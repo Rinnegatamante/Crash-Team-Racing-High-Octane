@@ -1,5 +1,72 @@
 #include <common.h>
 
+enum
+{
+	TURBO_FIRE_SIZE_MIN = 4,
+	TURBO_FIRE_SIZE_MAX = 8,
+	TURBO_FIRE_MATRIX_SCALE_SHIFT = 3,
+	TURBO_FIRE_LEFT_X_NUMERATOR = 9,
+	TURBO_FIRE_LEFT_X_SHIFT = 0xb,
+	TURBO_FIRE_RIGHT_X_NUMERATOR = -0x12,
+	TURBO_FIRE_RIGHT_X_SHIFT = 0xc,
+	TURBO_FIRE_Y_NUMERATOR = 3,
+	TURBO_FIRE_Y_SHIFT = 8,
+	TURBO_FIRE_Z_NUMERATOR = -0x34,
+	TURBO_FIRE_Z_SHIFT = 0xc,
+	TURBO_COOLDOWN_SIGN_SCALE = 0x10000,
+	TURBO_ALPHA_RUMBLE_THRESHOLD = 2500,
+	TURBO_RUMBLE_FRAMES = 4,
+	TURBO_RUMBLE_FORCE = 4,
+	TURBO_SECONDARY_MODEL_FRAME_OFFSET = 3,
+	TURBO_ANIM_FRAME_COUNT = 8,
+	TURBO_ANIM_FRAME_MASK = 7,
+	TURBO_AUDIO_SLOT = 3,
+	TURBO_AUDIO_VOLUME_BASE = 0x100,
+	TURBO_AUDIO_ALPHA_SHIFT = 4,
+	TURBO_AUDIO_VOLUME_MAX = 0x82,
+	TURBO_AUDIO_DISTORT_STEP = 0x10,
+	TURBO_AUDIO_DISTORT_MAX = 0x80,
+	TURBO_AUDIO_DISTORT_INCREMENT_LIMIT = 0xc0,
+	TURBO_AUDIO_SFX_ID = 0xe,
+	TURBO_RESERVES_DISAPPEAR_THRESHOLD = 0x10,
+	TURBO_ALPHA_FULL_MINUS_ONE = 0xfff,
+	TURBO_FADE_FAST_STEP = 0x100,
+	TURBO_FADE_SLOW_STEP = 0x40,
+	TURBO_STOP_SFX_ID = -1,
+};
+
+CTR_STATIC_ASSERT(TURBO_FIRE_SIZE_MIN == 4);
+CTR_STATIC_ASSERT(TURBO_FIRE_SIZE_MAX == 8);
+CTR_STATIC_ASSERT(TURBO_FIRE_MATRIX_SCALE_SHIFT == 3);
+CTR_STATIC_ASSERT(TURBO_FIRE_LEFT_X_NUMERATOR == 9);
+CTR_STATIC_ASSERT(TURBO_FIRE_LEFT_X_SHIFT == 0xb);
+CTR_STATIC_ASSERT(TURBO_FIRE_RIGHT_X_NUMERATOR == -0x12);
+CTR_STATIC_ASSERT(TURBO_FIRE_RIGHT_X_SHIFT == 0xc);
+CTR_STATIC_ASSERT(TURBO_FIRE_Y_NUMERATOR == 3);
+CTR_STATIC_ASSERT(TURBO_FIRE_Y_SHIFT == 8);
+CTR_STATIC_ASSERT(TURBO_FIRE_Z_NUMERATOR == -0x34);
+CTR_STATIC_ASSERT(TURBO_FIRE_Z_SHIFT == 0xc);
+CTR_STATIC_ASSERT(TURBO_COOLDOWN_SIGN_SCALE == 0x10000);
+CTR_STATIC_ASSERT(TURBO_ALPHA_RUMBLE_THRESHOLD == 2500);
+CTR_STATIC_ASSERT(TURBO_RUMBLE_FRAMES == 4);
+CTR_STATIC_ASSERT(TURBO_RUMBLE_FORCE == 4);
+CTR_STATIC_ASSERT(TURBO_SECONDARY_MODEL_FRAME_OFFSET == 3);
+CTR_STATIC_ASSERT(TURBO_ANIM_FRAME_COUNT == 8);
+CTR_STATIC_ASSERT(TURBO_ANIM_FRAME_MASK == 7);
+CTR_STATIC_ASSERT(TURBO_AUDIO_SLOT == 3);
+CTR_STATIC_ASSERT(TURBO_AUDIO_VOLUME_BASE == 0x100);
+CTR_STATIC_ASSERT(TURBO_AUDIO_ALPHA_SHIFT == 4);
+CTR_STATIC_ASSERT(TURBO_AUDIO_VOLUME_MAX == 0x82);
+CTR_STATIC_ASSERT(TURBO_AUDIO_DISTORT_STEP == 0x10);
+CTR_STATIC_ASSERT(TURBO_AUDIO_DISTORT_MAX == 0x80);
+CTR_STATIC_ASSERT(TURBO_AUDIO_DISTORT_INCREMENT_LIMIT == 0xc0);
+CTR_STATIC_ASSERT(TURBO_AUDIO_SFX_ID == 0xe);
+CTR_STATIC_ASSERT(TURBO_RESERVES_DISAPPEAR_THRESHOLD == 0x10);
+CTR_STATIC_ASSERT(TURBO_ALPHA_FULL_MINUS_ONE == 0xfff);
+CTR_STATIC_ASSERT(TURBO_FADE_FAST_STEP == 0x100);
+CTR_STATIC_ASSERT(TURBO_FADE_SLOW_STEP == 0x40);
+CTR_STATIC_ASSERT(TURBO_STOP_SFX_ID == -1);
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80069284-0x80069370.
 void VehTurbo_ProcessBucket(struct Thread *turboThread)
 {
@@ -46,14 +113,12 @@ void VehTurbo_ProcessBucket(struct Thread *turboThread)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80069370-0x800693c8.
 void VehTurbo_ThDestroy(struct Thread *t)
 {
-	struct Turbo *turboObj;
-	turboObj = t->object;
-
+	struct Turbo *turboObj = t->object;
 	struct Driver *d = turboObj->driver;
 	d->actionsFlagSet &= ~ACTION_TURBO_ITEM;
 
-	INSTANCE_Death(t->inst);
 	INSTANCE_Death(turboObj->inst);
+	INSTANCE_Death(t->inst);
 }
 
 static void VehTurbo_TransformOffset(struct Instance *driverInst, s16 x, s16 y, s16 z, s32 *out)
@@ -130,49 +195,51 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	}
 
 	int fireSize = (int)turbo->fireSize;
-	if (8 < (int)turbo->fireSize)
+	if (TURBO_FIRE_SIZE_MAX < (int)turbo->fireSize)
 	{
-		fireSize = 8;
+		fireSize = TURBO_FIRE_SIZE_MAX;
 	}
-	if ((int)turbo->fireSize < 4)
+	if ((int)turbo->fireSize < TURBO_FIRE_SIZE_MIN)
 	{
-		fireSize = 4;
+		fireSize = TURBO_FIRE_SIZE_MIN;
 	}
 
 	// matrix of first turbo instance
-	instance->matrix.m[0][0] = (s16)(instanceDriver->matrix.m[0][0] * fireSize >> 3);
-	instance->matrix.m[0][1] = (s16)(instanceDriver->matrix.m[0][1] * fireSize >> 3);
-	instance->matrix.m[0][2] = (s16)(instanceDriver->matrix.m[0][2] * fireSize >> 3);
-	instance->matrix.m[1][0] = (s16)(instanceDriver->matrix.m[1][0] * fireSize >> 3);
-	instance->matrix.m[1][1] = (s16)(instanceDriver->matrix.m[1][1] * fireSize >> 3);
-	instance->matrix.m[1][2] = (s16)(instanceDriver->matrix.m[1][2] * fireSize >> 3);
-	instance->matrix.m[2][0] = (s16)(instanceDriver->matrix.m[2][0] * fireSize >> 3);
-	instance->matrix.m[2][1] = (s16)(instanceDriver->matrix.m[2][1] * fireSize >> 3);
-	instance->matrix.m[2][2] = (s16)(instanceDriver->matrix.m[2][2] * fireSize >> 3);
+	instance->matrix.m[0][0] = (s16)(instanceDriver->matrix.m[0][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[0][1] = (s16)(instanceDriver->matrix.m[0][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[0][2] = (s16)(instanceDriver->matrix.m[0][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[1][0] = (s16)(instanceDriver->matrix.m[1][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[1][1] = (s16)(instanceDriver->matrix.m[1][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[1][2] = (s16)(instanceDriver->matrix.m[1][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[2][0] = (s16)(instanceDriver->matrix.m[2][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[2][1] = (s16)(instanceDriver->matrix.m[2][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	instance->matrix.m[2][2] = (s16)(instanceDriver->matrix.m[2][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
 
-	VehTurbo_TransformOffset(instanceDriver, instanceDriver->scale.x * 9 >> 0xb, instanceDriver->scale.y * 3 >> 8, instanceDriver->scale.z * -0x34 >> 0xc,
-	                         &instance->matrix.t[0]);
+	VehTurbo_TransformOffset(instanceDriver, instanceDriver->scale.x * TURBO_FIRE_LEFT_X_NUMERATOR >> TURBO_FIRE_LEFT_X_SHIFT,
+	                         instanceDriver->scale.y * TURBO_FIRE_Y_NUMERATOR >> TURBO_FIRE_Y_SHIFT,
+	                         instanceDriver->scale.z * TURBO_FIRE_Z_NUMERATOR >> TURBO_FIRE_Z_SHIFT, &instance->matrix.t[0]);
 
 	// matrix of second turbo instance, negate X axis
-	turbo->inst->matrix.m[0][0] = (s16)(-(int)instanceDriver->matrix.m[0][0] * fireSize >> 3);
-	turbo->inst->matrix.m[0][1] = (s16)(instanceDriver->matrix.m[0][1] * fireSize >> 3);
-	turbo->inst->matrix.m[0][2] = (s16)(instanceDriver->matrix.m[0][2] * fireSize >> 3);
-	turbo->inst->matrix.m[1][0] = (s16)(-(int)instanceDriver->matrix.m[1][0] * fireSize >> 3);
-	turbo->inst->matrix.m[1][1] = (s16)(instanceDriver->matrix.m[1][1] * fireSize >> 3);
-	turbo->inst->matrix.m[1][2] = (s16)(instanceDriver->matrix.m[1][2] * fireSize >> 3);
-	turbo->inst->matrix.m[2][0] = (s16)(-(int)instanceDriver->matrix.m[2][0] * fireSize >> 3);
-	turbo->inst->matrix.m[2][1] = (s16)(instanceDriver->matrix.m[2][1] * fireSize >> 3);
-	turbo->inst->matrix.m[2][2] = (s16)(instanceDriver->matrix.m[2][2] * fireSize >> 3);
+	turbo->inst->matrix.m[0][0] = (s16)(-(int)instanceDriver->matrix.m[0][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[0][1] = (s16)(instanceDriver->matrix.m[0][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[0][2] = (s16)(instanceDriver->matrix.m[0][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[1][0] = (s16)(-(int)instanceDriver->matrix.m[1][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[1][1] = (s16)(instanceDriver->matrix.m[1][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[1][2] = (s16)(instanceDriver->matrix.m[1][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[2][0] = (s16)(-(int)instanceDriver->matrix.m[2][0] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[2][1] = (s16)(instanceDriver->matrix.m[2][1] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
+	turbo->inst->matrix.m[2][2] = (s16)(instanceDriver->matrix.m[2][2] * fireSize >> TURBO_FIRE_MATRIX_SCALE_SHIFT);
 
-	VehTurbo_TransformOffset(instanceDriver, instanceDriver->scale.x * -0x12 >> 0xc, instanceDriver->scale.y * 3 >> 8, instanceDriver->scale.z * -0x34 >> 0xc,
-	                         &turbo->inst->matrix.t[0]);
+	VehTurbo_TransformOffset(instanceDriver, instanceDriver->scale.x * TURBO_FIRE_RIGHT_X_NUMERATOR >> TURBO_FIRE_RIGHT_X_SHIFT,
+	                         instanceDriver->scale.y * TURBO_FIRE_Y_NUMERATOR >> TURBO_FIRE_Y_SHIFT,
+	                         instanceDriver->scale.z * TURBO_FIRE_Z_NUMERATOR >> TURBO_FIRE_Z_SHIFT, &turbo->inst->matrix.t[0]);
 
 	// decrease turbo visibility cooldown by elapsed milliseconds per frame, ~32
 	s16 elapsedTime = turbo->fireVisibilityCooldown - gGT->elapsedTimeMS;
 	turbo->fireVisibilityCooldown = elapsedTime;
 
 	// don't allow negatives
-	if (elapsedTime * 0x10000 < 0)
+	if (elapsedTime * TURBO_COOLDOWN_SIGN_SCALE < 0)
 	{
 		turbo->fireVisibilityCooldown = 0;
 	}
@@ -184,16 +251,16 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		turbo->inst->flags &= ~HIDE_MODEL;
 	}
 
-	if (instance->alphaScale < 2500)
+	if (instance->alphaScale < TURBO_ALPHA_RUMBLE_THRESHOLD)
 	{
 		// gamepad vibration
-		GAMEPAD_ShockFreq(driver, 4, 4);
+		GAMEPAD_ShockFreq(driver, TURBO_RUMBLE_FRAMES, TURBO_RUMBLE_FORCE);
 	}
 
-	// set new model pointer, one of seven
+	// set new model pointer, one of eight
 	instance->model = gGT->modelPtr[(int)turbo->fireAnimIndex + STATIC_TURBO_EFFECT];
 
-	// set new model pointer, one of seven
+	// set new model pointer, one of eight
 
 	// STATIC_TURBO_EFFECT
 	// STATIC_TURBO_EFFECT1
@@ -203,12 +270,15 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	// STATIC_TURBO_EFFECT5
 	// STATIC_TURBO_EFFECT6
 	// STATIC_TURBO_EFFECT7
-	turbo->inst->model = gGT->modelPtr[(((int)turbo->fireAnimIndex + 3U) & 7) + STATIC_TURBO_EFFECT];
+	turbo->inst->model = gGT->modelPtr[(((int)turbo->fireAnimIndex + TURBO_SECONDARY_MODEL_FRAME_OFFSET) & TURBO_ANIM_FRAME_MASK) + STATIC_TURBO_EFFECT];
 
 	turbo->fireAnimIndex++;
 
-	// if higher than 7, back to zero
-	turbo->fireAnimIndex &= 7;
+	// if eight or higher, back to zero
+	if (turbo->fireAnimIndex >= TURBO_ANIM_FRAME_COUNT)
+	{
+		turbo->fireAnimIndex = 0;
+	}
 
 	if (turbo->fireDisappearCountdown > 0)
 	{
@@ -218,7 +288,7 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	// player of any kind
 	if (instanceDriver->thread->modelIndex == DYNAMIC_PLAYER)
 	{
-		int fireSfxVolume = 0x100 - (u32)(instance->alphaScale >> 4);
+		int fireSfxVolume = TURBO_AUDIO_VOLUME_BASE - (u32)(instance->alphaScale >> TURBO_AUDIO_ALPHA_SHIFT);
 
 		if (fireSfxVolume < 0)
 		{
@@ -226,13 +296,13 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		}
 		else
 		{
-			if (0x82 < fireSfxVolume)
+			if (TURBO_AUDIO_VOLUME_MAX < fireSfxVolume)
 			{
-				fireSfxVolume = 0x82;
+				fireSfxVolume = TURBO_AUDIO_VOLUME_MAX;
 			}
 		}
 
-		u32 fireAudioDistort = (u32)turbo->fireAudioDistort + 0x10;
+		u32 fireAudioDistort = (u32)turbo->fireAudioDistort + TURBO_AUDIO_DISTORT_STEP;
 
 		if ((int)fireAudioDistort < 0)
 		{
@@ -240,9 +310,9 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		}
 		else
 		{
-			if (fireAudioDistort > 0x80)
+			if (fireAudioDistort > TURBO_AUDIO_DISTORT_MAX)
 			{
-				fireAudioDistort = 0x80;
+				fireAudioDistort = TURBO_AUDIO_DISTORT_MAX;
 			}
 		}
 
@@ -250,16 +320,17 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		u32 echo = ((driver->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
 
 		// driver audio
-		OtherFX_RecycleNew((u32 *)&driver->driverAudioPtrs[3], 0xe, HowlSfx_Pack(HOWL_SFX_LR_CENTER, fireAudioDistort, fireSfxVolume, echo));
+		OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_AUDIO_SFX_ID,
+		                   HowlSfx_Pack(HOWL_SFX_LR_CENTER, fireAudioDistort, fireSfxVolume, echo));
 
 		// manipulate turbo audio distort to change sound each frame
-		if (turbo->fireAudioDistort < 0xc0)
+		if (turbo->fireAudioDistort < TURBO_AUDIO_DISTORT_INCREMENT_LIMIT)
 		{
 			turbo->fireAudioDistort++;
 		}
 	}
 
-	char kartState = driver->kartState;
+	u8 kartState = driver->kartState;
 
 	if (
 	    // if this is a ghost
@@ -274,31 +345,31 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	         ))
 	{
 		// if reserves are nearing zero
-		if ((driver->reserves < 0x10) || (turbo->fireDisappearCountdown == '\0'))
+		if ((driver->reserves < TURBO_RESERVES_DISAPPEAR_THRESHOLD) || (turbo->fireDisappearCountdown == 0))
 		{
 			// if fully transparent, skip lines
-			if (0xfff < instance->alphaScale)
+			if (TURBO_ALPHA_FULL_MINUS_ONE < instance->alphaScale)
 			{
 				goto LAB_80069b50;
 			}
 
-			if (turbo->fireDisappearCountdown == '\0')
+			if (turbo->fireDisappearCountdown == 0)
 			{
 				// increase transparency
-				instance->alphaScale += 0x100;
-				turbo->inst->alphaScale += 0x100;
+				instance->alphaScale += TURBO_FADE_FAST_STEP;
+				turbo->inst->alphaScale += TURBO_FADE_FAST_STEP;
 			}
 			else
 			{
 				// increase transparency
-				instance->alphaScale += 0x40;
-				turbo->inst->alphaScale += 0x40;
+				instance->alphaScale += TURBO_FADE_SLOW_STEP;
+				turbo->inst->alphaScale += TURBO_FADE_SLOW_STEP;
 			}
 		}
 		else
 		{
 			// if scale is big, skip lines
-			if (0xfff < instance->alphaScale)
+			if (TURBO_ALPHA_FULL_MINUS_ONE < instance->alphaScale)
 			{
 				goto LAB_80069b50;
 			}
@@ -327,7 +398,7 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 			}
 
 			// driver audio
-			OtherFX_RecycleNew((u32 *)&driver->driverAudioPtrs[3], 0xffffffff, stopSfxParams);
+			OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_STOP_SFX_ID, stopSfxParams);
 		}
 
 		// 0x800 = this thread needs to be deleted

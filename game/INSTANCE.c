@@ -31,7 +31,7 @@ void INSTANCE_Birth(struct Instance *inst, struct Model *model, const char *name
 	inst->depthBiasNormal = 0xfe;
 	inst->depthBiasSecondary = 0xc;
 	inst->animIndex = 0;
-	inst->unk53 = 1;
+	inst->specLightX = 1;
 
 	inst->model = model;
 
@@ -47,7 +47,7 @@ void INSTANCE_Birth(struct Instance *inst, struct Model *model, const char *name
 	inst->reflectionRGBA = 0x7f7f7f;
 
 	inst->thread = th;
-	inst->bitCompressed_NormalVector_AndDriverIndex = 0;
+	inst->compressedNormalAndDriverIndex = 0;
 
 	struct InstDrawPerPlayer *idpp = INST_GETIDPP(inst);
 
@@ -197,7 +197,6 @@ void INSTANCE_Death(struct Instance *inst)
 // param2 - number of instances
 void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 {
-	s16 sVar5;
 	u16 modelID;
 	int *dst;
 	int *src;
@@ -261,8 +260,8 @@ void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 		inst->instDef = levInstDef;
 
 		inst->vertSplit = 0;
-		inst->unk53 = 1;
-		inst->bitCompressed_NormalVector_AndDriverIndex = 0;
+		inst->specLightX = 1;
+		inst->compressedNormalAndDriverIndex = 0;
 
 		// converted to TEST in rebuildPS1
 		ConvertRotToMatrix(&inst->matrix, &levInstDef->rot);
@@ -274,7 +273,7 @@ void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 		struct InstDrawPerPlayer *idpp = INST_GETIDPP(inst);
 
 		// loop through InstDrawPerPlayer
-		for (char j = 0; j < gGT->numPlyrCurrGame; j++)
+		for (s32 j = 0; j < gGT->numPlyrCurrGame; j++)
 		{
 			idpp[j].mh = 0;
 			idpp[j].pushBuffer = &gGT->pushBuffer[j];
@@ -303,31 +302,27 @@ void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 
 		b32 boolRelicOnly = ((((u32)modelID - STATIC_TIME_CRATE_02) < 2) || (modelID == STATIC_TIME_CRATE_01));
 
-		if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+		if (((gGT->gameMode1 & TIME_TRIAL) != 0) && (boolArcadeOnly || boolRelicOnly))
 		{
-			if (boolArcadeOnly || boolRelicOnly)
-			{
-				inst->flags &= ~DRAW_COLLISION_MASK;
-			}
+			inst->flags &= ~DRAW_COLLISION_MASK;
 		}
-
 		else if ((gGT->gameMode1 & RELIC_RACE) != 0)
 		{
-			if (boolArcadeOnly)
-			{
-				inst->flags &= ~DRAW_COLLISION_MASK;
-			}
-
 			if (boolRelicOnly)
 			{
 				gGT->timeCratesInLEV++;
-
-				// temporary, until timebox thread is ready
-				inst->flags |= 1;
+			}
+			else if (boolArcadeOnly)
+			{
+				inst->flags &= ~DRAW_COLLISION_MASK;
 			}
 		}
+		else if (boolRelicOnly)
+		{
+			inst->flags &= ~DRAW_COLLISION_MASK;
+		}
 
-		else if ((gGT->gameMode1 & CRYSTAL_CHALLENGE) != 0)
+		if ((gGT->gameMode1 & CRYSTAL_CHALLENGE) != 0)
 		{
 			if (modelID == STATIC_CRYSTAL)
 			{

@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_DECAL_H
+#define CTR_NATIVE_NAMESPACE_DECAL_H
+
 // transparent parameter of DrawPoly funcs
 enum BlendModeDecal
 {
@@ -176,7 +179,14 @@ struct IconGroup
 
 CTR_STATIC_ASSERT(sizeof(struct TextureLayout) == 0xC);
 CTR_STATIC_ASSERT(sizeof(struct Icon) == 0x20);
+CTR_STATIC_ASSERT(sizeof(((struct Icon *)0)->name) == 0x10);
+CTR_STATIC_ASSERT(sizeof(struct IconGroup) == 0x14);
+CTR_STATIC_ASSERT(OFFSETOF(struct IconGroup, name) == 0x0);
+CTR_STATIC_ASSERT(OFFSETOF(struct IconGroup, groupID) == 0x10);
+CTR_STATIC_ASSERT(OFFSETOF(struct IconGroup, numIcons) == 0x12);
 
-#define setIconUV(p, icon)                                                                                                                    \
-	*(u32 *)&p->u0 = *(u32 *)&icon->texLayout.u0, *(u32 *)&p->u1 = *(u32 *)&icon->texLayout.u1, *(u16 *)&p->u2 = *(u16 *)&icon->texLayout.u2, \
-	      *(u16 *)&p->u3 = *(u16 *)&icon->texLayout.u3
+#define setIconUV(p, icon)                                                                                                                              \
+	CtrGpu_WritePackedUVWord(&(p)->u0, CTR_ReadU32LE(&(icon)->texLayout.u0)), CtrGpu_WritePackedUVWord(&(p)->u1, CTR_ReadU32LE(&(icon)->texLayout.u1)), \
+	    CtrGpu_WritePackedUV(&(p)->u2, CTR_ReadU16LE(&(icon)->texLayout.u2)), CtrGpu_WritePackedUV(&(p)->u3, CTR_ReadU16LE(&(icon)->texLayout.u3))
+
+#endif

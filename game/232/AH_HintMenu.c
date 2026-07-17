@@ -1,27 +1,24 @@
 #include <common.h>
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b344c-0x800b351c.
-void AH_HintMenu_FiveArrows(int param_1, s16 rotation)
+void AH_HintMenu_FiveArrows(int posY, s16 rotation)
 {
-	int *ptrColor;
-	char i;
-
-	ptrColor = &D232.fiveArrow_col1[0];
+	u32 *ptrColor = &D232.fiveArrow_col1[0];
 	if ((sdata->frameCounter & 2) != 0)
 	{
 		ptrColor = &D232.fiveArrow_col2[0];
 	}
 
-	for (i = 0; i < 5; i++)
+	for (int i = 0; i < AH_HINTMENU_ARROW_COUNT; i++)
 	{
 		AH_Map_HubArrow(
 		    // posX
-		    (i * 0x32 + 0x95),
+		    (i * AH_HINTMENU_ARROW_SPACING + AH_HINTMENU_ARROW_START_X),
 
 		    // posY
-		    (param_1 + 4),
+		    (posY + AH_HINTMENU_ARROW_Y_OFFSET),
 
-		    &D232.fiveArrow_pos[0],
+		    &D232.fiveArrowPos[0],
 
 		    (char *)ptrColor, 0x800, (int)rotation);
 	}
@@ -39,7 +36,7 @@ void AH_HintMenu_MaskPosRot(void)
 	mask->matrix.t[1] = D232.maskPos.y;
 	mask->matrix.t[2] = D232.maskPos.z;
 
-	// always 0x1000 ???
+	// Apply the default mask model scale from D232.
 	((struct MaskHint *)mask->thread->object)->scale = D232.maskScale;
 
 	return;
@@ -48,62 +45,47 @@ void AH_HintMenu_MaskPosRot(void)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 232 0x800b3594-0x800b3dd8.
 void AH_HintMenu_MenuProc(struct RectMenu *menu)
 {
-	struct GameTracker *gGT;
-	struct Instance *inst;
-
-	u32 *puVar1;
-	u16 uVar2;
-	char bVar3;
-	u32 uVar6;
-	int iVar7;
-	int *puVar8;
-	s16 sVar9;
-	int iVar10;
-	int iVar11;
-	s16 sVar12;
+	struct GameTracker *gGT = sdata->gGT;
+	b32 shouldClose = false;
 	RECT box;
-	char hintsFound[32];
+	char hintsFound[AH_HINTMENU_HINT_STRING_COUNT];
 	Color color;
 
-	gGT = sdata->gGT;
-	bVar3 = false;
-
-	iVar11 = 0;
 	MainFreeze_SafeAdvDestroy();
 
-	iVar10 = 0;
 	UNLOCK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_HINT_WELCOME_TO_ARENA);
 
 	int numHintsFound = 0;
 
 	int i = 0;
-	s16 *ptrLngID = &D232.hintMenu_lngIndexArr[0];
+	const s16 *ptrLngID = &D232.hintMenuLngIndex[0];
 
 	for (/**/; *ptrLngID > -1; ptrLngID++, i++)
 	{
-		int hintID = (ptrLngID[0] - 0x17b) / 2;
+		int hintID = (ptrLngID[0] - AH_HINTMENU_HINT_LNG_FIRST) / 2;
 		int bitIndex = hintID + ADV_REWARD_FIRST_HINT;
 
-		if (CHECK_ADV_BIT(sdata->advProgress.rewards, bitIndex) != 0)
+		if (CHECK_ADV_BIT(sdata->advProgress.rewards, bitIndex))
 		{
 			hintsFound[numHintsFound] = i;
 			numHintsFound++;
 		}
 	}
 
-	sVar9 = numHintsFound + 1;
+	s16 rowCount = numHintsFound + 1;
 
 	if (menu->rowSelected > numHintsFound)
 	{
 		menu->rowSelected = numHintsFound;
 	}
 
-	if ((D232.hintMenu_scrollIndex > (numHintsFound + -4)) && (D232.hintMenu_scrollIndex = (s16)(numHintsFound + -4), D232.hintMenu_scrollIndex < 0))
+	if ((D232.hintMenu_scrollIndex > (numHintsFound - AH_HINTMENU_SCROLL_MARGIN)) &&
+	    (D232.hintMenu_scrollIndex = (s16)(numHintsFound - AH_HINTMENU_SCROLL_MARGIN), D232.hintMenu_scrollIndex < 0))
 	{
 		D232.hintMenu_scrollIndex = 0;
 	}
 
-	int lngIndex = D232.hintMenu_lngIndexArr[hintsFound[menu->rowSelected]];
+	int lngIndex = D232.hintMenuLngIndex[(s32)hintsFound[menu->rowSelected]];
 
 	// if viewing a hint
 	if (D232.hintMenu_boolViewHint != 0)
@@ -116,14 +98,7 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 		}
 
 		// If you press Cross, Square, Triangle, or Circle
-		if (((sdata->buttonTapPerPlayer[0] & 0x40070) != 0) &&
-
-		    ((
-		        // if no XA is playing anymore
-		        uVar6 = VehTalkMask_boolNoXA(), (uVar6 & 0xffff) != 0 ||
-
-		                                            // allowed to leave hint
-		                                            (D232.maskCooldown == 0))))
+		if (((sdata->buttonTapPerPlayer[0] & AH_HINTMENU_INPUT_VIEW_EXIT) != 0) && (VehTalkMask_boolNoXA() || (D232.maskCooldown == 0)))
 		{
 			D232.hintMenu_boolViewHint = 0;
 
@@ -135,18 +110,18 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 		DecalFont_DrawLine(sdata->lngStrings[lngIndex + 0], 0x100, 0x2c, 1, 0xffff8000);
 
 		// height of multiLine
-		iVar11 = DecalFont_DrawMultiLine(sdata->lngStrings[lngIndex + 1], 0x96, 0x3f, 0x14e, 2, 0);
+		int textHeight = DecalFont_DrawMultiLine(sdata->lngStrings[lngIndex + 1], 0x96, 0x3f, 0x14e, 2, 0);
 
 		char *strExit = sdata->lngStrings[LNG_HINT_EXIT];
 
-		DecalFont_DrawLine(strExit, 0x100, iVar11 + 0x4f, 1, 0xffff8000);
+		DecalFont_DrawLine(strExit, 0x100, textHeight + 0x4f, 1, 0xffff8000);
 
-		iVar10 = DecalFont_GetLineWidth(strExit, 1);
+		int exitWidth = DecalFont_GetLineWidth(strExit, 1);
 
-		iVar7 = (iVar10 + 6);
-		box.x = 0xff - (iVar7 >> 1);
-		box.w = iVar7;
-		box.y = (s16)iVar11 + 0x4e;
+		int exitBoxWidth = exitWidth + 6;
+		box.x = 0xff - (exitBoxWidth >> 1);
+		box.w = exitBoxWidth;
+		box.y = (s16)textHeight + 0x4e;
 		box.h = 0x11;
 
 		uint32_t *ot = gGT->backBuffer->otMem.uiOT;
@@ -161,7 +136,7 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 		RECTMENU_DrawOuterRect_Edge(&box, color, 0x20, ot);
 
 		box.y = 0x28;
-		box.h = (s16)iVar11 + 0x3b;
+		box.h = (s16)textHeight + 0x3b;
 		box.x = -0xe;
 		box.w = 0x21c;
 
@@ -173,22 +148,22 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 	int tapP1 = sdata->buttonTapPerPlayer[0];
 
 	// If you press Up, Down, Cross, Square, Triangle, Circle
-	if ((tapP1 & 0x40073) == 0)
+	if ((tapP1 & AH_HINTMENU_INPUT_NAV) == 0)
 	{
 		goto LAB_800b38cc;
 	}
 
 	// If you dont press Up
-	if ((tapP1 & 1) == 0)
+	if ((tapP1 & BTN_UP) == 0)
 	{
 		// If you dont press Down
-		if ((tapP1 & 2) == 0)
+		if ((tapP1 & BTN_DOWN) == 0)
 		{
 			// If you dont press Cross or Circle
-			if ((tapP1 & 0x50) == 0)
+			if ((tapP1 & AH_HINTMENU_INPUT_CONFIRM) == 0)
 			{
 				// If you press Triangle or Square
-				if ((tapP1 & 0x40020) != 0)
+				if ((tapP1 & AH_HINTMENU_INPUT_BACK) != 0)
 				{
 					// Play sound
 					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b38b4-0x800b38bc for hint-menu back SFX.
@@ -207,7 +182,7 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 				if (menu->rowSelected == numHintsFound)
 				{
 				LAB_800b38c0:
-					bVar3 = true;
+					shouldClose = true;
 				}
 				else
 				{
@@ -216,14 +191,14 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 					{
 						sdata->instMaskHints3D = VehTalkMask_Init();
 
-						D232.maskCooldown = 30;
+						D232.maskCooldown = AH_HINTMENU_VIEW_COOLDOWN_FRAMES;
 
-						VehTalkMask_PlayXA(sdata->instMaskHints3D, (lngIndex + -0x17b) / 2);
+						VehTalkMask_PlayXA(sdata->instMaskHints3D, (lngIndex - AH_HINTMENU_HINT_LNG_FIRST) / 2);
 
 						AH_HintMenu_MaskPosRot();
 
 						// talking mask instance
-						inst = sdata->instMaskHints3D;
+						struct Instance *inst = sdata->instMaskHints3D;
 						inst->flags |= SCREENSPACE_INSTANCE;
 
 						struct InstDrawPerPlayer *idpp = INST_GETIDPP(inst);
@@ -275,25 +250,27 @@ void AH_HintMenu_MenuProc(struct RectMenu *menu)
 	// clear gamepad input (for menus)
 	RECTMENU_ClearInput();
 
+	u32 isGoodMask;
+
 LAB_800b38cc:
 
-	uVar6 = VehPickupItem_MaskBoolGoodGuy(gGT->drivers[0]);
+	isGoodMask = VehPickupItem_MaskBoolGoodGuy(gGT->drivers[0]);
 
 	// Draw the "Hints" string
-	DecalFont_DrawLine(sdata->lngStrings[0x178 + (uVar6 == 0)], 0x100, 0x2c, 1, 0xffff8000);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_AKU_AKU_HINTS_MENU + (isGoodMask == 0)], 0x100, 0x2c, 1, 0xffff8000);
 
-	if (D232.hintMenu_scrollIndex + 5 <= menu->rowSelected)
+	if (D232.hintMenu_scrollIndex + AH_HINTMENU_VISIBLE_ROWS <= menu->rowSelected)
 	{
-		D232.hintMenu_scrollIndex = menu->rowSelected - 4;
+		D232.hintMenu_scrollIndex = menu->rowSelected - AH_HINTMENU_SCROLL_MARGIN;
 	}
 	if (menu->rowSelected < D232.hintMenu_scrollIndex)
 	{
 		D232.hintMenu_scrollIndex = menu->rowSelected;
 	}
-	sVar12 = 5;
-	if (sVar9 < D232.hintMenu_scrollIndex + 5)
+	s16 visibleRows = AH_HINTMENU_VISIBLE_ROWS;
+	if (rowCount < D232.hintMenu_scrollIndex + AH_HINTMENU_VISIBLE_ROWS)
 	{
-		sVar12 = sVar9;
+		visibleRows = rowCount;
 	}
 
 	// if scroll bar is not on top
@@ -302,36 +279,37 @@ LAB_800b38cc:
 		AH_HintMenu_FiveArrows(0x3f, 0);
 	}
 
-	iVar10 = 0x10;
-	iVar11 = 0;
-	if (0 < sVar12)
+	int menuHeight = 0x10;
+	int visibleRowIndex = 0;
+	if (0 < visibleRows)
 	{
 		do
 		{
-			iVar7 = D232.hintMenu_scrollIndex + (int)(s16)iVar11;
-			if (iVar7 < numHintsFound)
+			int hintListIndex = D232.hintMenu_scrollIndex + (int)(s16)visibleRowIndex;
+			u32 rowLngIndex;
+			if (hintListIndex < numHintsFound)
 			{
-				uVar6 = D232.hintMenu_lngIndexArr[hintsFound[iVar7]];
+				rowLngIndex = D232.hintMenuLngIndex[(s32)hintsFound[hintListIndex]];
 			}
 			else
 			{
 				// EXIT
-				uVar6 = 0x17a;
+				rowLngIndex = LNG_HINT_EXIT;
 			}
-			iVar7 = iVar10 + 0x40;
-			iVar10 = iVar10 + 0x10;
+			int rowPosY = menuHeight + 0x40;
+			menuHeight = menuHeight + 0x10;
 
 			// "EXIT"
-			DecalFont_DrawLine(sdata->lngStrings[uVar6], 0x100, iVar7, 1, 0xffff8000);
+			DecalFont_DrawLine(sdata->lngStrings[rowLngIndex], 0x100, rowPosY, 1, 0xffff8000);
 
-			iVar11 = iVar11 + 1;
-		} while (iVar11 < sVar12);
+			visibleRowIndex = visibleRowIndex + 1;
+		} while (visibleRowIndex < visibleRows);
 	}
 
 	// if scroll bar is not on bottom
-	if (D232.hintMenu_scrollIndex + (int)sVar12 < (int)sVar9)
+	if (D232.hintMenu_scrollIndex + (int)visibleRows < (int)rowCount)
 	{
-		AH_HintMenu_FiveArrows((iVar10 + 0x40), 0x800);
+		AH_HintMenu_FiveArrows((menuHeight + 0x40), 0x800);
 	}
 	box.x = -0xe;
 	box.w = 0x21c;
@@ -350,16 +328,16 @@ LAB_800b38cc:
 	RECTMENU_DrawOuterRect_Edge(&box, color, 0x20, ot);
 
 	box.y = 0x28;
-	box.h = (s16)iVar10 + 0x2b;
+	box.h = (s16)menuHeight + 0x2b;
 	box.x = -0x14;
 	box.w = 0x228;
 
 	RECTMENU_DrawInnerRect(&box, 4, ot);
 
-	if ((bVar3) ||
+	if ((shouldClose) ||
 
 	    // If you dont press Start, Square, or Triangle
-	    ((sdata->buttonTapPerPlayer[0] & 0x41020) != 0))
+	    ((sdata->buttonTapPerPlayer[0] & AH_HINTMENU_INPUT_CLOSE) != 0))
 	{
 		RECTMENU_ClearInput();
 		sdata->ptrDesiredMenu = MainFreeze_GetMenuPtr();

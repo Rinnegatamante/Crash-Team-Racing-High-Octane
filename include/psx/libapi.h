@@ -33,23 +33,19 @@ extern int OpenTh(int (*func)(), unsigned int, unsigned int);
 extern int CloseTh(int unk00);
 extern int ChangeTh(int unk00);
 
-/*
-extern int open(char* unk00, unsigned int );
+#if !defined(CTR_NATIVE)
+extern int open(char *unk00, unsigned int);
 extern int close(int unk00);
-extern int lseek(int unk00, int , int );
-extern int read(int unk00, void *, int );
-extern int write(int unk00, void *, int );
-extern int ioctl(int unk00, int , int );
+extern int lseek(int unk00, int, int);
+extern int read(int unk00, void *, int);
+extern int write(int unk00, void *, int);
+#endif
 
-extern struct DIRENTRY* firstfile(char* unk00, struct DIRENTRY *);
-extern struct DIRENTRY* nextfile(struct DIRENTRY* unk00);
+extern struct DIRENTRY *firstfile(char *unk00, struct DIRENTRY *);
+extern struct DIRENTRY *nextfile(struct DIRENTRY *unk00);
 
-extern int erase(char* unk00);
-extern int undelete(char* unk00);
-extern int format(char* unk00);
-extern int rename(char* unk00, char *);
-extern int cd(char* unk00);
-*/
+extern int erase(char *unk00);
+extern int format(char *unk00);
 
 extern int LoadTest(char *unk00, struct EXEC *);
 extern int Load(char *unk00, struct EXEC *);
@@ -64,10 +60,10 @@ extern void DisablePAD();
 
 extern void FlushCache();
 extern void ReturnFromException();
-/*
+#if !defined(CTR_NATIVE)
 extern int EnterCriticalSection();
 extern void ExitCriticalSection();
-*/
+#endif
 extern void Exception();
 extern void SwEnterCriticalSection();
 extern void SwExitCriticalSection();

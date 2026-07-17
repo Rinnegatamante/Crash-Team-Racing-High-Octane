@@ -2,12 +2,12 @@
 
 static inline u32 MATH_Matrix_ReadWord(const void *ptr, s32 offset)
 {
-	return *(u32 *)(void *)((u8 *)ptr + offset);
+	return CTR_ReadU32LE((u8 *)ptr + offset);
 }
 
 static inline void MATH_Matrix_WriteWord(void *ptr, s32 offset, u32 value)
 {
-	*(u32 *)(void *)((u8 *)ptr + offset) = value;
+	CTR_WriteU32LE((u8 *)ptr + offset, value);
 }
 
 static inline u32 MATH_Matrix_NegLowWord(u32 value)
@@ -22,20 +22,20 @@ static inline u32 MATH_Matrix_NegHighWord(u32 value)
 
 static void MATH_Matrix_TrigSinCos(u32 angle, u32 *sinOut, u32 *cosOut)
 {
-	u32 trig = *(u32 *)&data.trigApprox[angle & 0x3ff];
-	u32 quadrant = angle & 0xc00;
+	u32 trig = CTR_ReadU32LE(&data.trigApprox[ANG_MODULO_HALF_PI(angle)]);
+	u32 quadrant = angle & ANG_QUADRANT_BITS;
 
 	if (quadrant == 0)
 	{
 		*sinOut = trig & 0xffff;
 		*cosOut = trig >> 0x10;
 	}
-	else if (quadrant == 0x400)
+	else if (quadrant == ANG_QUADRANT_BIT)
 	{
 		*sinOut = trig >> 0x10;
 		*cosOut = MATH_Matrix_NegLowWord(trig);
 	}
-	else if (quadrant == 0x800)
+	else if (quadrant == ANG_SIGN_BIT)
 	{
 		*sinOut = MATH_Matrix_NegLowWord(trig);
 		*cosOut = MATH_Matrix_NegLowWord(trig >> 0x10);
@@ -207,7 +207,7 @@ static void MATH_Matrix_MulIfNonZero(s32 angle, u32 *r0, u32 *r1, u32 *r2, u32 *
 
 	if (axis == 0)
 	{
-		*r0 = 0x1000;
+		*r0 = FP_ONE;
 		*r1 = 0;
 		*r2 = MATH_Matrix_NegHighWord(sine) | cosine;
 		*r3 = sine << 0x10;
@@ -217,7 +217,7 @@ static void MATH_Matrix_MulIfNonZero(s32 angle, u32 *r0, u32 *r1, u32 *r2, u32 *
 	{
 		*r0 = cosine;
 		*r1 = sine;
-		*r2 = 0x1000;
+		*r2 = FP_ONE;
 		*r3 = MATH_Matrix_NegLowWord(sine);
 		*r4 = cosine;
 	}
@@ -227,7 +227,7 @@ static void MATH_Matrix_MulIfNonZero(s32 angle, u32 *r0, u32 *r1, u32 *r2, u32 *
 		*r1 = sine << 0x10;
 		*r2 = cosine;
 		*r3 = 0;
-		*r4 = 0x1000;
+		*r4 = FP_ONE;
 	}
 
 	MATH_Matrix_MulRotWords(r0, r1, r2, r3, r4);
@@ -242,7 +242,7 @@ void ConvertRotToMatrix_InverseTranspose_NoRotY(MATRIX *m, const SVec3 *rot)
 	u32 r1;
 	u32 r2;
 	u32 r3 = 0;
-	u32 r4 = 0x1000;
+	u32 r4 = FP_ONE;
 
 	MATH_Matrix_TrigSinCos((s32)rot->z, &sine, &cosine);
 	r0 = MATH_Matrix_NegHighWord(sine) | cosine;
@@ -262,7 +262,7 @@ static void MATH_Matrix_InverseTransposeBody(MATRIX *m, s32 rotX, s32 rotZ, s32 
 	u32 r1;
 	u32 r2;
 	u32 r3 = 0;
-	u32 r4 = 0x1000;
+	u32 r4 = FP_ONE;
 
 	MATH_Matrix_TrigSinCos(rotZ, &sine, &cosine);
 	r0 = MATH_Matrix_NegHighWord(sine) | cosine;
@@ -288,7 +288,7 @@ void ConvertRotToMatrix(MATRIX *m, const SVec3 *rot)
 	u32 cosine;
 	u32 r0;
 	u32 r1;
-	u32 r2 = 0x1000;
+	u32 r2 = FP_ONE;
 	u32 r3;
 	u32 r4;
 

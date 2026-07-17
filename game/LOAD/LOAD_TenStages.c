@@ -31,12 +31,6 @@ static void LOAD_NativeAudio_SetStateAfterBankReload(u32 state)
 
 int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *bigfile)
 {
-	s16 sVar4;
-	int iVar5;
-	u32 uVar6;
-	int iVar9;
-	int iVar12;
-	u32 uVar16;
 	int levelID;
 	int ovrRegion1;
 	int ovrRegion3;
@@ -66,12 +60,12 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		// if first boot (SCEA + Copyright + ND Box)
 		if (sdata->boolFirstBoot != 0)
 		{
-			int vramSize;
+			u32 vramSize;
 
 			sdata->boolFirstBoot = 0;
 
 			// Load Intro TIM for Copyright Page from VRAM file
-			LOAD_VramFile(bigfile, 0x1fe, NULL, &vramSize, -1);
+			LOAD_VramFile(bigfile, LOAD_FIRST_BOOT_COPYRIGHT_TIM_BIGFILE_INDEX, NULL, &vramSize, -1);
 			MainInit_VRAMDisplay();
 
 #ifdef CTR_NATIVE
@@ -96,7 +90,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		{
 			// change active allocation system to #1
 			// used for whole game (except adventure arena)
-			MEMPACK_SwapPacks(0);
+			MEMPACK_SwapPacks(LOAD_MAIN_PACK_INDEX);
 
 			sdata->levelID = MainInit_StringToLevID(gGT->levelName);
 
@@ -114,11 +108,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		sdata->bookmarkID = MEMPACK_PushState();
 
 		// Reset HUD
-		gGT->hudFlags &= ~(1 | 8);
+		gGT->hudFlags &= HUD_FLAG_LOAD_RESET_MASK;
 
 		// disable all rendering except loading screen
 		// no overlay transition (advhub),  use normal spawn
-		gGT->renderFlags &= 0x1000;
+		gGT->renderFlags &= RENDER_FLAG_CHECKERED_FLAG;
 		gGT->overlayTransition = 0;
 		gGT->Debug_ToggleNormalSpawn = 1;
 		gGT->visMem1 = 0;
@@ -135,35 +129,37 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		gGT->gameMode1 &= ~(GAME_CUTSCENE | END_OF_RACE | ADVENTURE_ARENA | MAIN_MENU);
 		gGT->gameMode2 &= ~(LEV_SWAP | CREDITS | NO_LEV_INSTANCE);
 
-		if ((strncmp(gGT->levelName, sdata->s_ndi, 3) == 0) || (strncmp(gGT->levelName, sdata->s_ending, 6) == 0))
+		if ((strncmp(gGT->levelName, sdata->s_ndi, LOAD_LEVEL_PREFIX_NDI_LENGTH) == 0) ||
+		    (strncmp(gGT->levelName, sdata->s_ending, LOAD_LEVEL_PREFIX_ENDING_LENGTH) == 0))
 		{
 			gGT->gameMode1 |= GAME_CUTSCENE;
 		}
-		else if (strncmp(gGT->levelName, sdata->s_intro, 5) == 0)
+		else if (strncmp(gGT->levelName, sdata->s_intro, LOAD_LEVEL_PREFIX_INTRO_LENGTH) == 0)
 		{
 			gGT->gameMode1 |= GAME_CUTSCENE;
 			gGT->gameMode2 |= LEV_SWAP;
 		}
-		else if ((strncmp(gGT->levelName, sdata->s_screen, 6) == 0) || (strncmp(gGT->levelName, sdata->s_garage, 6) == 0))
+		else if ((strncmp(gGT->levelName, sdata->s_screen, LOAD_LEVEL_PREFIX_SCREEN_LENGTH) == 0) ||
+		         (strncmp(gGT->levelName, sdata->s_garage, LOAD_LEVEL_PREFIX_GARAGE_LENGTH) == 0))
 		{
 			gGT->gameMode1 |= MAIN_MENU;
 			gGT->numPlyrNextGame = gGT->numPlyrCurrGame;
 			gGT->numPlyrCurrGame = 4;
 
-			if (strncmp(gGT->levelName, sdata->s_garage, 6) == 0)
+			if (strncmp(gGT->levelName, sdata->s_garage, LOAD_LEVEL_PREFIX_GARAGE_LENGTH) == 0)
 			{
 				gGT->numPlyrCurrGame = 1;
 				sdata->mainMenuState = MAIN_MENU_ADVENTURE;
 			}
 		}
-		else if (strncmp(gGT->levelName, sdata->s_hub, 3) == 0)
+		else if (strncmp(gGT->levelName, sdata->s_hub, LOAD_LEVEL_PREFIX_HUB_LENGTH) == 0)
 		{
 			gGT->numPlyrNextGame = 1;
 			gGT->numPlyrCurrGame = 1;
 			gGT->gameMode1 |= ADVENTURE_ARENA;
 			gGT->gameMode2 |= LEV_SWAP;
 		}
-		else if (strncmp(gGT->levelName, sdata->s_credit, 6) == 0)
+		else if (strncmp(gGT->levelName, sdata->s_credit, LOAD_LEVEL_PREFIX_CREDIT_LENGTH) == 0)
 		{
 			gGT->numPlyrNextGame = 1;
 			gGT->numPlyrCurrGame = 1;
@@ -176,22 +172,22 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		// ========== Set LevelLOD variables ================
 
 
-		// default
-		sdata->levelLOD = gGT->numPlyrCurrGame;
-
 		// main menu or adv garage
 		if ((gGT->gameMode1 & MAIN_MENU) != 0)
 		{
-			sdata->levelLOD = 1;
+			sdata->levelLOD = LOAD_LEVEL_LOD_1P;
 		}
-
 		// if relic, or time trial
-		if ((gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0)
+		else if ((gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0)
 		{
-			sdata->levelLOD = 8;
+			sdata->levelLOD = LOAD_LEVEL_LOD_RELIC;
+		}
+		else
+		{
+			sdata->levelLOD = gGT->numPlyrCurrGame;
 		}
 
-		gGT->hudFlags |= 2;
+		gGT->hudFlags |= HUD_FLAG_INIT_UI_INSTANCES;
 
 
 		// ========== End of LevelLOD ================
@@ -214,7 +210,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 	{
 		// if XA has not paused since CDSYS_XAPauseRequest in stage #0,
 		// then quit the function and try again next frame
-		if (sdata->XA_State == 4)
+		if (sdata->XA_State == XA_FADING)
 		{
 			return loadingStage;
 		}
@@ -284,7 +280,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		{
 			ovrRegion3 = 1;
 
-			if (gGT->overlayIndex_Threads == 1)
+			if (gGT->overlayIndex_Threads == OVERLAY_INDEX_RACING_OR_BATTLE)
 			{
 				break;
 			}
@@ -315,7 +311,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		sdata->ptrMPK = 0;
 
 		// Clear driver extras
-		for (int i = 0; i < 3; i++)
+		for (int i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			data.driverModelExtras[i].fileBase = NULL;
 		}
@@ -365,9 +361,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if (!boolPlayMusicDuringLoading)
 		{
 			// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80033ef8-0x80033f14 for async bank parse and volume restore.
-			iVar9 = Music_AsyncParseBanks();
+			int banksReady = Music_AsyncParseBanks();
 
-			if (iVar9 == 0)
+			if (banksReady == 0)
 			{
 				// quit and restart stage 6 next frame
 				return loadingStage;
@@ -377,11 +373,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		}
 
 		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80033f1c-0x80033f44; retail converts driver DRAM file headers to model payload pointers here.
-		for (int i = 0; i < 3; i++)
+		for (int i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			if (data.driverModelExtras[i].fileBase != NULL)
 			{
-				data.driverModelExtras[i].model = (struct Model *)((u8 *)data.driverModelExtras[i].fileBase + 4);
+				data.driverModelExtras[i].model = (struct Model *)((u8 *)data.driverModelExtras[i].fileBase + LOAD_MODEL_FILE_HEADER_BYTES);
 			}
 		}
 
@@ -391,59 +387,61 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if ((gGT->gameMode2 & LEV_SWAP) != 0)
 		{
 			// Cutscene Packs
-			iVar9 = 0x6b000;
-			iVar12 = 0x40000;
+			int firstSubpackSize = LOAD_CUTSCENE_FIRST_PACK_BYTES;
+			int secondSubpackSize = LOAD_CUTSCENE_SECOND_PACK_BYTES;
 
 			// If you're in Adventure Arena
 			if ((gGT->gameMode1 & ADVENTURE_ARENA) != 0)
 			{
 				// Adv Arena Packs
-				iVar9 = 0x68800;
-				iVar12 = 0x68800;
+				firstSubpackSize = LOAD_ADV_ARENA_FIRST_PACK_BYTES;
+				secondSubpackSize = LOAD_ADV_ARENA_SECOND_PACK_BYTES;
 			}
 
 			// Allocate room for LEV swapping
-			iVar5 = (int)MEMPACK_AllocMem(iVar9 + iVar12); // "HUB ALLOC"
-			sdata->ptrHubAlloc = (void *)iVar5;
+			u8 *hubAlloc = MEMPACK_AllocMem(firstSubpackSize + secondSubpackSize); // "HUB ALLOC"
+			sdata->ptrHubAlloc = hubAlloc;
 
 			// Change active allocation system to #2
 			// pack = [hubAlloc, hubAlloc+size1]
-			MEMPACK_SwapPacks(1);
-			MEMPACK_NewPack((void *)iVar5, iVar9);
+			MEMPACK_SwapPacks(LOAD_FIRST_SUBPACK_INDEX);
+			MEMPACK_NewPack(hubAlloc, firstSubpackSize);
 
 			// Change active allocation system to #3
 			// pack = [hubAlloc+size1, hubAlloc+size1+size2]
-			MEMPACK_SwapPacks(2);
-			MEMPACK_NewPack((void *)(iVar5 + iVar9), iVar12);
+			MEMPACK_SwapPacks(LOAD_SECOND_SUBPACK_INDEX);
+			MEMPACK_NewPack(hubAlloc + firstSubpackSize, secondSubpackSize);
+
+			s16 activeSubpackIndex;
 
 			// Intro cutscene with oxide spaceship and all racers
 			if ((gGT->gameMode1 & ADVENTURE_ARENA) == 0)
 			{
 				// Always start with pool 1
-				sVar4 = 1;
+				activeSubpackIndex = LOAD_FIRST_SUBPACK_INDEX;
 			}
 
 			// If you're in Adventure Arena
 			else
 			{
 				// Get 1 or 2, depending on map
-				sVar4 = LOAD_GetAdvPackIndex();
+				activeSubpackIndex = LOAD_GetAdvPackIndex();
 
 				// Then swap:
 				// Turn 1 into 2
 				// Turn 2 into 1
-				sVar4 = 3 - sVar4;
+				activeSubpackIndex = LOAD_HUB_MEMPACK_PAIR_INDEX_SUM - activeSubpackIndex;
 			}
 
 			// keep track of subpack levels
-			gGT->activeMempackIndex = sVar4;
-			gGT->levID_in_each_mempack[sVar4] = gGT->levelID;
-			gGT->levID_in_each_mempack[3 - sVar4] = 0xffff;
+			gGT->activeMempackIndex = activeSubpackIndex;
+			gGT->levID_in_each_mempack[activeSubpackIndex] = gGT->levelID;
+			gGT->levID_in_each_mempack[LOAD_HUB_MEMPACK_PAIR_INDEX_SUM - activeSubpackIndex] = LOAD_NO_LEVEL_IN_MEMPACK;
 
 			// the rest of memory will load pointer maps,
 			// loaded at HighMem in main pack, end of RAM,
 			// so the pointer maps dont bloat subpacks
-			MEMPACK_SwapPacks(0);
+			MEMPACK_SwapPacks(LOAD_MAIN_PACK_INDEX);
 
 			sdata->PatchMem_Size = MEMPACK_GetFreeBytes();
 			sdata->PatchMem_Ptr = MEMPACK_AllocHighMem(sdata->PatchMem_Size); //, "Patch Table Memory");
@@ -456,16 +454,16 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		sdata->load_inProgress = 1;
 
 		// add VRAM to loading queue
-		LOAD_AppendQueue(0, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
+		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
 
 		// add LEV to loading queue
-		LOAD_AppendQueue(0, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
+		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
 
 		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800340c0-0x80034180; retail queues PTR maps by level-ID ranges.
-		if (((u32)(levelID - GEM_STONE_VALLEY) < 0xe) || ((u32)(levelID - CREDITS_CRASH) < 0x14))
+		if (((u32)(levelID - GEM_STONE_VALLEY) < LOAD_PTR_MAP_ADV_LEVEL_COUNT) || ((u32)(levelID - CREDITS_CRASH) < LOAD_PTR_MAP_CREDIT_LEVEL_COUNT))
 		{
 			// add PTR file to loading queue
-			LOAD_AppendQueue(0, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
+			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
 		}
 		break;
 	}
@@ -509,29 +507,14 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		gGT->gameMode1_prevFrame = 1;
 
-		MEMPACK_SwapPacks(0);
 		if (((gGT->gameMode1 & (GAME_CUTSCENE | ADVENTURE_ARENA)) == 0) && ((gGT->gameMode2 & CREDITS) == 0))
 		{
 			MainInit_JitPoolsNew(gGT);
 			return loadingStage + 1;
 		}
 
-		if ((gGT->gameMode2 & LEV_SWAP) == 0)
-		{
-			break;
-		}
-
-		// === Assume LEV_SWAP Active ===
-
-		if ((gGT->gameMode1 & ADVENTURE_ARENA) == 0)
-		{
-			break;
-		}
-
-		// === Assume AdventureArena Active ===
-
 		// podium reward
-		if (gGT->podiumRewardID == 0)
+		if (gGT->podiumRewardID == NOFUNC)
 		{
 			break;
 		}
@@ -539,14 +522,14 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		// === Assume PodiumReward Active ===
 
 		// Set Pack of the hub you're NOT on
-		MEMPACK_SwapPacks(3 - gGT->activeMempackIndex);
+		MEMPACK_SwapPacks(LOAD_HUB_MEMPACK_PAIR_INDEX_SUM - gGT->activeMempackIndex);
 
 		// Load model+vrm files on the VRAM page
 		// that does NOT overwrite the hub VRAM
-		iVar9 = LOAD_GetAdvPackIndex() - 1;
+		int podiumFileVariant = LOAD_GetAdvPackIndex() - 1;
 
 		struct Model **podiumModels = &data.podiumModel_firstPlace;
-		for (int i = 7; i >= 0; i--)
+		for (int i = LOAD_PODIUM_LAST_MODEL_SLOT; i >= 0; i--)
 		{
 			podiumModels[i] = NULL;
 		}
@@ -556,49 +539,49 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		sdata->load_inProgress = 1;
 
 		// VRAM for podium and all related models
-		LOAD_AppendQueue(0, LT_VRAM, BI_PODIUMVRMS + iVar9, NULL, NULL);
+		LOAD_AppendQueue(bigfile, LT_VRAM, BI_PODIUMVRMS + podiumFileVariant, NULL, NULL);
 
 		int fileIndex;
 		u8 *ptrIndexArr = &gGT->podium_modelIndex_First;
 		struct Model **ptrModelPtrArr = podiumModels;
-		void (*setPtrCb)(struct LoadQueueSlot *) = (void (*)(struct LoadQueueSlot *))-2;
+		void (*setPtrCb)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
 
 		// podium first place
 		if ((ptrIndexArr[0] != 0) && (ptrIndexArr[0] != STATIC_OXIDEDANCE))
 		{
-			fileIndex = BI_DANCEMODELWIN + iVar9 + (ptrIndexArr[0] - STATIC_CRASHDANCE) * 2;
-			LOAD_AppendQueue(0, LT_GETADDR, fileIndex, &ptrModelPtrArr[0], setPtrCb);
+			fileIndex = BI_DANCEMODELWIN + podiumFileVariant + (ptrIndexArr[0] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[0], setPtrCb);
 		}
 
 		// podium second place
 		if (ptrIndexArr[1] != 0)
 		{
-			fileIndex = BI_DANCEMODELLOSE + iVar9 + (ptrIndexArr[1] - STATIC_CRASHDANCE) * 2;
-			LOAD_AppendQueue(0, LT_GETADDR, fileIndex, &ptrModelPtrArr[1], setPtrCb);
+			fileIndex = BI_DANCEMODELLOSE + podiumFileVariant + (ptrIndexArr[1] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[1], setPtrCb);
 		}
 
 		// podium third place
 		if (ptrIndexArr[2] != 0)
 		{
-			fileIndex = BI_DANCEMODELLOSE + iVar9 + (ptrIndexArr[2] - STATIC_CRASHDANCE) * 2;
-			LOAD_AppendQueue(0, LT_GETADDR, fileIndex, &ptrModelPtrArr[2], setPtrCb);
+			fileIndex = BI_DANCEMODELLOSE + podiumFileVariant + (ptrIndexArr[2] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[2], setPtrCb);
 		}
 
 		// TAWNA
-		fileIndex = BI_DANCETAWNAGIRL + iVar9 + (gGT->podium_modelIndex_tawna - STATIC_TAWNA1) * 2;
+		fileIndex = BI_DANCETAWNAGIRL + podiumFileVariant + (gGT->podium_modelIndex_tawna - STATIC_TAWNA1) * LOAD_PODIUM_MODEL_FILE_STRIDE;
 
 		// add TAWNA to loading queue
-		LOAD_AppendQueue(0, LT_GETADDR, fileIndex, (void *)&data.podiumModel_tawna, setPtrCb);
+		LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, (void *)&data.podiumModel_tawna, setPtrCb);
 
 		// if 0x7e+5 (dingo)
 		if (gGT->podium_modelIndex_First == STATIC_DINGODANCE)
 		{
 			// add "DingoFire" to loading queue
-			LOAD_AppendQueue(0, LT_GETADDR, BI_DINGOFIRE + iVar9, (void *)&data.podiumModel_dingoFire, setPtrCb);
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_DINGOFIRE + podiumFileVariant, (void *)&data.podiumModel_dingoFire, setPtrCb);
 		}
 
 		// add Podium
-		LOAD_AppendQueue(0, LT_GETADDR, BI_PODIUM + iVar9, NULL, LOAD_Callback_Podiums);
+		LOAD_AppendQueue(bigfile, LT_GETADDR, BI_PODIUM + podiumFileVariant, NULL, LOAD_Callback_Podiums);
 
 		// Disable LEV instances on Adv Hub, for podium scene
 		gGT->gameMode2 = gGT->gameMode2 | NO_LEV_INSTANCE;
@@ -612,7 +595,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		{
 			struct Model **modelPtrArr = &data.podiumModel_firstPlace;
 
-			for (int i = 0; i < 8; i++)
+			for (int i = 0; i < LOAD_PODIUM_MODEL_SLOT_COUNT; i++)
 			{
 				struct Model *m = modelPtrArr[i];
 
@@ -621,9 +604,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 					continue;
 				}
 
-				if (i < 7)
+				if (i < LOAD_PODIUM_MODELS_WITH_FILE_HEADER)
 				{
-					m = (struct Model *)((u8 *)m + 4);
+					m = (struct Model *)((u8 *)m + LOAD_MODEL_FILE_HEADER_BYTES);
 					modelPtrArr[i] = m;
 				}
 
@@ -639,60 +622,61 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		}
 
 		// Level ID
-		iVar9 = gGT->levelID;
+		int currentLevelID = gGT->levelID;
+		int audioState;
 
 		// Main Menu
-		if (iVar9 == 0x27)
+		if (currentLevelID == MAIN_MENU_LEVEL)
 		{
-			uVar16 = 7;
+			audioState = AUDIO_GARAGE_ENTRY;
 		LAB_800346b0:
 			// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034694-0x800346b8 for the retail post-load audio state call.
 #if defined(CTR_NATIVE)
-			LOAD_NativeAudio_SetStateAfterBankReload(uVar16);
+			LOAD_NativeAudio_SetStateAfterBankReload(audioState);
 #else
-			Audio_SetState_Safe(uVar16);
+			Audio_SetState_Safe(audioState);
 #endif
 			return loadingStage + 1;
 		}
 
 		// One of the maps on Adventure Arena
-		if (iVar9 - 0x19U < 5)
+		if ((u32)(currentLevelID - GEM_STONE_VALLEY) < LOAD_ADV_HUB_COUNT)
 		{
-			uVar16 = 6;
+			audioState = AUDIO_ADV_HUB_WAIT;
 
 			// podium reward
 			if (gGT->podiumRewardID == NOFUNC) // 0
 			{
-				uVar16 = 5;
+				audioState = AUDIO_ADV_HUB;
 			}
 			goto LAB_800346b0;
 		}
 
 		// oxide intro
-		if (iVar9 == 0x1e)
+		if (currentLevelID == INTRO_RACE_TODAY)
 		{
-			uVar16 = 3;
+			audioState = LOAD_POSTLOAD_AUDIO_OXIDE_INTRO;
 			goto LAB_800346b0;
 		}
 
 		// credits
-		if (iVar9 == 0x2c)
+		if (currentLevelID == CREDITS_CRASH)
 		{
-			uVar16 = 2;
+			audioState = AUDIO_STOP_ALL;
 			goto LAB_800346b0;
 		}
 
 		// Naughty Dog Box
-		if (iVar9 == 0x29)
+		if (currentLevelID == NAUGHTY_DOG_CRATE)
 		{
-			uVar16 = 4;
+			audioState = LOAD_POSTLOAD_AUDIO_NDBOX;
 			goto LAB_800346b0;
 		}
 
 		// stop/pause cseq music
-		uVar16 = 1;
+		audioState = AUDIO_LOADING;
 
-		if (iVar9 - 0x2aU < 2)
+		if ((u32)(currentLevelID - OXIDE_ENDING) < LOAD_OUTRO_CUTSCENE_COUNT)
 		{
 			goto LAB_800346b0;
 		}
@@ -700,7 +684,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 	}
 	case 9:
 	{
-		if (sdata->XA_State == 2)
+		if (sdata->XA_State == XA_STARTING)
 		{
 			return loadingStage;
 		}
@@ -709,9 +693,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if (((gGT->gameMode1 & MAIN_MENU) != 0) && (gGT->levelID != ADVENTURE_GARAGE))
 		{
 			// disable rendering everything, draw loading screen and instances
-			gGT->renderFlags = (gGT->renderFlags & 0x1000) | 0x20;
+			gGT->renderFlags = (gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) | RENDER_FLAG_RENDER_BUCKET;
 
-			if (RaceFlag_IsFullyOffScreen() == 1)
+			if (RaceFlag_IsFullyOffScreen())
 			{
 				RaceFlag_BeginTransition(1);
 			}
@@ -720,17 +704,17 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		else if ((gGT->gameMode2 & CREDITS) != 0)
 		{
 			// disable rendering everything, draw loading screen and instances
-			gGT->renderFlags = (gGT->renderFlags & 0x1000) | 0x20;
+			gGT->renderFlags = (gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) | RENDER_FLAG_RENDER_BUCKET;
 		}
 
 		// Normal level
 		else
 		{
 			// enable all flags except loading screen
-			gGT->renderFlags = gGT->renderFlags | 0xffffefff;
+			gGT->renderFlags |= RENDER_FLAG_ALL_EXCEPT_CHECKERED_FLAG_MASK;
 		}
 
-		gGT->hudFlags = gGT->hudFlags | 8;
+		gGT->hudFlags |= HUD_FLAG_INTRO_RACE_TITLE_BARS;
 		gGT->framesInThisLEV = 0;
 		gGT->msInThisLEV = 0;
 

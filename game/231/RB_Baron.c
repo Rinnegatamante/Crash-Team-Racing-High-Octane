@@ -142,9 +142,9 @@ void RB_Baron_LInB(struct Instance *inst)
 	}
 
 	baronObj->pointIndex = pointIndex;
-	baronObj->unk1A = 4;
-	baronObj->unk22 = 0x18;
-	baronObj->unk06 = 0;
+	baronObj->unused1A = 4;
+	baronObj->unused22 = 0x18;
+	baronObj->unused06 = 0;
 	baronObj->otherInst = 0;
 
 	if (inst->model->id == DYNAMIC_VONLABASS)

@@ -1,13 +1,53 @@
 #include <common.h>
 
-static u32 VehGroundSkids_ReadTexWord(const struct TextureLayout *layout, int offset)
+enum
+{
+	VEH_GROUND_SKIDS_ICON_TIREMARK = 0x2f,
+	VEH_GROUND_SKIDS_ALT_TPAGE_FLAG = 0x1,
+	VEH_GROUND_SKIDS_TPAGE_BLEND_ALT = 0x00600000,
+	VEH_GROUND_SKIDS_TPAGE_BLEND_NORMAL = 0x00400000,
+	VEH_GROUND_SKIDS_GPU_TAG_POLY_GT4 = 0x0c000000u,
+	VEH_GROUND_SKIDS_OT_DEPTH_SHIFT = 6,
+	VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT = 2,
+	VEH_GROUND_SKIDS_CULL_ABS_MAX = 0x1771,
+	VEH_GROUND_SKIDS_DEPTH_SHIFT = 2,
+	VEH_GROUND_SKIDS_FULL_INTENSITY_DEPTH = 0x180,
+	VEH_GROUND_SKIDS_FULL_INTENSITY = 0x7f,
+	VEH_GROUND_SKIDS_LZCR_SHIFT_BASE = 0x1a,
+	VEH_GROUND_SKIDS_MIN_INTENSITY = 0x10,
+	VEH_GROUND_SKIDS_COLOR_PREFIX = 0x3e000000u,
+	VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH = 0x20,
+	VEH_GROUND_SKIDS_COLOR_FADE_SHIFT = 1,
+};
+
+static const u32 VEH_GROUND_SKIDS_TPAGE_BLEND_MASK = 0xff9fffff;
+static const u32 VEH_GROUND_SKIDS_COLOR_SENTINEL = 0xffffffffu;
+
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_ICON_TIREMARK == 0x2f);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_ALT_TPAGE_FLAG == 0x1);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_TPAGE_BLEND_ALT == 0x00600000);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_TPAGE_BLEND_NORMAL == 0x00400000);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_GPU_TAG_POLY_GT4 == 0x0c000000u);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_OT_DEPTH_SHIFT == 6);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT == 2);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_CULL_ABS_MAX == 0x1771);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_DEPTH_SHIFT == 2);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_FULL_INTENSITY_DEPTH == 0x180);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_FULL_INTENSITY == 0x7f);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_LZCR_SHIFT_BASE == 0x1a);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_MIN_INTENSITY == 0x10);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_COLOR_PREFIX == 0x3e000000u);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH == 0x20);
+CTR_STATIC_ASSERT(VEH_GROUND_SKIDS_COLOR_FADE_SHIFT == 1);
+
+static u32 VehGroundSkids_ReadTexWord(const struct TextureLayout *layout, size_t offset)
 {
 	u32 word;
 	memcpy(&word, (const u8 *)layout + offset, sizeof(word));
 	return word;
 }
 
-static u16 VehGroundSkids_ReadTexHalf(const struct TextureLayout *layout, int offset)
+static u16 VehGroundSkids_ReadTexHalf(const struct TextureLayout *layout, size_t offset)
 {
 	u16 half;
 	memcpy(&half, (const u8 *)layout + offset, sizeof(half));
@@ -39,32 +79,32 @@ void VehGroundSkids_Subset1(u32 *currXY, u32 *prevXY, int depth, struct VehGroun
 	CtrGpu_WritePackedXY(&poly->x2, prevXY[0]);
 	CtrGpu_WritePackedXY(&poly->x3, prevXY[1]);
 
-	struct Icon *icon = gGT->ptrIcons[0x2f];
-	CtrGpu_WritePackedUVWord(&poly->u0, VehGroundSkids_ReadTexWord(&icon->texLayout, 0x0));
+	struct Icon *icon = gGT->ptrIcons[VEH_GROUND_SKIDS_ICON_TIREMARK];
+	CtrGpu_WritePackedUVWord(&poly->u0, VehGroundSkids_ReadTexWord(&icon->texLayout, offsetof(struct TextureLayout, u0)));
 
-	u32 tpage = VehGroundSkids_ReadTexWord(&icon->texLayout, 0x4);
-	if ((scratch->segmentFlags & 1) != 0)
+	u32 tpage = VehGroundSkids_ReadTexWord(&icon->texLayout, offsetof(struct TextureLayout, u1));
+	if ((scratch->segmentFlags & VEH_GROUND_SKIDS_ALT_TPAGE_FLAG) != 0)
 	{
-		tpage = (tpage & 0xff9fffff) | 0x00600000;
+		tpage = (tpage & VEH_GROUND_SKIDS_TPAGE_BLEND_MASK) | VEH_GROUND_SKIDS_TPAGE_BLEND_ALT;
 	}
 	else
 	{
-		tpage = (tpage & 0xff9fffff) | 0x00400000;
+		tpage = (tpage & VEH_GROUND_SKIDS_TPAGE_BLEND_MASK) | VEH_GROUND_SKIDS_TPAGE_BLEND_NORMAL;
 	}
 	CtrGpu_WritePackedUVWord(&poly->u1, tpage);
 
-	CtrGpu_WritePackedUV(&poly->u2, VehGroundSkids_ReadTexHalf(&icon->texLayout, 0x8));
-	CtrGpu_WritePackedUV(&poly->u3, VehGroundSkids_ReadTexHalf(&icon->texLayout, 0xa));
+	CtrGpu_WritePackedUV(&poly->u2, VehGroundSkids_ReadTexHalf(&icon->texLayout, offsetof(struct TextureLayout, u2)));
+	CtrGpu_WritePackedUV(&poly->u3, VehGroundSkids_ReadTexHalf(&icon->texLayout, offsetof(struct TextureLayout, u3)));
 
 	struct PushBuffer *pb = scratch->pushBuffer;
-	uint32_t *ot = pb->ptrOT + ((s32)depth >> 6);
-	CtrGpu_LinkPacket24(ot, &poly->tag, poly, 0x0c000000);
+	u32 *ot = pb->ptrOT + ((s32)depth >> VEH_GROUND_SKIDS_OT_DEPTH_SHIFT);
+	CtrGpu_LinkPacket24(ot, &poly->tag, poly, VEH_GROUND_SKIDS_GPU_TAG_POLY_GT4);
 }
 
 static s16 VehGroundSkids_ScaleRelative(u16 value, u16 origin)
 {
 	// NOTE(aalhendi): Retail uses lhu/subu/sll/sh, so preserve unsigned halfword wraparound.
-	return (s16)(u16)(((u32)value - (u32)origin) << 2);
+	return (s16)(u16)(((u32)value - (u32)origin) << VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8005c278-0x8005c354.
@@ -89,7 +129,7 @@ void VehGroundSkids_Subset2(struct VehGroundSkidsScratch *scratch, const SVECTOR
 
 static u32 VehGroundSkids_ColorWord(int value)
 {
-	return 0x3e000000 | ((u32)value << 16) | ((u32)value << 8) | (u32)value;
+	return VEH_GROUND_SKIDS_COLOR_PREFIX | ((u32)value << 16) | ((u32)value << 8) | (u32)value;
 }
 
 static s32 VehGroundSkids_Abs(s32 value)
@@ -100,20 +140,20 @@ static s32 VehGroundSkids_Abs(s32 value)
 static int VehGroundSkids_InitPoint(SVECTOR *scratch, const SVECTOR *point, const s32 *origin)
 {
 	// NOTE(aalhendi): Retail uses lh/lw/subu/sll here; preserve unsigned 32-bit wraparound.
-	s32 x = (s32)(((u32)(s32)point->vx - (u32)origin[0]) << 2);
-	if (VehGroundSkids_Abs(x) >= 0x1771)
+	s32 x = (s32)(((u32)(s32)point->vx - (u32)origin[0]) << VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT);
+	if (VehGroundSkids_Abs(x) >= VEH_GROUND_SKIDS_CULL_ABS_MAX)
 	{
 		return 0;
 	}
 
-	s32 y = (s32)(((u32)(s32)point->vy - (u32)origin[1]) << 2);
-	if (VehGroundSkids_Abs(y) >= 0x1771)
+	s32 y = (s32)(((u32)(s32)point->vy - (u32)origin[1]) << VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT);
+	if (VehGroundSkids_Abs(y) >= VEH_GROUND_SKIDS_CULL_ABS_MAX)
 	{
 		return 0;
 	}
 
-	s32 z = (s32)(((u32)(s32)point->vz - (u32)origin[2]) << 2);
-	if (VehGroundSkids_Abs(z) >= 0x1771)
+	s32 z = (s32)(((u32)(s32)point->vz - (u32)origin[2]) << VEH_GROUND_SKIDS_PROJECT_SCALE_SHIFT);
+	if (VehGroundSkids_Abs(z) >= VEH_GROUND_SKIDS_CULL_ABS_MAX)
 	{
 		return 0;
 	}
@@ -126,21 +166,21 @@ static int VehGroundSkids_InitPoint(SVECTOR *scratch, const SVECTOR *point, cons
 
 static int VehGroundSkids_IntensityFromDepth(int depth)
 {
-	depth >>= 2;
-	if (depth < 0x180)
+	depth >>= VEH_GROUND_SKIDS_DEPTH_SHIFT;
+	if (depth < VEH_GROUND_SKIDS_FULL_INTENSITY_DEPTH)
 	{
-		return 0x7f;
+		return VEH_GROUND_SKIDS_FULL_INTENSITY;
 	}
 
-	MTC2(depth - 0x180, 30);
-	int shift = 0x1a - MFC2(31);
+	MTC2(depth - VEH_GROUND_SKIDS_FULL_INTENSITY_DEPTH, 30);
+	int shift = VEH_GROUND_SKIDS_LZCR_SHIFT_BASE - MFC2(31);
 	if (shift < 0)
 	{
 		shift = 0;
 	}
 
-	int intensity = 0x7f >> (shift & 0x1f);
-	if (intensity < 0x10)
+	int intensity = VEH_GROUND_SKIDS_FULL_INTENSITY >> (shift & 0x1f);
+	if (intensity < VEH_GROUND_SKIDS_MIN_INTENSITY)
 	{
 		return -1;
 	}
@@ -176,17 +216,17 @@ static void VehGroundSkids_TryEmitSegment(struct VehGroundSkidsScratch *scratch,
 	{
 		return;
 	}
-	if (currDepth[pointIndex] <= 0x20 || currDepth[pointIndex + 1] <= 0x20)
+	if (currDepth[pointIndex] <= VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH || currDepth[pointIndex + 1] <= VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH)
 	{
 		return;
 	}
-	if (prevDepth[pointIndex] <= 0x20 || prevDepth[pointIndex + 1] <= 0x20)
+	if (prevDepth[pointIndex] <= VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH || prevDepth[pointIndex + 1] <= VEH_GROUND_SKIDS_MIN_VISIBLE_DEPTH)
 	{
 		return;
 	}
 
 	scratch->segmentFlagsLow = mark->flags;
-	int depth = (currDepth[pointIndex] >> 2) + (mark->color << 6);
+	int depth = (currDepth[pointIndex] >> VEH_GROUND_SKIDS_DEPTH_SHIFT) + (mark->color << VEH_GROUND_SKIDS_OT_DEPTH_SHIFT);
 	VehGroundSkids_Subset1(&currXY[pointIndex], &prevXY[pointIndex], depth, scratch);
 }
 
@@ -204,7 +244,7 @@ void VehGroundSkids_Main(struct Thread *thread, struct PushBuffer *pb)
 	scratch->origin.z = 0;
 
 	gte_SetRotMatrix(&pb->matrix_ViewProj);
-	gte_SetTransVector((VECTOR *)&scratch->origin);
+	gte_SetTransVector(&scratch->origin);
 
 	scratch->origin.x = pb->matrix_Camera.t[0];
 	scratch->origin.y = pb->matrix_Camera.t[1];
@@ -215,9 +255,9 @@ void VehGroundSkids_Main(struct Thread *thread, struct PushBuffer *pb)
 		struct Driver *d = thread->object;
 		u32 flags = d->skidmarkEnableFlags;
 
-		if (flags > 0xf)
+		if (flags > DRIVER_SKIDMARK_CURRENT_FRAME_MASK)
 		{
-			int frameIndex = ((u8)d->skidmarkFrameIndex - 1) & (DRIVER_SKIDMARK_FRAME_COUNT - 1);
+			int frameIndex = ((u8)d->skidmarkFrameIndex - 1) & DRIVER_SKIDMARK_FRAME_INDEX_MASK;
 			union VehEmitterSkidmark *frame = d->skidmarks[frameIndex];
 			SVECTOR *framePoints = &frame[0].edge[0];
 
@@ -235,23 +275,27 @@ void VehGroundSkids_Main(struct Thread *thread, struct PushBuffer *pb)
 					s32 *prevDepth = scratch->prevDepth;
 
 					scratch->colorNear = VehGroundSkids_ColorWord(intensity);
-					scratch->colorFar = 0xffffffff;
+					scratch->colorFar = VEH_GROUND_SKIDS_COLOR_SENTINEL;
 
 					u32 prevFlags = 0;
 					while (flags != 0)
 					{
 						u32 currFlags = flags;
 
-						if ((currFlags & 0xf) != 0)
+						if ((currFlags & DRIVER_SKIDMARK_CURRENT_FRAME_MASK) != 0)
 						{
 							frame = d->skidmarks[frameIndex];
 							framePoints = &frame[0].edge[0];
 							VehGroundSkids_ProjectFrame(scratch, framePoints, currXY, currDepth);
 
-							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, 1, &frame[0], 0);
-							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, 2, &frame[1], 2);
-							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, 4, &frame[2], 4);
-							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, 8, &frame[3], 6);
+							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, DRIVER_SKIDMARK_BACK_LEFT,
+							                              &frame[0], 0);
+							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, DRIVER_SKIDMARK_BACK_RIGHT,
+							                              &frame[1], 2);
+							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, DRIVER_SKIDMARK_FRONT_LEFT,
+							                              &frame[2], 4);
+							VehGroundSkids_TryEmitSegment(scratch, currXY, prevXY, currDepth, prevDepth, currFlags, prevFlags, DRIVER_SKIDMARK_FRONT_RIGHT,
+							                              &frame[3], 6);
 						}
 
 						u32 *tmpXY = currXY;
@@ -262,19 +306,19 @@ void VehGroundSkids_Main(struct Thread *thread, struct PushBuffer *pb)
 						currDepth = prevDepth;
 						prevDepth = tmpDepth;
 
-						frameIndex = (frameIndex + 1) & (DRIVER_SKIDMARK_FRAME_COUNT - 1);
+						frameIndex = (frameIndex + 1) & DRIVER_SKIDMARK_FRAME_INDEX_MASK;
 
-						if (scratch->colorFar == 0xffffffff)
+						if (scratch->colorFar == VEH_GROUND_SKIDS_COLOR_SENTINEL)
 						{
 							scratch->colorFar = scratch->colorNear;
-							prevFlags = 0xf;
+							prevFlags = DRIVER_SKIDMARK_CURRENT_FRAME_MASK;
 						}
 						else
 						{
 							prevFlags = currFlags;
-							flags = currFlags >> 4;
+							flags = currFlags >> DRIVER_SKIDMARK_HISTORY_SHIFT;
 
-							int faded = (scratch->colorNear & 0xff) >> 1;
+							int faded = (scratch->colorNear & 0xff) >> VEH_GROUND_SKIDS_COLOR_FADE_SHIFT;
 							scratch->colorFar = scratch->colorNear;
 							scratch->colorNear = VehGroundSkids_ColorWord(faded);
 						}

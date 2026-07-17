@@ -51,8 +51,7 @@ void DecalMP_01(struct GameTracker *gGT)
 			}
 
 			struct Instance *inst = driver->instSelf;
-			struct InstDrawPerPlayer *idpp = DecalMP_GetIdpp(inst, cameraID);
-			idpp->instFlags |= 0x300;
+			inst->flags |= PUSHBUFFER_EXISTS | PIXEL_LOD;
 
 			if (driverID == cameraID)
 			{
@@ -78,6 +77,7 @@ void DecalMP_01(struct GameTracker *gGT)
 			entry->pb.ptrOT = pb->ptrOT;
 			entry->pb.cameraID = pb->cameraID;
 
+			struct InstDrawPerPlayer *idpp = DecalMP_GetIdpp(inst, cameraID);
 			idpp->pushBuffer = &entry->pb;
 			entry->inst = inst;
 		}
@@ -191,10 +191,10 @@ void DecalMP_03(struct GameTracker *gGT)
 		POLY_FT4 *poly = gGT->backBuffer->primMem.cursor;
 		poly->code = 0x2d;
 
-		s16 x = entry->pb.rect.x;
-		s16 y = entry->pb.rect.y;
-		s16 w = entry->pb.rect.w;
-		s16 h = entry->pb.rect.h;
+		s16 x = (s16)entry->pb.renderBucketScreenPos;
+		s16 y = (s16)(entry->pb.renderBucketScreenPos >> 16);
+		s16 w = (s16)entry->pb.renderBucketScreenSize;
+		s16 h = (s16)(entry->pb.renderBucketScreenSize >> 16);
 
 		CtrGpu_WritePackedXY(&poly->x0, (u16)x | ((u32)(u16)y << 16));
 		CtrGpu_WritePackedXY(&poly->x1, (u16)(x + w) | ((u32)(u16)y << 16));
@@ -215,7 +215,7 @@ void DecalMP_03(struct GameTracker *gGT)
 		CtrGpu_WritePackedUV(&poly->u2, (u16)(u0 | (v1 << 8)));
 		CtrGpu_WritePackedUV(&poly->u3, (u16)(u1 | (v1 << 8)));
 
-		poly->tpage = (u16)(((texY & 0x100) >> 4) | ((texX & 0x3ff) >> 6) | 0x100 | ((texY & 0x200) << 2));
+		poly->tpage = (u16)getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)texX, (u32)texY);
 
 		uint32_t *ot = gGT->pushBuffer[cameraID].ptrOT + (entry->pb.renderBucketOTByteOffset >> 2);
 		poly->tag = CtrGpu_PackOTTag(*ot, 0x09000000);

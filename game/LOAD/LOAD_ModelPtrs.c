@@ -5,7 +5,7 @@ void LOAD_GlobalModelPtrs_MPK()
 {
 	struct GameTracker *gGT = sdata->gGT;
 
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 	{
 		struct Model *m = data.driverModelExtras[i].model;
 

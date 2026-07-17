@@ -3,14 +3,12 @@
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80032d30-0x80032d8c.
 void LOAD_AppendQueue(struct BigHeader *bigfile, int type, int fileIndex, void *destinationPtr, void (*callback)(struct LoadQueueSlot *))
 {
-	struct LoadQueueSlot *lqs;
-
-	if (sdata->queueLength >= 8)
+	if (sdata->queueLength >= LOAD_QUEUE_SLOT_COUNT)
 	{
 		return;
 	}
 
-	lqs = &sdata->queueSlots[sdata->queueLength];
+	struct LoadQueueSlot *lqs = &sdata->queueSlots[(s32)sdata->queueLength];
 	lqs->ptrBigfileCdPos_UNUSED = bigfile;
 	lqs->flags = 0;
 	lqs->type_UNUSED = type;
@@ -50,7 +48,7 @@ void LOAD_NextQueuedFile()
 		{
 			*curr = sdata->queueSlots[0];
 
-			for (int i = 1; i < sdata->queueLength; i++)
+			for (int i = LOAD_QUEUE_FIRST_PENDING_SLOT; i < sdata->queueLength; i++)
 			{
 				sdata->queueSlots[i - 1] = sdata->queueSlots[i];
 			}
@@ -79,7 +77,7 @@ void LOAD_NextQueuedFile()
 
 	if (sdata->frameFinishedVRAM != 0)
 	{
-		if ((u32)(sdata->gGT->frameTimer_VsyncCallback - sdata->frameFinishedVRAM) >= 3)
+		if ((u32)(sdata->gGT->frameTimer_VsyncCallback - sdata->frameFinishedVRAM) >= LOAD_QUEUE_VRAM_CALLBACK_DELAY_FRAMES)
 		{
 			if (curr->callbackFuncPtr != NULL)
 			{

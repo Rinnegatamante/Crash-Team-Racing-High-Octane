@@ -1,6 +1,6 @@
 #include <common.h>
 
-SVec3 crystalLightDir = {0x94F, 0x94F, 0x94F};
+SVec3 crystalLightDir = {{0x94F, 0x94F, 0x94F}};
 
 static void RB_Crystal_RotateStep(struct Instance *crystalInst, struct Crystal *crystalObj)
 {
@@ -11,6 +11,7 @@ static void RB_Crystal_RotateStep(struct Instance *crystalInst, struct Crystal *
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b4c5c-0x800b4dd8.
 int RB_Crystal_ThCollide(struct Thread *crystalTh, struct Thread *driverTh, void *funcThCollide, struct ScratchpadStruct *sps)
 {
+	(void)funcThCollide;
 	struct PushBuffer *pb;
 	s16 posScreen[2];
 	struct Driver *driver;
@@ -49,7 +50,7 @@ int RB_Crystal_ThCollide(struct Thread *crystalTh, struct Thread *driverTh, void
 		driver->PickupWumpaHUD.numCollected++;
 	}
 
-	*(int *)&crystalInst->scale.x = 0;
+	CTR_WriteU32LE(&crystalInst->scale.x, 0);
 	crystalInst->scale.z = 0;
 	crystalInst->thread = 0;
 
@@ -87,7 +88,6 @@ void RB_Crystal_ThTick(struct Thread *t)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b4e7c-0x800b4f48.
 int RB_Crystal_LInC(struct Instance *crystalInst, struct Thread *driverTh, struct ScratchpadStruct *sps)
 {
-	typedef int (*CrystalCollideFunc)(struct Thread *, struct Thread *, void *, struct ScratchpadStruct *);
 	struct Thread *crystalTh;
 
 	crystalTh = crystalInst->thread;
@@ -109,7 +109,7 @@ int RB_Crystal_LInC(struct Instance *crystalInst, struct Thread *driverTh, struc
 		}
 
 		crystalTh->inst = crystalInst;
-		crystalTh->funcThCollide = (void (*)(struct Thread *))RB_Crystal_ThCollide;
+		crystalTh->funcThCollide = (void *)RB_Crystal_ThCollide;
 		crystalTh = crystalInst->thread;
 	}
 
@@ -123,7 +123,7 @@ int RB_Crystal_LInC(struct Instance *crystalInst, struct Thread *driverTh, struc
 		return 0;
 	}
 
-	return ((CrystalCollideFunc)crystalTh->funcThCollide)(crystalTh, driverTh, crystalTh->funcThCollide, sps);
+	return ((ThreadScratchCollideFunc)crystalTh->funcThCollide)(crystalTh, driverTh, crystalTh->funcThCollide, sps);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b4f48-0x800b4fe4.
@@ -151,10 +151,10 @@ void RB_Crystal_LInB(struct Instance *inst)
 
 		crystalObj = ((struct Crystal *)t->object);
 		t->inst = inst;
-		t->funcThCollide = (void (*)(struct Thread *))RB_Crystal_ThCollide;
+		t->funcThCollide = (void *)RB_Crystal_ThCollide;
 
 		// rotX, rotY, rotZ
-		*(int *)&crystalObj->rot.x = 0;
+		CTR_WriteU32LE(&crystalObj->rot.x, 0);
 		crystalObj->rot.z = 0;
 
 		inst->colorRGBA = 0xd22fff0;

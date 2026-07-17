@@ -16,7 +16,7 @@ Checks: >
 WarningsAsErrors: ''
 
 # TODO(aalhendi): regex... can do this better
-HeaderFilterRegex: '(^|.*/)(game|include|platform)/|(^|.*/)(main\.c|ctr_native\.h|platform\.h)$'
+HeaderFilterRegex: '(^|.*/)(game|include|platform)/|(^|.*/)main\.c$'
 ExcludeHeaderFilterRegex: '(^|.*/)externals/'
 
 FormatStyle: file

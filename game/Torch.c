@@ -142,8 +142,8 @@ CTR_STATIC_ASSERT(offsetof(struct TorchScratch, uv0) == 0x5c);
 CTR_STATIC_ASSERT(offsetof(struct TorchScratch, uv1) == 0x60);
 CTR_STATIC_ASSERT(offsetof(struct TorchScratch, uv23) == 0x64);
 CTR_STATIC_ASSERT(offsetof(struct TorchScratch, rings) == TORCH_RING0_SCRATCH_OFFSET);
-CTR_STATIC_ASSERT(offsetof(struct TorchScratch, rings[1]) == TORCH_RING1_SCRATCH_OFFSET);
-CTR_STATIC_ASSERT(offsetof(struct TorchScratch, rings[2]) == TORCH_RING2_SCRATCH_OFFSET);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_ARRAY(struct TorchScratch, rings, 1) == TORCH_RING1_SCRATCH_OFFSET);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_ARRAY(struct TorchScratch, rings, 2) == TORCH_RING2_SCRATCH_OFFSET);
 
 static u32 Torch_ReadWord(const void *base, int offset)
 {
@@ -509,7 +509,7 @@ static u32 *Torch_EmitParticle(u32 *prim, uint32_t *ot)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004b470-0x8004b914
-void Torch_Main(void *particleList_heatWarp, struct PushBuffer *pb, struct PrimMem *primMem, char numPlyr, int swapchainIndex)
+void Torch_Main(void *particleList_heatWarp, struct PushBuffer *pb, struct PrimMem *primMem, u8 numPlyr, int swapchainIndex)
 {
 	struct Particle *firstParticle = particleList_heatWarp;
 	struct TorchScratch *scratch = Torch_Scratch();

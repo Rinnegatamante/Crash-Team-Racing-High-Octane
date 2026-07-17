@@ -1,56 +1,126 @@
 #include <common.h>
 
+enum
+{
+	PARTICLE_POTION_SHATTER_Y_SPEED_THRESHOLD = 0x578,
+	PARTICLE_POTION_SHATTER_XZ_RANDOM_RANGE = 800,
+	PARTICLE_POTION_SHATTER_XZ_RANDOM_CENTER = 400,
+	PARTICLE_POTION_SHATTER_SCALE_RANDOM_RANGE = 0x100,
+	PARTICLE_POTION_SHATTER_SCALE_RANDOM_BASE = 0x100,
+	PARTICLE_POTION_SHATTER_FADE_STEP = 0x1200,
+
+	PARTICLE_SPIT_TIRE_MOUTH_Y_OFFSET = 0x10,
+	PARTICLE_SPIT_TIRE_XZ_RANDOM_RANGE = 0x1640,
+	PARTICLE_SPIT_TIRE_XZ_RANDOM_CENTER = 0xb20,
+	PARTICLE_SPIT_TIRE_FRAME_1 = 0x1000,
+	PARTICLE_SPIT_TIRE_FRAME_2 = 0xfff,
+	PARTICLE_SPIT_TIRE_FRAME_3 = 0xffe,
+	PARTICLE_SPIT_TIRE_FRAME_3_VELOCITY = 0xf801,
+	PARTICLE_SPIT_TIRE_FRAME_1_Y_RANDOM_RANGE = 0x12c0,
+	PARTICLE_SPIT_TIRE_FRAME_1_Y_BASE = 0x1900,
+	PARTICLE_SPIT_TIRE_LATER_Y_RANDOM_RANGE = 800,
+	PARTICLE_SPIT_TIRE_FRAME_2_Y_BASE = 8000,
+	PARTICLE_SPIT_TIRE_FRAME_3_Y_BASE = 6000,
+
+	PARTICLE_EXHAUST_WATER_HEIGHT_THRESHOLD = 3,
+	PARTICLE_EXHAUST_POP_LIFE_THRESHOLD = 27,
+	PARTICLE_EXHAUST_BUBBLEPOP_ICON_GROUP = 8,
+	PARTICLE_EXHAUST_ROTATION_RANDOM_MASK = 0xfff,
+
+	PARTICLE_OSC_WAVE_CENTER = 0x1000,
+	PARTICLE_OSC_SAW_PHASE_SHIFT = 4,
+	PARTICLE_OSC_SAW_PHASE_MASK = 0x1fff,
+	PARTICLE_OSC_TRIANGLE_PHASE_SHIFT = 3,
+	PARTICLE_OSC_TRIANGLE_PHASE_MASK = 0x3fff,
+	PARTICLE_OSC_TRIANGLE_PEAK = 0x2000,
+	PARTICLE_OSC_TRIANGLE_PERIOD = 0x4000,
+	PARTICLE_OSC_SQUARE_PHASE_SHIFT = 6,
+	PARTICLE_OSC_SQUARE_HIGH_BIT = 0x400,
+	PARTICLE_OSC_RANDOM_SHIFT = 3,
+	PARTICLE_OSC_SINE_PHASE_SHIFT = 5,
+	PARTICLE_OSC_ABS_SINE_PHASE_SHIFT = 6,
+	PARTICLE_OSC_SCALE_SHIFT = 12,
+
+	PARTICLE_COLOR_CHANNEL_MIN = 0,
+	PARTICLE_COLOR_CHANNEL_MAX = 0xff00,
+	PARTICLE_COLOR_CHANNEL_SHIFT = 8,
+	PARTICLE_COLOR_BYTE_MASK = 0xff,
+};
+
+enum
+{
+	PARTICLE_GPU_CODE_SHADE_TEXTURE = 0x01000000u,
+	PARTICLE_GPU_CODE_SEMI_TRANS = 0x02000000u,
+	PARTICLE_GPU_CODE_POLY_FT4 = 0x2c000000u,
+	PARTICLE_GPU_CODE_LINE_G2 = 0x50000000u,
+	PARTICLE_GPU_TAG_LENGTH_SPECIAL_LINE = 0x06000000u,
+	PARTICLE_GPU_TAG_LENGTH_POLY_FT4 = 0x09000000u,
+	PARTICLE_GPU_DRAWMODE_BASE = 0xe1000a00u,
+	PARTICLE_TEXTURE_DRAW_MODE_MASK = 0xff9fffffu,
+};
+
+CTR_STATIC_ASSERT(PARTICLE_POTION_SHATTER_Y_SPEED_THRESHOLD == 0x578);
+CTR_STATIC_ASSERT(PARTICLE_POTION_SHATTER_FADE_STEP == 0x1200);
+CTR_STATIC_ASSERT(PARTICLE_SPIT_TIRE_MOUTH_Y_OFFSET == 0x10);
+CTR_STATIC_ASSERT(PARTICLE_SPIT_TIRE_FRAME_1 == 0x1000);
+CTR_STATIC_ASSERT(PARTICLE_SPIT_TIRE_FRAME_2 == 0xfff);
+CTR_STATIC_ASSERT(PARTICLE_SPIT_TIRE_FRAME_3 == 0xffe);
+CTR_STATIC_ASSERT(PARTICLE_SPIT_TIRE_FRAME_3_VELOCITY == 0xf801);
+CTR_STATIC_ASSERT(PARTICLE_EXHAUST_BUBBLEPOP_ICON_GROUP == 8);
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003eae0-0x8003ec18.
 void Particle_FuncPtr_PotionShatter(struct Particle *p)
 {
-	s16 sVar2;
+	s16 scaleRandomQuotient;
 	int rng;
 
-	if (p->axis[1].velocity < 0x578)
+	if (p->axis[PARTICLE_AXIS_POS_Y].velocity < PARTICLE_POTION_SHATTER_Y_SPEED_THRESHOLD)
 	{
-		if (p->axis[0].velocity != 0)
+		if (p->axis[PARTICLE_AXIS_POS_X].velocity != 0)
 		{
-			goto LAB_8003ebc8;
+			goto FadeShatterChannel;
 		}
 
 		// random X
 		rng = MixRNG_Scramble();
-		p->axis[0].velocity = rng + (rng / 800) * -800 - 400;
+		p->axis[PARTICLE_AXIS_POS_X].velocity =
+		    rng + (rng / PARTICLE_POTION_SHATTER_XZ_RANDOM_RANGE) * -PARTICLE_POTION_SHATTER_XZ_RANDOM_RANGE - PARTICLE_POTION_SHATTER_XZ_RANDOM_CENTER;
 
 		// random Z
 		rng = MixRNG_Scramble();
-		p->axis[2].velocity = rng + (rng / 800) * -800 - 400;
+		p->axis[PARTICLE_AXIS_POS_Z].velocity =
+		    rng + (rng / PARTICLE_POTION_SHATTER_XZ_RANDOM_RANGE) * -PARTICLE_POTION_SHATTER_XZ_RANDOM_RANGE - PARTICLE_POTION_SHATTER_XZ_RANDOM_CENTER;
 
 		// random scale
 		rng = MixRNG_Scramble();
-		sVar2 = (rng >> 8);
+		scaleRandomQuotient = (rng >> 8);
 		if (rng < 0)
 		{
-			sVar2 = ((rng + 0xff) >> 8);
+			scaleRandomQuotient = ((rng + 0xff) >> 8);
 		}
-		p->axis[5].velocity = rng + sVar2 * -0x100 + 0x100;
+		p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].velocity =
+		    rng + scaleRandomQuotient * -PARTICLE_POTION_SHATTER_SCALE_RANDOM_RANGE + PARTICLE_POTION_SHATTER_SCALE_RANDOM_BASE;
 	}
-	if (p->axis[0].velocity == 0)
+	if (p->axis[PARTICLE_AXIS_POS_X].velocity == 0)
 	{
 		return;
 	}
 
-LAB_8003ebc8:
+FadeShatterChannel:
 
 	// green shatter or red shatter
 	if (p->modelID == STATIC_SHOCKWAVE_GREEN)
 	{
-		if (0 < p->axis[8].startVal)
+		if (0 < p->axis[PARTICLE_AXIS_COLOR_G].startVal)
 		{
-			p->axis[8].startVal -= 0x1200;
+			p->axis[PARTICLE_AXIS_COLOR_G].startVal -= PARTICLE_POTION_SHATTER_FADE_STEP;
 		}
 	}
 	else
 	{
-		if (0 < p->axis[7].startVal)
+		if (0 < p->axis[PARTICLE_AXIS_COLOR_R].startVal)
 		{
-			p->axis[7].startVal -= 0x1200;
+			p->axis[PARTICLE_AXIS_COLOR_R].startVal -= PARTICLE_POTION_SHATTER_FADE_STEP;
 		}
 	}
 }
@@ -60,64 +130,69 @@ LAB_8003ebc8:
 void Particle_FuncPtr_SpitTire(struct Particle *p)
 {
 	int rng;
-	int iVar2;
+	int scaleFrame;
 	int targetY;
 
 	// Wait until tires are 0x10 units above
 	// the ground, which is where the plant
 	// actually "spits" tires from the mouth
-	targetY = p->plantInst->matrix.t[1] + 0x10;
+	targetY = p->plantInst->matrix.t[1] + PARTICLE_SPIT_TIRE_MOUTH_Y_OFFSET;
 
-	if ((p->axis[1].startVal >> 8) >= targetY)
+	if ((p->axis[PARTICLE_AXIS_POS_Y].startVal >> 8) >= targetY)
 	{
 		return;
 	}
 
 	// random X
 	rng = MixRNG_Scramble();
-	p->axis[0].velocity = rng + (rng / 0x1640) * -0x1640 - 0xb20;
+	p->axis[PARTICLE_AXIS_POS_X].velocity =
+	    rng + (rng / PARTICLE_SPIT_TIRE_XZ_RANDOM_RANGE) * -PARTICLE_SPIT_TIRE_XZ_RANDOM_RANGE - PARTICLE_SPIT_TIRE_XZ_RANDOM_CENTER;
 
 	// random Z
 	rng = MixRNG_Scramble();
-	p->axis[2].velocity = rng + (rng / 0x1640) * -0x1640 - 0xb20;
+	p->axis[PARTICLE_AXIS_POS_Z].velocity =
+	    rng + (rng / PARTICLE_SPIT_TIRE_XZ_RANDOM_RANGE) * -PARTICLE_SPIT_TIRE_XZ_RANDOM_RANGE - PARTICLE_SPIT_TIRE_XZ_RANDOM_CENTER;
 
 	// scale value
-	iVar2 = p->axis[5].startVal;
+	scaleFrame = p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].startVal;
 
-	switch (iVar2)
+	switch (scaleFrame)
 	{
 	// frame #1
-	case 0x1000:
+	case PARTICLE_SPIT_TIRE_FRAME_1:
 	{
 		// random Y
 		rng = MixRNG_Scramble();
-		p->axis[1].velocity = rng + (rng / 0x12c0) * -0x12c0 + 0x1900;
+		p->axis[PARTICLE_AXIS_POS_Y].velocity =
+		    rng + (rng / PARTICLE_SPIT_TIRE_FRAME_1_Y_RANDOM_RANGE) * -PARTICLE_SPIT_TIRE_FRAME_1_Y_RANDOM_RANGE + PARTICLE_SPIT_TIRE_FRAME_1_Y_BASE;
 
 		// frame #2
-		p->axis[5].startVal = 0xfff;
+		p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].startVal = PARTICLE_SPIT_TIRE_FRAME_2;
 		break;
 	}
 
 	// frame #2
-	case 0xfff:
+	case PARTICLE_SPIT_TIRE_FRAME_2:
 	{
 		// random Y
 		rng = MixRNG_Scramble();
-		p->axis[1].velocity = rng + (rng / 800) * -800 + 8000;
+		p->axis[PARTICLE_AXIS_POS_Y].velocity =
+		    rng + (rng / PARTICLE_SPIT_TIRE_LATER_Y_RANDOM_RANGE) * -PARTICLE_SPIT_TIRE_LATER_Y_RANDOM_RANGE + PARTICLE_SPIT_TIRE_FRAME_2_Y_BASE;
 
 		// frame #3
-		p->axis[5].startVal = 0xffe;
+		p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].startVal = PARTICLE_SPIT_TIRE_FRAME_3;
 		break;
 	}
 
 	// frame #3
-	case 0xffe:
+	case PARTICLE_SPIT_TIRE_FRAME_3:
 	{
 		// random Y
 		rng = MixRNG_Scramble();
-		p->axis[1].velocity = rng + (rng / 800) * -800 + 6000;
+		p->axis[PARTICLE_AXIS_POS_Y].velocity =
+		    rng + (rng / PARTICLE_SPIT_TIRE_LATER_Y_RANDOM_RANGE) * -PARTICLE_SPIT_TIRE_LATER_Y_RANDOM_RANGE + PARTICLE_SPIT_TIRE_FRAME_3_Y_BASE;
 
-		p->axis[5].velocity = 0xf801;
+		p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].velocity = PARTICLE_SPIT_TIRE_FRAME_3_VELOCITY;
 		break;
 	}
 
@@ -125,7 +200,7 @@ void Particle_FuncPtr_SpitTire(struct Particle *p)
 		return;
 	}
 
-	p->axis[1].startVal = targetY * 0x100;
+	p->axis[PARTICLE_AXIS_POS_Y].startVal = targetY * 0x100;
 }
 
 
@@ -134,10 +209,11 @@ void Particle_FuncPtr_ExhaustUnderwater(struct Particle *p)
 {
 	struct IconGroup *icon;
 
-	if ((3 < ((p->axis[1].startVal >> 8) + p->driverInst->matrix.t[1])) && (p->framesLeftInLife < 27))
+	if ((PARTICLE_EXHAUST_WATER_HEIGHT_THRESHOLD < ((p->axis[PARTICLE_AXIS_POS_Y].startVal >> 8) + p->driverInst->matrix.t[1])) &&
+	    (p->framesLeftInLife < PARTICLE_EXHAUST_POP_LIFE_THRESHOLD))
 	{
 		// bubblepop
-		icon = sdata->gGT->iconGroup[8];
+		icon = sdata->gGT->iconGroup[PARTICLE_EXHAUST_BUBBLEPOP_ICON_GROUP];
 		p->ptrIconGroup = icon;
 
 		if (icon != NULL)
@@ -149,7 +225,7 @@ void Particle_FuncPtr_ExhaustUnderwater(struct Particle *p)
 			p->ptrIconArray = ptrIconArray[0];
 		}
 
-		p->axis[4].startVal = MixRNG_Scramble() & 0xfff;
+		p->axis[PARTICLE_AXIS_ROT_Y_OR_LINE_PREV_Z].startVal = MixRNG_Scramble() & PARTICLE_EXHAUST_ROTATION_RANDOM_MASK;
 		p->framesLeftInLife = 0;
 	}
 }
@@ -174,12 +250,7 @@ void Particle_OnDestroy(struct Particle *p)
 
 static u32 Particle_GetAxisFlags(const struct Particle *p)
 {
-	return *(const u32 *)&p->flagsAxis;
-}
-
-static void Particle_SetAxisFlags(struct Particle *p, u32 flags)
-{
-	*(u32 *)&p->flagsAxis = flags;
+	return CTR_ReadU32LE(&p->flagsAxis);
 }
 
 static int Particle_OscillatorValue(struct ParticleOscillator *osc)
@@ -189,56 +260,57 @@ static int Particle_OscillatorValue(struct ParticleOscillator *osc)
 	int phase = timer + osc->phase;
 	int product = (int)osc->period * phase;
 
-	switch (osc->flags & 7)
+	switch (osc->flags & PARTICLE_OSC_FLAG_MODE_MASK)
 	{
-	case 0:
-		value = MATH_Sin(product >> 5);
+	case PARTICLE_OSC_MODE_SINE:
+		value = MATH_Sin(product >> PARTICLE_OSC_SINE_PHASE_SHIFT);
 		break;
 
-	case 1:
-		value = MATH_Sin(product >> 6);
+	case PARTICLE_OSC_MODE_ABS_SINE:
+		value = MATH_Sin(product >> PARTICLE_OSC_ABS_SINE_PHASE_SHIFT);
 		if (value < 0)
 		{
 			value = -value;
 		}
-		value = (value << 1) - 0x1000;
+		value = (value << 1) - PARTICLE_OSC_WAVE_CENTER;
 		break;
 
-	case 2:
-		value = ((product >> 4) & 0x1fff) - 0x1000;
+	case PARTICLE_OSC_MODE_SAW:
+		value = ((product >> PARTICLE_OSC_SAW_PHASE_SHIFT) & PARTICLE_OSC_SAW_PHASE_MASK) - PARTICLE_OSC_WAVE_CENTER;
 		break;
 
-	case 3:
-		value = (product >> 3) & 0x3fff;
-		if (value > 0x2000)
+	case PARTICLE_OSC_MODE_TRIANGLE:
+		value = (product >> PARTICLE_OSC_TRIANGLE_PHASE_SHIFT) & PARTICLE_OSC_TRIANGLE_PHASE_MASK;
+		if (value > PARTICLE_OSC_TRIANGLE_PEAK)
 		{
-			value = 0x4000 - value;
+			value = PARTICLE_OSC_TRIANGLE_PERIOD - value;
 		}
-		value -= 0x1000;
+		value -= PARTICLE_OSC_WAVE_CENTER;
 		break;
 
-	case 4:
-		value = -0x1000;
-		if (((product >> 6) & 0x400) != 0)
+	case PARTICLE_OSC_MODE_SQUARE:
+		value = -PARTICLE_OSC_WAVE_CENTER;
+		if (((product >> PARTICLE_OSC_SQUARE_PHASE_SHIFT) & PARTICLE_OSC_SQUARE_HIGH_BIT) != 0)
 		{
-			value = 0x1000;
+			value = PARTICLE_OSC_WAVE_CENTER;
 		}
 		break;
 
-	case 5:
-		value = (MixRNG_Scramble() >> 3) - 0x1000;
+	case PARTICLE_OSC_MODE_RANDOM:
+		value = (MixRNG_Scramble() >> PARTICLE_OSC_RANDOM_SHIFT) - PARTICLE_OSC_WAVE_CENTER;
 		break;
 
-	case 6:
-		value = ((int)MixRNG_GetValue((s16)osc->previousValue) >> 3) - 0x1000;
+	case PARTICLE_OSC_MODE_SEEDED_RANDOM:
+		value = ((int)MixRNG_GetValue((s16)osc->previousValue) >> PARTICLE_OSC_RANDOM_SHIFT) - PARTICLE_OSC_WAVE_CENTER;
 		break;
 
+	case PARTICLE_OSC_MODE_TIMER:
 	default:
 		value = timer;
 		break;
 	}
 
-	value = ((value + osc->offset) * (int)osc->scale) >> 12;
+	value = ((value + osc->offset) * (int)osc->scale) >> PARTICLE_OSC_SCALE_SHIFT;
 
 	if (value > osc->max)
 	{
@@ -256,9 +328,9 @@ static void Particle_ApplyOscillator(struct ParticleAxis *axis, struct ParticleO
 {
 	int value;
 
-	if ((osc->flags & 8) == 0)
+	if ((osc->flags & PARTICLE_OSC_FLAG_SKIP_PREVIOUS_SUBTRACT) == 0)
 	{
-		if ((osc->flags & 0x10) == 0)
+		if ((osc->flags & PARTICLE_OSC_FLAG_APPLY_TO_VELOCITY) == 0)
 		{
 			axis->startVal -= (s16)osc->previousValue;
 		}
@@ -270,7 +342,7 @@ static void Particle_ApplyOscillator(struct ParticleAxis *axis, struct ParticleO
 
 	value = Particle_OscillatorValue(osc);
 
-	if ((osc->flags & 0x10) == 0)
+	if ((osc->flags & PARTICLE_OSC_FLAG_APPLY_TO_VELOCITY) == 0)
 	{
 		axis->startVal += value;
 	}
@@ -286,19 +358,19 @@ static int Particle_ColorExpired(struct Particle *p, u16 activeFlags)
 {
 	int value = 0;
 
-	if ((activeFlags & 0x80) != 0 && p->axis[7].startVal > 0)
+	if ((activeFlags & PARTICLE_AXIS_FLAG_COLOR_R) != 0 && p->axis[PARTICLE_AXIS_COLOR_R].startVal > 0)
 	{
-		value = p->axis[7].startVal;
+		value = p->axis[PARTICLE_AXIS_COLOR_R].startVal;
 	}
 
-	if ((activeFlags & 0x100) != 0 && p->axis[8].startVal > 0)
+	if ((activeFlags & PARTICLE_AXIS_FLAG_COLOR_G) != 0 && p->axis[PARTICLE_AXIS_COLOR_G].startVal > 0)
 	{
-		value |= p->axis[8].startVal;
+		value |= p->axis[PARTICLE_AXIS_COLOR_G].startVal;
 	}
 
-	if ((activeFlags & 0x200) != 0 && p->axis[9].startVal > 0)
+	if ((activeFlags & PARTICLE_AXIS_FLAG_COLOR_B) != 0 && p->axis[PARTICLE_AXIS_COLOR_B].startVal > 0)
 	{
-		value |= p->axis[9].startVal;
+		value |= p->axis[PARTICLE_AXIS_COLOR_B].startVal;
 	}
 
 	return value < 0x800;
@@ -306,20 +378,21 @@ static int Particle_ColorExpired(struct Particle *p, u16 activeFlags)
 
 static void Particle_UpdateIconFrame(struct Particle *p, u16 flagsSetColor)
 {
-	int frame = p->axis[10].startVal;
+	struct ParticleAxis *frameAxis = &p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR];
+	int frame = frameAxis->startVal;
 	int frameLimit = p->ptrIconGroup->numIcons << 8;
 
 	if (frame < 0)
 	{
-		if ((flagsSetColor & 0x100) != 0)
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_ICON_WRAP) != 0)
 		{
 			frame += frameLimit;
 		}
-		else if ((flagsSetColor & 0x200) != 0)
+		else if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_ICON_BOUNCE) != 0)
 		{
-			frame -= p->axis[10].velocity * 2;
-			p->axis[10].accel = -p->axis[10].accel;
-			p->axis[10].velocity = -p->axis[10].velocity;
+			frame -= frameAxis->velocity * 2;
+			frameAxis->accel = -frameAxis->accel;
+			frameAxis->velocity = -frameAxis->velocity;
 		}
 		else
 		{
@@ -333,15 +406,15 @@ static void Particle_UpdateIconFrame(struct Particle *p, u16 flagsSetColor)
 			return;
 		}
 
-		if ((flagsSetColor & 0x100) != 0)
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_ICON_WRAP) != 0)
 		{
 			frame -= frameLimit;
 		}
-		else if ((flagsSetColor & 0x200) != 0)
+		else if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_ICON_BOUNCE) != 0)
 		{
-			frame -= p->axis[10].velocity * 2;
-			p->axis[10].accel = -p->axis[10].accel;
-			p->axis[10].velocity = -p->axis[10].velocity;
+			frame -= frameAxis->velocity * 2;
+			frameAxis->accel = -frameAxis->accel;
+			frameAxis->velocity = -frameAxis->velocity;
 		}
 		else
 		{
@@ -349,7 +422,7 @@ static void Particle_UpdateIconFrame(struct Particle *p, u16 flagsSetColor)
 		}
 	}
 
-	p->axis[10].startVal = frame;
+	frameAxis->startVal = frame;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003eefc-0x8003f434
@@ -372,20 +445,21 @@ void Particle_UpdateList(struct Particle **listHead, struct Particle *p)
 		}
 
 		flagsSetColor = p->flagsSetColor;
-		if ((flagsSetColor & 8) != 0)
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_DESTROY_NOW) != 0)
 		{
 			goto destroyParticle;
 		}
 
-		if ((flagsSetColor & 0x1000) != 0)
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE) != 0)
 		{
-			p->axis[3].startVal = p->axis[0].startVal;
-			p->axis[6].startVal = p->axis[1].startVal;
-			p->axis[4].startVal = p->axis[2].startVal;
+			p->axis[PARTICLE_AXIS_ROT_X_OR_LINE_PREV_X].startVal = p->axis[PARTICLE_AXIS_POS_X].startVal;
+			p->axis[PARTICLE_AXIS_SCALE_Y_OR_LINE_PREV_Y].startVal = p->axis[PARTICLE_AXIS_POS_Y].startVal;
+			p->axis[PARTICLE_AXIS_ROT_Y_OR_LINE_PREV_Z].startVal = p->axis[PARTICLE_AXIS_POS_Z].startVal;
 
-			if ((flagsSetColor & 0x4000) == 0)
+			if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE_KEEP_PREVIOUS) == 0)
 			{
-				*(u32 *)&p->axis[10].startVal = *(u32 *)&p->axis[10].velocity;
+				CTR_WriteU32LE(&p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].startVal,
+				               CTR_ReadU32LE(&p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].velocity));
 			}
 		}
 
@@ -419,22 +493,23 @@ void Particle_UpdateList(struct Particle **listHead, struct Particle *p)
 
 		activeFlags = p->flagsAxis;
 
-		if ((flagsSetColor & 1) != 0)
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_DESTROY_ON_SCALE_EXPIRE) != 0)
 		{
-			if (((activeFlags & 0x20) != 0 && p->axis[5].startVal < 1) || ((activeFlags & 0x40) != 0 && p->axis[6].startVal < 1))
+			if (((activeFlags & PARTICLE_AXIS_FLAG_SCALE_X) != 0 && p->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].startVal < 1) ||
+			    ((activeFlags & PARTICLE_AXIS_FLAG_SCALE_Y) != 0 && p->axis[PARTICLE_AXIS_SCALE_Y_OR_LINE_PREV_Y].startVal < 1))
 			{
 				goto destroyParticle;
 			}
 		}
 
-		if ((flagsSetColor & 2) != 0 && Particle_ColorExpired(p, activeFlags))
+		if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_DESTROY_ON_COLOR_EXPIRE) != 0 && Particle_ColorExpired(p, activeFlags))
 		{
 			goto destroyParticle;
 		}
 
 		link = &p->next;
 
-		if ((activeFlags & 0x400) != 0 && p->ptrIconGroup != NULL)
+		if ((activeFlags & PARTICLE_AXIS_FLAG_ICON_FRAME_OR_LINE_COLOR) != 0 && p->ptrIconGroup != NULL)
 		{
 			Particle_UpdateIconFrame(p, flagsSetColor);
 		}
@@ -462,84 +537,67 @@ void Particle_UpdateAllParticles(void)
 		return;
 	}
 
-	Particle_UpdateList((struct Particle **)&gGT->particleList_ordinary, gGT->particleList_ordinary);
-	Particle_UpdateList((struct Particle **)&gGT->particleList_heatWarp, gGT->particleList_heatWarp);
+	Particle_UpdateList(&gGT->particleList_ordinary, gGT->particleList_ordinary);
+	Particle_UpdateList(&gGT->particleList_heatWarp, gGT->particleList_heatWarp);
 }
 
-
-#define CLAMP_LOW  0
-#define CLAMP_HIGH 0xff00
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003f48c-0x8003f4c4.
 int Particle_BitwiseClampByte(int *value)
 {
-	if (*value < CLAMP_LOW)
+	if (*value < PARTICLE_COLOR_CHANNEL_MIN)
 	{
-		*value = CLAMP_LOW;
+		*value = PARTICLE_COLOR_CHANNEL_MIN;
 	}
-	else if (*value > CLAMP_HIGH)
+	else if (*value > PARTICLE_COLOR_CHANNEL_MAX)
 	{
-		*value = CLAMP_HIGH;
+		*value = PARTICLE_COLOR_CHANNEL_MAX;
 	}
 
-	return *value >> 8;
+	return *value >> PARTICLE_COLOR_CHANNEL_SHIFT;
 }
 
-
-#define COLOR_FLAG_R 0x80
-#define COLOR_FLAG_G 0x100
-#define COLOR_FLAG_B 0x200
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003f4c4-0x8003f590
 u32 Particle_SetColors(u32 flagColors, u32 flagAlpha, struct Particle *p)
 {
 	u32 color = 0;
 
-	if (flagColors & COLOR_FLAG_R)
+	if (flagColors & PARTICLE_SET_COLOR_FLAG_RED)
 	{
-		color = (u32)Particle_BitwiseClampByte(&p->axis[7].startVal);
+		color = (u32)Particle_BitwiseClampByte(&p->axis[PARTICLE_AXIS_COLOR_R].startVal);
 
-		if (flagColors & COLOR_FLAG_G)
+		if (flagColors & PARTICLE_SET_COLOR_FLAG_GREEN)
 		{
-			color |= (u32)Particle_BitwiseClampByte(&p->axis[8].startVal) << 8;
+			color |= (u32)Particle_BitwiseClampByte(&p->axis[PARTICLE_AXIS_COLOR_G].startVal) << PARTICLE_COLOR_CHANNEL_SHIFT;
 		}
 		else
 		{
-			color |= color << 8;
+			color |= color << PARTICLE_COLOR_CHANNEL_SHIFT;
 		}
 
-		if (flagColors & COLOR_FLAG_B)
+		if (flagColors & PARTICLE_SET_COLOR_FLAG_BLUE)
 		{
-			color |= (u32)Particle_BitwiseClampByte(&p->axis[9].startVal) << 16;
+			color |= (u32)Particle_BitwiseClampByte(&p->axis[PARTICLE_AXIS_COLOR_B].startVal) << (PARTICLE_COLOR_CHANNEL_SHIFT * 2);
 		}
 		else
 		{
-			color |= (color & 0xff) << 16;
+			color |= (color & PARTICLE_COLOR_BYTE_MASK) << (PARTICLE_COLOR_CHANNEL_SHIFT * 2);
 		}
 	}
 	else
 	{
-		color = 0x01000000;
+		color = PARTICLE_GPU_CODE_SHADE_TEXTURE;
 	}
 
-	if (flagAlpha & 0x80)
+	if (flagAlpha & PARTICLE_SET_COLOR_FLAG_SEMI_TRANSPARENT)
 	{
-		color |= 0x2000000;
+		color |= PARTICLE_GPU_CODE_SEMI_TRANS;
 	}
 
 	return color;
 }
 
-
-static u32 Particle_RenderList_ReadWord(const void *base, int offset)
-{
-	return *(const u32 *)(const void *)((const char *)base + offset);
-}
-
-static u8 Particle_RenderList_ReadByte(const void *base, int offset)
-{
-	return *(const u8 *)(const void *)((const char *)base + offset);
-}
 
 static s32 Particle_RenderList_MulLo(s32 left, s32 right)
 {
@@ -598,6 +656,8 @@ struct ParticleRenderListScratch
 			u32 viewProjR22R23;
 			u32 viewProjR31R32;
 			u16 viewProjR33Low;
+			// NOTE(aalhendi): Retail leaves this high half as scratch residue.
+			u16 viewProjR33ScratchResidue;
 		};
 	};
 	u8 pad_14[0x0c];
@@ -608,6 +668,7 @@ struct ParticleRenderListScratch
 
 CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, viewProjWords) == 0x00);
 CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, viewProjR33Low) == 0x10);
+CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, viewProjR33ScratchResidue) == 0x12);
 CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, ot) == 0x20);
 CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, cameraOffset) == 0x24);
 CTR_STATIC_ASSERT(offsetof(struct ParticleRenderListScratch, depth) == 0x30);
@@ -642,15 +703,15 @@ CTR_STATIC_ASSERT(offsetof(struct ParticleSpecialPacket, line) == 0x0C);
 
 static struct ParticleRenderListTrig Particle_RenderList_ReadTrig(s32 angle)
 {
-	struct TrigTable trigApprox = data.trigApprox[angle & 0x3ff];
+	struct TrigTable trigApprox = data.trigApprox[ANG_MODULO_HALF_PI(angle)];
 	struct ParticleRenderListTrig trig;
 
-	if ((angle & 0x400) == 0)
+	if (IS_ANG_FIRST_OR_THIRD_QUADRANT(angle))
 	{
 		trig.sin = trigApprox.sin;
 		trig.cos = trigApprox.cos;
 
-		if ((angle & 0x800) != 0)
+		if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			trig.sin = -trig.sin;
 			trig.cos = -trig.cos;
@@ -660,7 +721,7 @@ static struct ParticleRenderListTrig Particle_RenderList_ReadTrig(s32 angle)
 	{
 		trig.sin = trigApprox.cos;
 
-		if ((angle & 0x800) == 0)
+		if (!IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			trig.cos = -trigApprox.sin;
 		}
@@ -719,11 +780,11 @@ static void Particle_RenderList_LinkAndAdvance(u32 **primCursor, u32 **payloadCu
 		otBase = defaultOT;
 	}
 
-	if ((flagsSetColor & 0x1000) != 0)
+	if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE) != 0)
 	{
 		struct ParticleSpecialPacket *packet = (struct ParticleSpecialPacket *)prim;
 
-		Particle_RenderList_LinkPrimitive(&packet->tag, packet, &otBase[otIndex], 0x06000000);
+		Particle_RenderList_LinkPrimitive(&packet->tag, packet, &otBase[otIndex], PARTICLE_GPU_TAG_LENGTH_SPECIAL_LINE);
 		*primCursor = (u32 *)(packet + 1);
 		*payloadCursor += 7;
 	}
@@ -731,7 +792,7 @@ static void Particle_RenderList_LinkAndAdvance(u32 **primCursor, u32 **payloadCu
 	{
 		POLY_FT4 *poly = (POLY_FT4 *)prim;
 
-		Particle_RenderList_LinkPrimitive(&poly->tag, poly, &otBase[otIndex], 0x09000000);
+		Particle_RenderList_LinkPrimitive(&poly->tag, poly, &otBase[otIndex], PARTICLE_GPU_TAG_LENGTH_POLY_FT4);
 		*primCursor = (u32 *)(poly + 1);
 		*payloadCursor += 10;
 	}
@@ -740,6 +801,14 @@ static void Particle_RenderList_LinkAndAdvance(u32 **primCursor, u32 **payloadCu
 static void Particle_RenderList_WriteSpecialPrimitive(struct ParticleSpecialPacket *packet, struct Particle *particle, u16 flagsAxis, u16 flagsSetColor,
                                                       u32 color, struct ParticleRenderListScratch *scratch)
 {
+	const struct ParticleAxis *posX = &particle->axis[PARTICLE_AXIS_POS_X];
+	const struct ParticleAxis *posY = &particle->axis[PARTICLE_AXIS_POS_Y];
+	const struct ParticleAxis *posZ = &particle->axis[PARTICLE_AXIS_POS_Z];
+	const struct ParticleAxis *linePrevX = &particle->axis[PARTICLE_AXIS_ROT_X_OR_LINE_PREV_X];
+	const struct ParticleAxis *linePrevY = &particle->axis[PARTICLE_AXIS_SCALE_Y_OR_LINE_PREV_Y];
+	const struct ParticleAxis *linePrevZ = &particle->axis[PARTICLE_AXIS_ROT_Y_OR_LINE_PREV_Z];
+	struct ParticleAxis *lineColor = &particle->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR];
+
 	CTC2(scratch->viewProjWords[0], 0);
 	CTC2(scratch->viewProjWords[1], 1);
 	CTC2(scratch->viewProjWords[2], 2);
@@ -749,21 +818,21 @@ static void Particle_RenderList_WriteSpecialPrimitive(struct ParticleSpecialPack
 	MTC2(0, 0);
 	MTC2(0, 1);
 
-	if ((flagsAxis & 0x20) != 0)
+	if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_X) != 0)
 	{
-		s32 scale = particle->axis[5].startVal;
-		s32 deltaX = Particle_RenderList_MulLo((particle->axis[3].startVal - particle->axis[0].startVal) >> 6, scale);
-		s32 deltaY = Particle_RenderList_MulLo((particle->axis[6].startVal - particle->axis[1].startVal) >> 6, scale);
-		s32 deltaZ = Particle_RenderList_MulLo((particle->axis[4].startVal - particle->axis[2].startVal) >> 6, scale);
+		s32 scale = particle->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE].startVal;
+		s32 deltaX = Particle_RenderList_MulLo((linePrevX->startVal - posX->startVal) >> 6, scale);
+		s32 deltaY = Particle_RenderList_MulLo((linePrevY->startVal - posY->startVal) >> 6, scale);
+		s32 deltaZ = Particle_RenderList_MulLo((linePrevZ->startVal - posZ->startVal) >> 6, scale);
 
 		MTC2(((u32)deltaX >> 16) | ((u32)(deltaY >> 16) << 16), 2);
 		MTC2((u32)(deltaZ >> 16), 3);
 	}
 	else
 	{
-		s32 deltaX = (particle->axis[3].startVal - particle->axis[0].startVal) >> 6;
-		s32 deltaY = (particle->axis[6].startVal - particle->axis[1].startVal) >> 6;
-		s32 deltaZ = (particle->axis[4].startVal - particle->axis[2].startVal) >> 6;
+		s32 deltaX = (linePrevX->startVal - posX->startVal) >> 6;
+		s32 deltaY = (linePrevY->startVal - posY->startVal) >> 6;
+		s32 deltaZ = (linePrevZ->startVal - posZ->startVal) >> 6;
 
 		MTC2(Particle_RenderList_PackXY(deltaX, deltaY), 2);
 		MTC2((u32)deltaZ, 3);
@@ -771,21 +840,21 @@ static void Particle_RenderList_WriteSpecialPrimitive(struct ParticleSpecialPack
 
 	gte_rtpt_b();
 
-	color |= 0x50000000;
+	color |= PARTICLE_GPU_CODE_LINE_G2;
 
-	if ((flagsSetColor & 0x2000) != 0)
+	if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE_SWAP_COLORS) != 0)
 	{
 		packet->line.color1 = color;
-		packet->line.color0AndCode = particle->axis[10].startVal;
+		packet->line.color0AndCode = lineColor->startVal;
 	}
 	else
 	{
 		packet->line.color0AndCode = color;
-		packet->line.color1 = particle->axis[10].startVal;
+		packet->line.color1 = lineColor->startVal;
 	}
 
-	*(u32 *)(void *)&particle->axis[10].velocity = color;
-	packet->drawMode = 0xe1000a00 | (flagsSetColor & 0x60);
+	CTR_WriteU32LE(&lineColor->velocity, color);
+	packet->drawMode = PARTICLE_GPU_DRAWMODE_BASE | (flagsSetColor & PARTICLE_SET_COLOR_FLAG_DRAW_MODE_MASK);
 	packet->pad = 0;
 	packet->line.xy0 = MFC2(12);
 	packet->line.xy1 = MFC2(13);
@@ -794,6 +863,10 @@ static void Particle_RenderList_WriteSpecialPrimitive(struct ParticleSpecialPack
 
 static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(struct Particle *particle, u16 flagsAxis)
 {
+	const struct ParticleAxis *rotXAxis = &particle->axis[PARTICLE_AXIS_ROT_X_OR_LINE_PREV_X];
+	const struct ParticleAxis *rotYAxis = &particle->axis[PARTICLE_AXIS_ROT_Y_OR_LINE_PREV_Z];
+	const struct ParticleAxis *scaleXAxis = &particle->axis[PARTICLE_AXIS_SCALE_X_OR_LINE_SCALE];
+	const struct ParticleAxis *scaleYAxis = &particle->axis[PARTICLE_AXIS_SCALE_Y_OR_LINE_PREV_Y];
 	struct ParticleRenderListMatrix matrix;
 
 	matrix.r11r12 = 0x2000;
@@ -802,33 +875,33 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 	matrix.r31r32 = 0;
 	matrix.r33 = 0x1000;
 
-	if ((flagsAxis & 0x8) == 0)
+	if ((flagsAxis & PARTICLE_AXIS_FLAG_ROT_X) == 0)
 	{
-		if ((flagsAxis & 0x10) == 0)
+		if ((flagsAxis & PARTICLE_AXIS_FLAG_ROT_Y) == 0)
 		{
-			if ((flagsAxis & 0x20) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_X) != 0)
 			{
-				matrix.r11r12 = (u32)particle->axis[5].startVal << 1;
+				matrix.r11r12 = (u32)scaleXAxis->startVal << 1;
 				matrix.r22r23 = (s32)matrix.r11r12 >> 1;
 			}
 
-			if ((flagsAxis & 0x40) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 			{
-				matrix.r22r23 = particle->axis[6].startVal;
+				matrix.r22r23 = scaleYAxis->startVal;
 			}
 
 			return matrix;
 		}
 
-		struct ParticleRenderListTrig rotY = Particle_RenderList_ReadTrig(particle->axis[4].startVal);
+		struct ParticleRenderListTrig rotY = Particle_RenderList_ReadTrig(rotYAxis->startVal);
 
-		if ((flagsAxis & 0x20) == 0)
+		if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_X) == 0)
 		{
 			matrix.r11r12 = (((u32)rotY.cos & 0x7fff) << 1) | ((u32)rotY.sin << 17);
 
-			if ((flagsAxis & 0x40) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 			{
-				s32 scaleY = particle->axis[6].startVal;
+				s32 scaleY = scaleYAxis->startVal;
 
 				matrix.r13r21 = (u32)(Particle_RenderList_MulLo(-rotY.sin, scaleY) >> 12) << 16;
 				matrix.r22r23 = (u32)Particle_RenderList_MulShift(rotY.cos, scaleY, 12) & 0xffff;
@@ -841,11 +914,11 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 		}
 		else
 		{
-			s32 scaleX = particle->axis[5].startVal;
+			s32 scaleX = scaleXAxis->startVal;
 
-			if ((flagsAxis & 0x40) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 			{
-				s32 scaleY = particle->axis[6].startVal;
+				s32 scaleY = scaleYAxis->startVal;
 
 				matrix.r11r12 =
 				    ((u32)Particle_RenderList_MulShift(rotY.cos, scaleX, 11) & 0xffff) | ((u32)Particle_RenderList_MulShift(rotY.sin, scaleX, 11) << 16);
@@ -866,19 +939,19 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 		return matrix;
 	}
 
-	if ((flagsAxis & 0x10) == 0)
+	if ((flagsAxis & PARTICLE_AXIS_FLAG_ROT_Y) == 0)
 	{
-		struct ParticleRenderListTrig rotX = Particle_RenderList_ReadTrig(particle->axis[3].startVal);
+		struct ParticleRenderListTrig rotX = Particle_RenderList_ReadTrig(rotXAxis->startVal);
 
-		if ((flagsAxis & 0x20) != 0)
+		if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_X) != 0)
 		{
-			s32 scaleX = particle->axis[5].startVal;
+			s32 scaleX = scaleXAxis->startVal;
 
 			matrix.r11r12 = ((u32)scaleX << 1) & 0xffff;
 
-			if ((flagsAxis & 0x40) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 			{
-				s32 scaleY = particle->axis[6].startVal;
+				s32 scaleY = scaleYAxis->startVal;
 
 				matrix.r31r32 = (u32)-rotX.sin << 16;
 				matrix.r33 = (u32)rotX.cos & 0xffff;
@@ -899,9 +972,9 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 		{
 			matrix.r33 = (u32)rotX.cos & 0xffff;
 
-			if ((flagsAxis & 0x40) != 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 			{
-				s32 scaleY = particle->axis[6].startVal;
+				s32 scaleY = scaleYAxis->startVal;
 
 				matrix.r31r32 = (u32)-rotX.sin << 16;
 				matrix.r22r23 =
@@ -917,16 +990,16 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 		return matrix;
 	}
 
-	struct ParticleRenderListTrig rotX = Particle_RenderList_ReadTrig(particle->axis[3].startVal);
-	struct ParticleRenderListTrig rotY = Particle_RenderList_ReadTrig(particle->axis[4].startVal);
+	struct ParticleRenderListTrig rotX = Particle_RenderList_ReadTrig(rotXAxis->startVal);
+	struct ParticleRenderListTrig rotY = Particle_RenderList_ReadTrig(rotYAxis->startVal);
 
-	if ((flagsAxis & 0x20) != 0)
+	if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_X) != 0)
 	{
-		s32 scaleX = particle->axis[5].startVal;
+		s32 scaleX = scaleXAxis->startVal;
 
-		if ((flagsAxis & 0x40) != 0)
+		if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 		{
-			s32 scaleY = particle->axis[6].startVal;
+			s32 scaleY = scaleYAxis->startVal;
 			s32 r13Base = Particle_RenderList_MulShift(rotX.cos, -rotY.sin, 12);
 			s32 r22Base = Particle_RenderList_MulShift(rotY.cos, rotX.cos, 12);
 
@@ -955,9 +1028,9 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 	}
 	else
 	{
-		if ((flagsAxis & 0x40) != 0)
+		if ((flagsAxis & PARTICLE_AXIS_FLAG_SCALE_Y) != 0)
 		{
-			s32 scaleY = particle->axis[6].startVal;
+			s32 scaleY = scaleYAxis->startVal;
 			s32 r13Base = Particle_RenderList_MulShift(rotX.cos, -rotY.sin, 12);
 			s32 r22Base = Particle_RenderList_MulShift(rotY.cos, rotX.cos, 12);
 
@@ -985,6 +1058,7 @@ static struct ParticleRenderListMatrix Particle_RenderList_BuildNormalMatrix(str
 static void Particle_RenderList_WriteNormalPrimitive(POLY_FT4 *poly, struct Icon *icon, u16 flagsAxis, u16 flagsSetColor, u32 color,
                                                      struct ParticleRenderListMatrix *matrix, s32 *scratchDepth)
 {
+	(void)flagsAxis;
 	s32 width;
 	s32 height;
 	s32 halfWidth;
@@ -997,19 +1071,20 @@ static void Particle_RenderList_WriteNormalPrimitive(POLY_FT4 *poly, struct Icon
 	CTC2(matrix->r31r32, 3);
 	CTC2(matrix->r33, 4);
 
-	CtrGpu_WriteColorCode(&poly->r0, color | 0x2c000000);
-	CtrGpu_WritePackedUVWord(&poly->u0, Particle_RenderList_ReadWord(icon, 0x14));
-	CtrGpu_WritePackedUVWord(&poly->u1, (Particle_RenderList_ReadWord(icon, 0x18) & 0xff9fffff) | ((u32)(flagsSetColor & 0x60) << 16));
-	CtrGpu_WritePackedUV(&poly->u2, *(u16 *)(void *)((char *)icon + 0x1c));
-	CtrGpu_WritePackedUV(&poly->u3, *(u16 *)(void *)((char *)icon + 0x1e));
+	CtrGpu_WriteColorCode(&poly->r0, color | PARTICLE_GPU_CODE_POLY_FT4);
+	CtrGpu_WritePackedUVWord(&poly->u0, CTR_ReadU32LE(&icon->texLayout.u0));
+	CtrGpu_WritePackedUVWord(&poly->u1, (CTR_ReadU32LE(&icon->texLayout.u1) & PARTICLE_TEXTURE_DRAW_MODE_MASK) |
+	                                        ((u32)(flagsSetColor & PARTICLE_SET_COLOR_FLAG_DRAW_MODE_MASK) << 16));
+	CtrGpu_WritePackedUV(&poly->u2, CTR_ReadU16LE(&icon->texLayout.u2));
+	CtrGpu_WritePackedUV(&poly->u3, CTR_ReadU16LE(&icon->texLayout.u3));
 
-	width = (Particle_RenderList_ReadByte(icon, 0x18) - Particle_RenderList_ReadByte(icon, 0x14)) + 1;
-	height = (Particle_RenderList_ReadByte(icon, 0x1d) - Particle_RenderList_ReadByte(icon, 0x15)) + 1;
+	width = (icon->texLayout.u1 - icon->texLayout.u0) + 1;
+	height = (icon->texLayout.v3 - icon->texLayout.v0) + 1;
 
 	halfWidth = width << 1;
 	halfHeight = height << 1;
 
-	if ((flagsSetColor & 0x400) != 0)
+	if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_LARGE_QUAD) != 0)
 	{
 		halfWidth = width << 4;
 		halfHeight = height << 4;
@@ -1048,15 +1123,15 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 	struct ParticleRenderListScratch *scratch = CTR_SCRATCHPAD_PTR(struct ParticleRenderListScratch, 0x00);
 	u32 *prim = (u32 *)primMem->cursor;
 	u32 *primPayload = prim + 8;
-	char cameraID;
+	s8 cameraID;
 
 	PushBuffer_SetPsyqGeom(pb);
 
-	scratch->viewProjWords[0] = Particle_RenderList_ReadWord(&pb->matrix_ViewProj, 0x00);
-	scratch->viewProjWords[1] = Particle_RenderList_ReadWord(&pb->matrix_ViewProj, 0x04);
-	scratch->viewProjWords[2] = Particle_RenderList_ReadWord(&pb->matrix_ViewProj, 0x08);
-	scratch->viewProjWords[3] = Particle_RenderList_ReadWord(&pb->matrix_ViewProj, 0x0c);
-	scratch->viewProjR33Low = *(u16 *)(void *)((char *)&pb->matrix_ViewProj + 0x10);
+	scratch->viewProjWords[0] = CTR_ReadU32LE(&pb->matrix_ViewProj.m[0][0]);
+	scratch->viewProjWords[1] = CTR_ReadU32LE(&pb->matrix_ViewProj.m[0][2]);
+	scratch->viewProjWords[2] = CTR_ReadU32LE(&pb->matrix_ViewProj.m[1][1]);
+	scratch->viewProjWords[3] = CTR_ReadU32LE(&pb->matrix_ViewProj.m[2][0]);
+	scratch->viewProjR33Low = CTR_ReadU16LE(&pb->matrix_ViewProj.m[2][2]);
 
 	CTC2(scratch->viewProjWords[0], 8);
 	CTC2(scratch->viewProjWords[1], 9);
@@ -1065,10 +1140,10 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 	CTC2(scratch->viewProjWords[4], 12);
 
 	scratch->ot = pb->ptrOT;
-	cameraID = (char)pb->cameraID;
-	scratch->cameraOffset[0] = (s32)Particle_RenderList_ReadWord(pb, 0x7c) << 2;
-	scratch->cameraOffset[1] = (s32)Particle_RenderList_ReadWord(pb, 0x80) << 2;
-	scratch->cameraOffset[2] = (s32)Particle_RenderList_ReadWord(pb, 0x84) << 2;
+	cameraID = (s8)pb->cameraID;
+	scratch->cameraOffset[0] = CTR_MipsSll(pb->matrix_Camera.t[0], 2);
+	scratch->cameraOffset[1] = CTR_MipsSll(pb->matrix_Camera.t[1], 2);
+	scratch->cameraOffset[2] = CTR_MipsSll(pb->matrix_Camera.t[2], 2);
 
 	if (prim + (gGT->numParticles * 10) >= (u32 *)primMem->guardEnd)
 	{
@@ -1109,13 +1184,13 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 			}
 
 			flagsAxis = particle->flagsAxis;
-			if ((flagsAxis & 0x400) == 0)
+			if ((flagsAxis & PARTICLE_AXIS_FLAG_ICON_FRAME_OR_LINE_COLOR) == 0)
 			{
 				icon = particle->ptrIconArray;
 			}
 			else
 			{
-				int frame = particle->axis[10].startVal >> 8;
+				int frame = particle->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].startVal >> 8;
 
 				if (frame < 0)
 				{
@@ -1142,12 +1217,12 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 			}
 
 			idpp = NULL;
-			posX = particle->axis[0].startVal >> 6;
-			posY = particle->axis[1].startVal >> 6;
-			posZ = particle->axis[2].startVal >> 6;
+			posX = particle->axis[PARTICLE_AXIS_POS_X].startVal >> 6;
+			posY = particle->axis[PARTICLE_AXIS_POS_Y].startVal >> 6;
+			posZ = particle->axis[PARTICLE_AXIS_POS_Z].startVal >> 6;
 			flagsSetColor = particle->flagsSetColor;
 
-			if ((flagsSetColor & 0x800) != 0 && particle->driverInst != NULL)
+			if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_DRIVER_LOCAL) != 0 && particle->driverInst != NULL)
 			{
 				struct Instance *inst = particle->driverInst;
 				u32 idppFlags;
@@ -1155,19 +1230,19 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 				idpp = Particle_RenderList_GetIdpp(inst, cameraID);
 				idppFlags = idpp->instFlags;
 
-				if ((idppFlags & 0x40) == 0)
+				if ((idppFlags & DRAW_SUCCESSFUL) == 0)
 				{
 					goto next_particle;
 				}
 
-				posX += inst->matrix.t[0] << 2;
-				if ((flagsSetColor & 0x8000) == 0)
+				posX += CTR_MipsSll(inst->matrix.t[0], 2);
+				if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_DRIVER_LOCAL_IGNORE_Y) == 0)
 				{
-					posY += inst->matrix.t[1] << 2;
+					posY += CTR_MipsSll(inst->matrix.t[1], 2);
 				}
-				posZ += inst->matrix.t[2] << 2;
+				posZ += CTR_MipsSll(inst->matrix.t[2], 2);
 
-				if ((idppFlags & 0x100) != 0)
+				if ((idppFlags & PUSHBUFFER_EXISTS) != 0)
 				{
 					idpp = NULL;
 				}
@@ -1204,14 +1279,14 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 				goto next_particle;
 			}
 
-			if ((particle->unk1A << 2) < depth)
+			if (CTR_MipsSll(particle->renderDepthLimit, 2) < depth)
 			{
 				goto next_particle;
 			}
 
 			color = Particle_SetColors(flagsAxis, flagsSetColor, particle);
 
-			if ((flagsSetColor & 0x1000) != 0)
+			if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE) != 0)
 			{
 				Particle_RenderList_WriteSpecialPrimitive((struct ParticleSpecialPacket *)prim, particle, flagsAxis, flagsSetColor, color, scratch);
 				Particle_RenderList_LinkAndAdvance(&primCursor, &payloadCursor, particle, idpp, flagsSetColor, scratch->depth, scratch->ot);
@@ -1236,28 +1311,27 @@ void Particle_RenderList(struct PushBuffer *pb, void *particleList)
 
 static u32 Particle_Init_GetAxisFlags(const struct Particle *p)
 {
-	return *(const u32 *)&p->flagsAxis;
+	return p->flagsAxisWord;
 }
 
 static void Particle_Init_SetAxisFlags(struct Particle *p, u32 flags)
 {
-	*(u32 *)&p->flagsAxis = flags;
+	p->flagsAxisWord = flags;
 }
 
 static u8 ParticleEmitter_GetInitOffset(const struct ParticleEmitter *emSet)
 {
-	return ((const u8 *)emSet)[2];
+	return (u8)emSet->initOffset;
 }
 
 static void ParticleEmitter_CopyOscillator(struct ParticleOscillator *osc, const struct ParticleEmitter *emSet)
 {
-	const u32 *src = (const u32 *)emSet->data;
-	u32 *dst = (u32 *)&osc->flags;
+	const struct ParticleOscillatorConfig *src = &emSet->oscillator;
 
-	dst[0] = src[0];
-	dst[1] = src[1];
-	dst[2] = src[2];
-	dst[3] = src[3];
+	CTR_WriteU32LE(&osc->flags, CTR_ReadU32LE(&src->flags));
+	CTR_WriteU32LE((u8 *)&osc->flags + 4, CTR_ReadU32LE(&src->period));
+	CTR_WriteU32LE((u8 *)&osc->flags + 8, CTR_ReadU32LE(&src->scale));
+	CTR_WriteU32LE((u8 *)&osc->flags + 12, CTR_ReadU32LE(&src->min));
 }
 
 static void Particle_InitAxis(struct Particle *p, const struct ParticleEmitter *emSet, u8 axisIndex, u32 *flagsAxis)
@@ -1268,33 +1342,33 @@ static void Particle_InitAxis(struct Particle *p, const struct ParticleEmitter *
 	s16 velocity = 0;
 	s16 accel = 0;
 
-	if ((flags & 1) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_BASE_START) != 0)
 	{
 		value = emSet->InitTypes.AxisInit.baseValue.startVal;
 	}
-	if ((flags & 8) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_RANDOM_START) != 0)
 	{
 		value += MixRNG_Particles(emSet->InitTypes.AxisInit.rngSeed.startVal);
 	}
 
 	axis->startVal = value;
 
-	if ((flags & 2) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_BASE_VELOCITY) != 0)
 	{
 		velocity = emSet->InitTypes.AxisInit.baseValue.velocity;
 	}
-	if ((flags & 0x10) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_RANDOM_VELOCITY) != 0)
 	{
 		velocity = (s16)(velocity + MixRNG_Particles(emSet->InitTypes.AxisInit.rngSeed.velocity));
 	}
 
 	axis->velocity = velocity;
 
-	if ((flags & 4) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_BASE_ACCEL) != 0)
 	{
 		accel = emSet->InitTypes.AxisInit.baseValue.accel;
 	}
-	if ((flags & 0x20) != 0)
+	if ((flags & PARTICLE_EMITTER_FLAG_RANDOM_ACCEL) != 0)
 	{
 		accel = (s16)(accel + MixRNG_Particles(emSet->InitTypes.AxisInit.rngSeed.accel));
 	}
@@ -1328,12 +1402,12 @@ static void Particle_InitOscillator(struct Particle *p, struct ParticleOscillato
 
 	ParticleEmitter_CopyOscillator(osc, emSet);
 
-	if ((osc->flags & 0x20) != 0)
+	if ((osc->flags & PARTICLE_OSC_FLAG_PHASE_RELATIVE_TO_NOW) != 0)
 	{
 		osc->phase = (s16)(osc->phase - (u16)sdata->gGT->frameTimer_Confetti);
 	}
 
-	if ((osc->flags & 7) == 6)
+	if ((osc->flags & PARTICLE_OSC_FLAG_MODE_MASK) == PARTICLE_OSC_MODE_SEEDED_RANDOM)
 	{
 		osc->previousValue = osc->phase;
 	}
@@ -1354,7 +1428,7 @@ static void Particle_InitOscillator(struct Particle *p, struct ParticleOscillato
 static void Particle_RandomizeOscillator(struct ParticleOscillator *localOsc[12], const struct ParticleEmitter *emSet, u8 axisIndex, u32 flagsAxis)
 {
 	struct ParticleOscillator *osc;
-	const s16 *rng;
+	const struct ParticleOscillatorRandomRange *rng;
 
 	if ((flagsAxis & (1u << ((axisIndex + 0x10) & 0x1f))) == 0)
 	{
@@ -1362,31 +1436,31 @@ static void Particle_RandomizeOscillator(struct ParticleOscillator *localOsc[12]
 	}
 
 	osc = localOsc[axisIndex];
-	rng = (const s16 *)&((const u8 *)emSet)[0x18];
+	rng = &emSet->oscillator.randomRange;
 
-	if ((u16)rng[0] != 0)
+	if (rng->period != 0)
 	{
-		osc->period = (u16)(osc->period + MixRNG_Particles((u16)rng[0]));
+		osc->period = (u16)(osc->period + MixRNG_Particles(rng->period));
 	}
-	if (rng[1] != 0)
+	if (rng->phase != 0)
 	{
-		osc->phase = (s16)(osc->phase + MixRNG_Particles(rng[1]));
+		osc->phase = (s16)(osc->phase + MixRNG_Particles(rng->phase));
 	}
-	if ((u16)rng[2] != 0)
+	if (rng->scale != 0)
 	{
-		osc->scale = (u16)(osc->scale + MixRNG_Particles((u16)rng[2]));
+		osc->scale = (u16)(osc->scale + MixRNG_Particles(rng->scale));
 	}
-	if (rng[3] != 0)
+	if (rng->offset != 0)
 	{
-		osc->offset = (s16)(osc->offset + MixRNG_Particles(rng[3]));
+		osc->offset = (s16)(osc->offset + MixRNG_Particles(rng->offset));
 	}
-	if (rng[4] != 0)
+	if (rng->min != 0)
 	{
-		osc->min = (s16)(osc->min + MixRNG_Particles(rng[4]));
+		osc->min = (s16)(osc->min + MixRNG_Particles(rng->min));
 	}
-	if (rng[5] != 0)
+	if (rng->max != 0)
 	{
-		osc->max = (s16)(osc->max + MixRNG_Particles(rng[5]));
+		osc->max = (s16)(osc->max + MixRNG_Particles(rng->max));
 	}
 }
 
@@ -1448,22 +1522,22 @@ struct Particle *Particle_Init(u32 param_1, struct IconGroup *ig, struct Particl
 			u16 flags = emSet->flags;
 			u8 axisIndex = ParticleEmitter_GetInitOffset(emSet);
 
-			if (axisIndex == 0xc)
+			if (axisIndex == PARTICLE_EMITTER_INIT_FUNC_OFFSET)
 			{
-				if ((flags & 0xc0) == 0)
+				if ((flags & PARTICLE_EMITTER_FLAG_NON_FUNC_INIT_MASK) == 0)
 				{
 					p->funcPtr = emSet->InitTypes.FuncInit.particle_funcPtr;
 					p->flagsSetColor = emSet->InitTypes.FuncInit.particle_colorFlags;
 					p->framesLeftInLife = emSet->InitTypes.FuncInit.particle_lifespan;
-					flagsAxis |= 0x1000;
+					flagsAxis |= PARTICLE_AXIS_FLAG_FUNC_INIT;
 					particleType = emSet->InitTypes.FuncInit.particle_Type;
 				}
 			}
-			else if ((flags & 0x80) != 0)
+			else if ((flags & PARTICLE_EMITTER_FLAG_OSCILLATOR_RANDOMIZE) != 0)
 			{
 				Particle_RandomizeOscillator(localOsc, emSet, axisIndex, flagsAxis);
 			}
-			else if ((flags & 0x40) != 0)
+			else if ((flags & PARTICLE_EMITTER_FLAG_OSCILLATOR) != 0)
 			{
 				Particle_InitOscillator(p, localOsc, emSet, axisIndex, &flagsAxis);
 			}
@@ -1478,7 +1552,7 @@ struct Particle *Particle_Init(u32 param_1, struct IconGroup *ig, struct Particl
 
 	Particle_LinkOscillators(p, localOsc, flagsAxis);
 
-	if ((flagsAxis & 0x1000) == 0)
+	if ((flagsAxis & PARTICLE_AXIS_FLAG_FUNC_INIT) == 0)
 	{
 		p->funcPtr = NULL;
 		p->flagsSetColor = 0;
@@ -1487,7 +1561,7 @@ struct Particle *Particle_Init(u32 param_1, struct IconGroup *ig, struct Particl
 		p->ptrIconGroup = NULL;
 	}
 
-	Particle_Init_SetAxisFlags(p, flagsAxis & 0xffffefff);
+	Particle_Init_SetAxisFlags(p, flagsAxis & ~PARTICLE_AXIS_FLAG_FUNC_INIT);
 
 	if (particleType == 0)
 	{
@@ -1500,29 +1574,29 @@ struct Particle *Particle_Init(u32 param_1, struct IconGroup *ig, struct Particl
 		gGT->particleList_heatWarp = p;
 	}
 
-	p->unk1A = 0x400;
+	p->renderDepthLimit = 0x400;
 	p->driverID = -1;
 	p->otIndexOffset = 0;
 
-	if ((p->flagsSetColor & 0x1000) != 0)
+	if ((p->flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE) != 0)
 	{
-		if ((p->flagsSetColor & 0x4000) == 0)
+		if ((p->flagsSetColor & PARTICLE_SET_COLOR_FLAG_SPECIAL_LINE_KEEP_PREVIOUS) == 0)
 		{
-			u32 color = Particle_SetColors(Particle_Init_GetAxisFlags(p), p->flagsSetColor, p) | 0x50000000;
+			u32 color = Particle_SetColors(Particle_Init_GetAxisFlags(p), p->flagsSetColor, p) | PARTICLE_GPU_CODE_LINE_G2;
 
-			p->axis[10].startVal = color;
-			*(u32 *)&p->axis[10].velocity = color;
+			p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].startVal = color;
+			CTR_WriteU32LE(&p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].velocity, color);
 		}
 		else
 		{
-			u32 color = 0x50000000;
+			u32 color = PARTICLE_GPU_CODE_LINE_G2;
 
-			if ((p->flagsSetColor & 0x80) != 0)
+			if ((p->flagsSetColor & PARTICLE_SET_COLOR_FLAG_SEMI_TRANSPARENT) != 0)
 			{
-				color = 0x52000000;
+				color = PARTICLE_GPU_CODE_LINE_G2 | PARTICLE_GPU_CODE_SEMI_TRANS;
 			}
 
-			p->axis[10].startVal = color;
+			p->axis[PARTICLE_AXIS_ICON_FRAME_OR_LINE_COLOR].startVal = color;
 		}
 	}
 

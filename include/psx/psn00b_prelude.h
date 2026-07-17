@@ -1,3 +1,6 @@
+#ifndef PSX_PSN00B_PRELUDE_H
+#define PSX_PSN00B_PRELUDE_H
+
 #include <psn00bsdk/include/sys/types.h>
 #include <psn00bsdk/include/sys/fcntl.h>
 #include <psn00bsdk/include/psxetc.h>
@@ -11,3 +14,5 @@
 #include <psn00bsdk/include/string.h>
 #include <psn00bsdk/include/inline_c.h>
 #include <psn00bsdk/include/psxsn.h>
+
+#endif

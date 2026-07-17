@@ -1,87 +1,124 @@
 #include <common.h>
 
+enum
+{
+	UI_JUMP_METER_SIGNIFICANT_THRESHOLD = 0x150,
+	UI_JUMP_METER_HANG_TIME_SMALL = 640,
+	UI_JUMP_METER_HANG_TIME_MEDIUM = 960,
+	UI_JUMP_METER_HANG_TIME_LARGE = 1440,
+	UI_JUMP_METER_HANG_TIME_RESERVES = 960,
+	UI_JUMP_METER_HANG_TIME_FIRE_SMALL = 0,
+	UI_JUMP_METER_HANG_TIME_FIRE_MEDIUM = 0x80,
+	UI_JUMP_METER_HANG_TIME_FIRE_LARGE = 0x100,
+	UI_JUMP_METER_LANDING_VOICELINE_MIN = 0x480,
+	UI_JUMP_METER_LANDING_VOICELINE_CUTOFF = 0x481,
+	UI_JUMP_METER_LANDING_VOICELINE_ID = 7,
+	UI_JUMP_METER_LANDING_VOICELINE_FLAGS = 0x10,
+	UI_JUMP_METER_MAX = 0x960,
+	UI_JUMP_METER_DISPLAY_TIMER = 0x5a0,
+	UI_JUMP_METER_TIME_UNIT = 0x3c0,
+	UI_JUMP_METER_TENTH_PRE_DIVISOR = 6,
+	UI_JUMP_METER_TENTH_SHIFT = 4,
+	UI_JUMP_METER_TENTH_UNIT = 0x60,
+	UI_JUMP_METER_PERCENT_SCALE = 100,
+	UI_JUMP_METER_NUMBER_Y_OFFSET = -45,
+	UI_JUMP_METER_NUMBER_Y_BIAS = 2,
+	UI_JUMP_METER_SECONDS_X_OFFSET = -0x10,
+	UI_JUMP_METER_TENTHS_X_OFFSET = -4,
+	UI_JUMP_METER_HUNDREDTHS_X_OFFSET = 4,
+	UI_JUMP_METER_NUMBER_BOX_X_OFFSET = -0x14,
+	UI_JUMP_METER_NUMBER_BOX_W = 0x22,
+	UI_JUMP_METER_NUMBER_BOX_H = 10,
+	UI_JUMP_METER_NUMBER_FILL_RIGHT_OFFSET = 14,
+	UI_JUMP_METER_BAR_W = 0xc,
+	UI_JUMP_METER_BAR_H = 38,
+	UI_JUMP_METER_POLY_F4_OT_TAG = 0x5000000,
+	UI_JUMP_METER_NUMBER_FILL_COLOR = 0x28ffffff,
+	UI_JUMP_METER_BAR_RED = 0x28ff0000,
+	UI_JUMP_METER_BAR_GREEN = 0x2800ff00,
+	UI_JUMP_METER_BAR_CYAN = 0x2800ffff,
+	UI_JUMP_METER_BAR_BLUE = 0x280000ff,
+	UI_JUMP_METER_BAR_EMPTY_COLOR = 0x28808080,
+	UI_SLIDE_METER_BAR_W = 49,
+	UI_SLIDE_METER_BAR_H_FULL = 7,
+	UI_SLIDE_METER_BAR_H_SPLIT = 3,
+	UI_SLIDE_METER_SPLIT_PLAYER_COUNT = 3,
+	UI_SLIDE_METER_PRIM_COUNT = 2,
+	UI_SLIDE_METER_READY_R = 0xff,
+	UI_SLIDE_METER_READY_G = 0,
+	UI_SLIDE_METER_READY_B = 0,
+	UI_SLIDE_METER_WAIT_R = 0,
+	UI_SLIDE_METER_WAIT_G = 0xff,
+	UI_SLIDE_METER_WAIT_B = 0,
+	UI_SLIDE_METER_EMPTY_R = 0x80,
+	UI_SLIDE_METER_EMPTY_G = 0x80,
+	UI_SLIDE_METER_EMPTY_B = 0x80,
+};
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80051c64-0x80051e24.
 
-void UI_JumpMeter_Update(struct Driver *d)
+void UI_JumpMeter_Update(struct Driver *driver)
 {
-	if ((d->actionsFlagSet & ACTION_AIRBORNE) == 0)
+	if ((driver->actionsFlagSet & ACTION_AIRBORNE) == 0)
 	{
-		if ((d->actionsFlagSetPrevFrame & ACTION_AIRBORNE) == 0)
+		if ((driver->actionsFlagSetPrevFrame & ACTION_AIRBORNE) == 0)
 		{
-			// if Jump meter Timer is done
-			if (d->jumpMeterTimer == 0)
+			if (driver->jumpMeterTimer == 0)
 			{
-				// reset Jump meter
-				d->jumpMeter = 0;
+				driver->jumpMeter = 0;
 			}
-			// if Jump meter Timer is not done
 			else
 			{
-				// reduce Jump meter Timer by ~32ms
-				d->jumpMeterTimer -= sdata->gGT->elapsedTimeMS;
-				// if Jump meter Timer goes negative
-				if (d->jumpMeterTimer < 0)
+				driver->jumpMeterTimer -= sdata->gGT->elapsedTimeMS;
+				if (driver->jumpMeterTimer < 0)
 				{
-					// prevent Jump meter Timer from going negative
-					d->jumpMeterTimer = 0;
+					driver->jumpMeterTimer = 0;
 				}
 			}
 		}
-		// if, in previous frame? player was in the air
 		else
 		{
-			// if jump is high enough to be significant
-			if (0x150 < d->jumpMeter)
+			if (UI_JUMP_METER_SIGNIFICANT_THRESHOLD < driver->jumpMeter)
 			{
-				// keep track of all jumps
-				d->timeSpentJumping += d->jumpMeter;
+				driver->timeSpentJumping += driver->jumpMeter;
 			}
 
-			// if highest jump is less than current jump
-			if (d->highestJump < d->jumpMeter)
+			if (driver->highestJump < driver->jumpMeter)
 			{
-				// save highest jump
-				d->highestJump = d->jumpMeter;
+				driver->highestJump = driver->jumpMeter;
 			}
 
-			if (d->jumpMeter >= 640)
+			if (driver->jumpMeter >= UI_JUMP_METER_HANG_TIME_SMALL)
 			{
-				int param = 0;
-				if (d->jumpMeter >= 960)
+				int fireLevel = UI_JUMP_METER_HANG_TIME_FIRE_SMALL;
+				if (driver->jumpMeter >= UI_JUMP_METER_HANG_TIME_MEDIUM)
 				{
-					param = 0x80;
+					fireLevel = UI_JUMP_METER_HANG_TIME_FIRE_MEDIUM;
 				}
-				if (d->jumpMeter >= 1440)
+				if (driver->jumpMeter >= UI_JUMP_METER_HANG_TIME_LARGE)
 				{
-					param = 0x100;
+					fireLevel = UI_JUMP_METER_HANG_TIME_FIRE_LARGE;
 				}
 
-				// add one second reserves
-				VehFire_Increment(d, 960, POWER_SLIDE_HANG_TIME, param);
+				VehFire_Increment(driver, UI_JUMP_METER_HANG_TIME_RESERVES, POWER_SLIDE_HANG_TIME, fireLevel);
 			}
 		}
 	}
-
-	// if player is in the air
 	else
 	{
-		if ((0x480 < d->jump_LandingBoost) && (d->jumpMeter < 0x481))
+		if ((UI_JUMP_METER_LANDING_VOICELINE_MIN < driver->jump_LandingBoost) && (driver->jumpMeter < UI_JUMP_METER_LANDING_VOICELINE_CUTOFF))
 		{
-			// Make driver talk
-			Voiceline_RequestPlay(7, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(UI_JUMP_METER_LANDING_VOICELINE_ID, data.characterIDs[driver->driverID], UI_JUMP_METER_LANDING_VOICELINE_FLAGS);
 		}
 
-		// Jump meter = 0x3FC
-		d->jumpMeter = d->jump_LandingBoost;
+		driver->jumpMeter = driver->jump_LandingBoost;
 
-		// if Jump meter > 0x960
-		if (0x960 < d->jump_LandingBoost)
+		if (UI_JUMP_METER_MAX < driver->jump_LandingBoost)
 		{
-			// prevent Jump meter from going over 0x960
-			d->jumpMeter = 0x960;
+			driver->jumpMeter = UI_JUMP_METER_MAX;
 		}
-		// keep Jump meter Timer at 0x5A0.
-		d->jumpMeterTimer = 0x5a0;
+
+		driver->jumpMeterTimer = UI_JUMP_METER_DISPLAY_TIMER;
 	}
 	return;
 }
@@ -89,165 +126,159 @@ void UI_JumpMeter_Update(struct Driver *d)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80051e24-0x80052250.
 void UI_JumpMeter_Draw(s16 posX, s16 posY, struct Driver *driver)
 {
-	struct GameTracker *gGT;
-	u32 colorAndCode;
-	s16 jumpMeter;
+	struct GameTracker *gGT = sdata->gGT;
+	u32 barColorAndCode;
+	s16 currentJumpMeter;
 	struct DB *backDB;
-	int iVar5;
-	uint32_t *primmemCurr;
+	int wholeSeconds;
+	u32 *primMemCursor;
 	POLY_F4 *p;
-	int iVar8;
-	s16 sVar9;
-	int iVar10;
-	int iVar11;
+	int numbersY;
+	s16 numberBoxX;
+	s16 barRightX;
+	s16 barTopY;
+	int tenths;
+	int posXInt;
 	RECT box;
 	RECT box2;
 	int jumpMeterHeight;
-	int whateverThisIs;
+	int jumpMeterRemainder;
 
-	int numbersYOffset = -45;
-	int numbersYHeight = 10;
-	int barHeight = 38;
+	wholeSeconds = ((int)driver->jumpMeter / UI_JUMP_METER_TIME_UNIT) * 0x10000 >> 0x10;
+	jumpMeterRemainder = (int)driver->jumpMeter + wholeSeconds * -UI_JUMP_METER_TIME_UNIT;
+	tenths =
+	    (((jumpMeterRemainder / UI_JUMP_METER_TENTH_PRE_DIVISOR + (jumpMeterRemainder >> 0x1f)) >> UI_JUMP_METER_TENTH_SHIFT) - (jumpMeterRemainder >> 0x1f)) *
+	        0x10000 >>
+	    0x10;
+	posXInt = (int)posX;
+	numbersY = (int)posY + UI_JUMP_METER_NUMBER_Y_OFFSET + UI_JUMP_METER_NUMBER_Y_BIAS;
 
-	gGT = sdata->gGT;
+	DebugFont_DrawNumbers(wholeSeconds, posXInt + UI_JUMP_METER_SECONDS_X_OFFSET, numbersY);
+	DebugFont_DrawNumbers(tenths, posXInt + UI_JUMP_METER_TENTHS_X_OFFSET, numbersY);
+	DebugFont_DrawNumbers((((jumpMeterRemainder + tenths * -UI_JUMP_METER_TENTH_UNIT) * UI_JUMP_METER_PERCENT_SCALE) / UI_JUMP_METER_TIME_UNIT) * 0x10000 >>
+	                          0x10,
+	                      posXInt + UI_JUMP_METER_HUNDREDTHS_X_OFFSET, numbersY);
 
-	iVar5 = ((int)driver->jumpMeter / 0x3c0) * 0x10000 >> 0x10;
-	whateverThisIs = (int)driver->jumpMeter + iVar5 * -0x3c0;
-	iVar10 = (((whateverThisIs / 6 + (whateverThisIs >> 0x1f)) >> 4) - (whateverThisIs >> 0x1f)) * 0x10000 >> 0x10;
-	iVar11 = (int)posX;
-	iVar8 = (int)posY + numbersYOffset + 2;
-
-	DebugFont_DrawNumbers(iVar5, iVar11 - 0x10, iVar8);
-	DebugFont_DrawNumbers(iVar10, iVar11 + -4, iVar8);
-	DebugFont_DrawNumbers((((whateverThisIs + iVar10 * -0x60) * 100) / 0x3c0) * 0x10000 >> 0x10, iVar11 + 4, iVar8);
-
-	sVar9 = posX + -0x14;
-	box.w = 0x22; // dont use 3/4 ratio
-	box.h = numbersYHeight;
-	box.x = sVar9;
-	box.y = posY + numbersYOffset;
+	numberBoxX = posX + UI_JUMP_METER_NUMBER_BOX_X_OFFSET;
+	box.w = UI_JUMP_METER_NUMBER_BOX_W;
+	box.h = UI_JUMP_METER_NUMBER_BOX_H;
+	box.x = numberBoxX;
+	box.y = posY + UI_JUMP_METER_NUMBER_Y_OFFSET;
 
 	Color color;
-	color.self = data.colors[21][0];
+	color.self = data.colors[BLACK][0];
 	CTR_Box_DrawWireBox(&box, &color, gGT->pushBuffer_UI.ptrOT, &gGT->backBuffer->primMem);
 
 	backDB = gGT->backBuffer;
-	primmemCurr = backDB->primMem.cursor;
+	primMemCursor = backDB->primMem.cursor;
 	p = 0;
 
-	// if there is room left for more
-	if (primmemCurr <= (uint32_t *)backDB->primMem.guardEnd)
+	if (primMemCursor <= (u32 *)backDB->primMem.guardEnd)
 	{
-		// add primitives
-		backDB->primMem.cursor = &primmemCurr[6];
-		p = (POLY_F4 *)primmemCurr;
+		backDB->primMem.cursor = &primMemCursor[6];
+		p = (POLY_F4 *)primMemCursor;
 	}
 
 	if (p != 0)
 	{
-		*(u32 *)&p->r0 = 0x28ffffff;
-		p->x1 = posX + 13;
-		p->x3 = posX + 13;
+		CtrGpu_WriteColorCode(&p->r0, UI_JUMP_METER_NUMBER_FILL_COLOR);
+		p->x1 = posX + UI_JUMP_METER_NUMBER_FILL_RIGHT_OFFSET;
+		p->x3 = posX + UI_JUMP_METER_NUMBER_FILL_RIGHT_OFFSET;
 		p->x0 = box.x;
 		p->y0 = box.y;
 		p->y1 = box.y;
 		p->x2 = box.x;
-		p->y2 = box.y + numbersYHeight;
-		p->y3 = box.y + numbersYHeight;
+		p->y2 = box.y + UI_JUMP_METER_NUMBER_BOX_H;
+		p->y3 = box.y + UI_JUMP_METER_NUMBER_BOX_H;
 
-		// pointer to OT memory
-		primmemCurr = gGT->pushBuffer_UI.ptrOT;
+		primMemCursor = gGT->pushBuffer_UI.ptrOT;
 
-		*(int *)p = CtrGpu_PackOTTag(*primmemCurr, 0x5000000);
-		*primmemCurr = CtrGpu_PrimToOTLink24(p);
+		p->tag = CtrGpu_PackOTTag(*primMemCursor, UI_JUMP_METER_POLY_F4_OT_TAG);
+		*primMemCursor = CtrGpu_PrimToOTLink24(p);
 
-		box2.y = posY - barHeight;
-		box2.w = 0xc;
-		box2.h = barHeight;
+		box2.y = posY - UI_JUMP_METER_BAR_H;
+		box2.w = UI_JUMP_METER_BAR_W;
+		box2.h = UI_JUMP_METER_BAR_H;
 		box2.x = posX;
 
 		CTR_Box_DrawWireBox(&box2, &color, gGT->pushBuffer_UI.ptrOT, &backDB->primMem);
 
 		backDB = gGT->backBuffer;
-		primmemCurr = backDB->primMem.cursor;
+		primMemCursor = backDB->primMem.cursor;
 		p = 0;
 
-		if (primmemCurr <= (uint32_t *)backDB->primMem.guardEnd)
+		if (primMemCursor <= (u32 *)backDB->primMem.guardEnd)
 		{
-			backDB->primMem.cursor = &primmemCurr[6];
-			p = (POLY_F4 *)primmemCurr;
+			backDB->primMem.cursor = &primMemCursor[6];
+			p = (POLY_F4 *)primMemCursor;
 		}
 
 		if (p != 0)
 		{
-			jumpMeter = driver->jumpMeter;
-			sVar9 = driver->jumpMeter;
-			colorAndCode = 0x28ff0000;
-			if (0x27f < jumpMeter)
+			currentJumpMeter = driver->jumpMeter;
+			barColorAndCode = UI_JUMP_METER_BAR_RED;
+			if (UI_JUMP_METER_HANG_TIME_SMALL <= currentJumpMeter)
 			{
-				if (jumpMeter < 0x3c0)
+				if (currentJumpMeter < UI_JUMP_METER_HANG_TIME_MEDIUM)
 				{
-					colorAndCode = 0x2800ff00;
+					barColorAndCode = UI_JUMP_METER_BAR_GREEN;
 				}
 				else
 				{
-					if (jumpMeter < 0x5a0)
+					if (currentJumpMeter < UI_JUMP_METER_HANG_TIME_LARGE)
 					{
-						colorAndCode = 0x2800ffff;
+						barColorAndCode = UI_JUMP_METER_BAR_CYAN;
 					}
 					else
 					{
-						colorAndCode = 0x280000ff;
+						barColorAndCode = UI_JUMP_METER_BAR_BLUE;
 					}
 				}
 			}
-			*(u32 *)&p->r0 = colorAndCode;
-			jumpMeterHeight = (int)sVar9 * barHeight;
-			sVar9 = posX + 0xc;
+			CtrGpu_WriteColorCode(&p->r0, barColorAndCode);
+			jumpMeterHeight = (int)currentJumpMeter * UI_JUMP_METER_BAR_H;
+			barRightX = posX + UI_JUMP_METER_BAR_W;
 			p->x0 = posX;
-			p->x1 = sVar9;
+			p->x1 = barRightX;
 			p->x2 = posX;
 			p->y2 = posY;
-			p->x3 = sVar9;
+			p->x3 = barRightX;
 			p->y3 = posY;
-			jumpMeter = posY - ((s16)(jumpMeterHeight / 0x960));
-			p->y0 = jumpMeter;
-			p->y1 = jumpMeter;
+			barTopY = posY - ((s16)(jumpMeterHeight / UI_JUMP_METER_MAX));
+			p->y0 = barTopY;
+			p->y1 = barTopY;
 
-			primmemCurr = gGT->pushBuffer_UI.ptrOT;
+			primMemCursor = gGT->pushBuffer_UI.ptrOT;
 
-			*(int *)p = CtrGpu_PackOTTag(*primmemCurr, 0x5000000);
-			*primmemCurr = CtrGpu_PrimToOTLink24(p);
+			p->tag = CtrGpu_PackOTTag(*primMemCursor, UI_JUMP_METER_POLY_F4_OT_TAG);
+			*primMemCursor = CtrGpu_PrimToOTLink24(p);
 
 			backDB = gGT->backBuffer;
-			primmemCurr = backDB->primMem.cursor;
+			primMemCursor = backDB->primMem.cursor;
 			p = 0;
 
-			// If there is room to add more
-			if (primmemCurr <= (uint32_t *)backDB->primMem.guardEnd)
+			if (primMemCursor <= (u32 *)backDB->primMem.guardEnd)
 			{
-				// Add more primitives
-				backDB->primMem.cursor = &primmemCurr[6];
-				p = (POLY_F4 *)primmemCurr;
+				backDB->primMem.cursor = &primMemCursor[6];
+				p = (POLY_F4 *)primMemCursor;
 			}
 
 			if (p != 0)
 			{
-				*(u32 *)&p->r0 = 0x28808080;
+				CtrGpu_WriteColorCode(&p->r0, UI_JUMP_METER_BAR_EMPTY_COLOR);
 				p->x0 = posX;
-				p->y0 = posY - barHeight;
-				p->x1 = sVar9;
-				p->y1 = posY - barHeight;
+				p->y0 = posY - UI_JUMP_METER_BAR_H;
+				p->x1 = barRightX;
+				p->y1 = posY - UI_JUMP_METER_BAR_H;
 				p->x2 = posX;
 				p->y2 = posY;
-				p->x3 = sVar9;
+				p->x3 = barRightX;
 				p->y3 = posY;
 
-				// pointer to OT memory
-				primmemCurr = gGT->pushBuffer_UI.ptrOT;
+				primMemCursor = gGT->pushBuffer_UI.ptrOT;
 
-				*(int *)p = CtrGpu_PackOTTag(*primmemCurr, 0x5000000);
-				*primmemCurr = CtrGpu_PrimToOTLink24(p);
+				p->tag = CtrGpu_PackOTTag(*primMemCursor, UI_JUMP_METER_POLY_F4_OT_TAG);
+				*primMemCursor = CtrGpu_PrimToOTLink24(p);
 			}
 		}
 	}
@@ -258,8 +289,8 @@ void UI_JumpMeter_Draw(s16 posX, s16 posY, struct Driver *driver)
 void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 {
 	const struct GameTracker *gGT = sdata->gGT;
-	const int barWidth = 49;
-	int barHeight = gGT->numPlyrCurrGame > 2 ? 3 : 7;
+	const int barWidth = UI_SLIDE_METER_BAR_W;
+	int barHeight = gGT->numPlyrCurrGame >= UI_SLIDE_METER_SPLIT_PLAYER_COUNT ? UI_SLIDE_METER_BAR_H_SPLIT : UI_SLIDE_METER_BAR_H_FULL;
 
 	int meterLength = 0;
 	if (driver->turbo_MeterRoomLeft != 0)
@@ -280,14 +311,14 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 	CTR_Box_DrawWireBox(&box, &black, gGT->pushBuffer_UI.ptrOT, &gGT->backBuffer->primMem);
 
 	const PrimCode primCode = {.poly = {.quad = 1, .renderCode = RenderCode_Polygon}};
-	ColorCode colorCode = MakeColorCode(0xFF, 0, 0, primCode); // red color, ready to boost
+	ColorCode colorCode = MakeColorCode(UI_SLIDE_METER_READY_R, UI_SLIDE_METER_READY_G, UI_SLIDE_METER_READY_B, primCode);
 
 	if (driver->const_turboLowRoomWarning * ELAPSED_MS < driver->turbo_MeterRoomLeft)
 	{
-		colorCode = MakeColorCode(0, 0xFF, 0, primCode); // green color, no boost yet
+		colorCode = MakeColorCode(UI_SLIDE_METER_WAIT_R, UI_SLIDE_METER_WAIT_G, UI_SLIDE_METER_WAIT_B, primCode);
 	}
 
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < UI_SLIDE_METER_PRIM_COUNT; i++)
 	{
 		PolyF4 *p;
 		GetPrimMem(p);
@@ -309,7 +340,7 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 		p->v[3].pos.x = posX;
 
 		AddPrimitive(p, gGT->pushBuffer_UI.ptrOT);
-		colorCode = MakeColorCode(0x80, 0x80, 0x80, primCode); // Gray color for background bar
+		colorCode = MakeColorCode(UI_SLIDE_METER_EMPTY_R, UI_SLIDE_METER_EMPTY_G, UI_SLIDE_METER_EMPTY_B, primCode);
 		meterLength = barWidth;
 	}
 }

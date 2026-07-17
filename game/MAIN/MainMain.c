@@ -42,8 +42,8 @@ static struct NativeReplaySchedulerFrameInfo MainReplayScheduler_FrameInfo(struc
 	info.levelID = gGT->levelID;
 	info.mixRandomNumber = (u32)sdata->randomNumber;
 	info.audioRNG = sdata->audioRNG;
-	info.deadcoed0 = (u32)gGT->deadcoed_struct.unk1;
-	info.deadcoed1 = (u32)gGT->deadcoed_struct.unk2;
+	info.deadcoed0 = (u32)gGT->deadcoed_struct.state0;
+	info.deadcoed1 = (u32)gGT->deadcoed_struct.state1;
 	info.advRng0 = (u32)sdata->const_0x30215400;
 	info.advRng1 = (u32)sdata->const_0x493583fe;
 
@@ -115,7 +115,7 @@ u32 main(void)
 
 			if (gGT->levelID == MAIN_MENU_LEVEL)
 			{
-				if (RaceFlag_IsFullyOffScreen() != 0)
+				if (RaceFlag_IsFullyOffScreen())
 				{
 					RaceFlag_SetFullyOnScreen();
 				}
@@ -123,7 +123,7 @@ u32 main(void)
 
 			else
 			{
-				if (RaceFlag_IsFullyOnScreen() != 0)
+				if (RaceFlag_IsFullyOnScreen())
 				{
 					RaceFlag_BeginTransition(2);
 				}
@@ -179,7 +179,7 @@ u32 main(void)
 			// if loading, or gameplay interrupted
 			if (sdata->Loading.stage != LOAD_IDLE)
 			{
-				if ((RaceFlag_IsFullyOnScreen() == 1) || (gGT->levelID == NAUGHTY_DOG_CRATE) || (sdata->pause_state != 0))
+				if (RaceFlag_IsFullyOnScreen() || (gGT->levelID == NAUGHTY_DOG_CRATE) || (sdata->pause_state != 0))
 				{
 					gGT->gameMode1 |= LOADING;
 				}
@@ -207,7 +207,7 @@ u32 main(void)
 				// if restarting race
 				if (iVar8 == LOAD_RESTART)
 				{
-					if (RaceFlag_IsFullyOnScreen() == 1)
+					if (RaceFlag_IsFullyOnScreen())
 					{
 						// reinitialize world,
 						// does not reinitialize pools
@@ -234,7 +234,7 @@ u32 main(void)
 					RemBitsConfig0 = sdata->Loading.OnBegin.RemBitsConfig0;
 					AddBitsConfig0 = sdata->Loading.OnBegin.AddBitsConfig0;
 
-					if (RaceFlag_IsFullyOnScreen() == 1)
+					if (RaceFlag_IsFullyOnScreen())
 					{
 						sdata->Loading.OnBegin.AddBitsConfig0 = 0;
 						sdata->Loading.OnBegin.RemBitsConfig0 = 0;
@@ -243,7 +243,7 @@ u32 main(void)
 
 						gameMode2 = gGT->gameMode2;
 
-						gGT->hudFlags &= 0xf7;
+						gGT->hudFlags &= HUD_FLAG_CLEAR_INTRO_RACE_TITLE_BARS_MASK;
 
 						gameMode1 = gGT->gameMode1;
 						gGT->gameMode2 = gameMode2 | AddBitsConfig8;
@@ -254,7 +254,7 @@ u32 main(void)
 						MainRaceTrack_StartLoad(sdata->Loading.Lev_ID_To_Load);
 					}
 
-					else if (RaceFlag_IsFullyOffScreen() == 1)
+					else if (RaceFlag_IsFullyOffScreen())
 					{
 						RaceFlag_BeginTransition(1);
 					}
@@ -348,7 +348,7 @@ u32 main(void)
 
 			    (
 			        // Turn off HUD
-			        gGT->hudFlags &= 0xfe,
+			        gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK,
 			        // if game is not loading
 			        sdata->Loading.stage == LOAD_IDLE))
 			{
@@ -414,7 +414,7 @@ u32 main(void)
 			if (gGT->boolDemoMode != '\0')
 			{
 				// Turn off HUD
-				gGT->hudFlags &= 0xfe;
+				gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 			}
 
 			// reset vsync calls between drawsync
@@ -496,7 +496,7 @@ u32 main(void)
 void StateZero()
 {
 	u16 *clockEffect;
-	int vramSize;
+	u32 vramSize;
 
 	struct GameTracker *gGT;
 	gGT = sdata->gGT;
@@ -504,10 +504,7 @@ void StateZero()
 	struct GamepadSystem *gGS;
 	gGS = sdata->gGamepads;
 
-// already zero, part of BSS
-#if 0
-	memset(gGT, 0, sizeof(struct GameTracker));
-#endif
+	memset(gGT, 0, sizeof(*gGT));
 
 	// Set Video Mode to NTSC
 	SetVideoMode(0);
@@ -561,7 +558,7 @@ void StateZero()
 	// set lap count to 3
 	gGT->numLaps = 3;
 
-	gGT->battleSetup.enabledWeapons |= 0x34de;
+	gGT->battleSetup.enabledWeapons |= BATTLE_DEFAULT_WEAPON_FLAGS;
 	gGT->numPlyrCurrGame = 1;
 	gGT->numPlyrNextGame = 1;
 	*(u32 *)&gGT->battleSetup.teamOfEachPlayer = 0x3020100;
@@ -629,8 +626,8 @@ void StateZero()
 	gGT->backBuffer = &gGT->db[0];
 
 	gGT->overlayIndex_EndOfRace = 0xff;
-	gGT->overlayIndex_LOD = 0xff;
-	gGT->overlayIndex_Threads = 0xff;
+	gGT->overlayIndex_LOD = OVERLAY_INDEX_NONE;
+	gGT->overlayIndex_Threads = OVERLAY_INDEX_NONE;
 
 	PutDispEnv(&gGT->db[1].dispEnv);
 	PutDrawEnv(&gGT->db[1].drawEnv);

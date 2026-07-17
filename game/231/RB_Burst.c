@@ -87,8 +87,6 @@ void RB_Burst_ThTick(struct Thread *t)
 	}
 }
 
-typedef int (*BurstThreadCollideFunc)(struct Thread *, struct Thread *, void *, int);
-
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 231 0x800b1e90-0x800b20a4.
 void RB_Burst_CollThBucket(struct ScratchpadStruct *sps, void *hitObject)
 {
@@ -119,7 +117,7 @@ void RB_Burst_CollThBucket(struct ScratchpadStruct *sps, void *hitObject)
 		{
 			attacker = ((struct MineWeapon *)weaponObj)->instParent->thread->object;
 
-			// blasted anyone?
+			// blast driver
 			RB_Hazard_HurtDriver(victim, 2, attacker, 2);
 		}
 		else
@@ -136,7 +134,7 @@ void RB_Burst_CollThBucket(struct ScratchpadStruct *sps, void *hitObject)
 
 			attacker = ((struct TrackerWeapon *)weaponObj)->instParent->thread->object;
 
-			// blasted anyone?
+			// blast driver
 			RB_Hazard_HurtDriver(victim, 2, attacker, reason);
 
 			if (attacker->longestShot < tw->timeAlive)
@@ -186,7 +184,7 @@ void RB_Burst_CollThBucket(struct ScratchpadStruct *sps, void *hitObject)
 	// if function pointer is valid
 	if (t->funcThCollide != NULL)
 	{
-		((BurstThreadCollideFunc)t->funcThCollide)(t, weaponTh, t->funcThCollide, 3);
+		((ThreadBurstCollideFunc)t->funcThCollide)(t, weaponTh, t->funcThCollide, 3);
 	}
 	return;
 }
@@ -260,7 +258,7 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	int *burst;
 
 	// initialize thread for burst
-	currInst = INSTANCE_BirthWithThread(0x2b, s_burst_explosion1, SMALL, BURST, RB_Burst_ThTick, 0xc, 0);
+	currInst = INSTANCE_BirthWithThread(STATIC_WARPEDBURST, s_burst_explosion1, SMALL, BURST, RB_Burst_ThTick, 0xc, 0);
 
 	// get thread from instance
 	t = currInst->thread;
@@ -274,11 +272,7 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	currInst->depthBiasNormal += -2;
 
 	// set rotation to identity matrix
-	*(int *)&currInst->matrix.m[0][0] = 0x1000;
-	*(int *)&currInst->matrix.m[0][2] = 0;
-	*(int *)&currInst->matrix.m[1][1] = 0x1000;
-	*(int *)&currInst->matrix.m[2][0] = 0;
-	currInst->matrix.m[2][2] = 0x1000;
+	CTR_MatrixSetRotIdentity(&currInst->matrix);
 
 	// set flag to always point to camera
 	headers = currInst->model->headers;
@@ -298,8 +292,8 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	currInst->matrix.m[0][1] = 0xf000;
 	currInst->matrix.m[0][2] = 0;
 	currInst->matrix.m[1][0] = 0x1000;
-	*(int *)&currInst->matrix.m[1][1] = 0;
-	*(int *)&currInst->matrix.m[2][0] = 0;
+	CTR_WriteU32LE(&currInst->matrix.m[1][1], 0);
+	CTR_WriteU32LE(&currInst->matrix.m[2][0], 0);
 	currInst->matrix.m[2][2] = 0x1000;
 
 	// set flag to always point to camera
@@ -341,7 +335,7 @@ void RB_Burst_Init(struct Instance *weaponInst)
 		}
 
 		// identity matrix (z)
-		*(int *)&currInst->matrix.m[2][0] = 0;
+		CTR_WriteU32LE(&currInst->matrix.m[2][0], 0);
 		currInst->matrix.m[2][2] = 0x1000;
 
 		if (i == 2)
@@ -350,9 +344,9 @@ void RB_Burst_Init(struct Instance *weaponInst)
 		}
 
 		// identity matrix (x, y)
-		*(int *)&currInst->matrix.m[0][0] = 0x1000;
-		*(int *)&currInst->matrix.m[0][2] = 0;
-		*(int *)&currInst->matrix.m[1][1] = 0x1000;
+		CTR_WriteU32LE(&currInst->matrix.m[0][0], 0x1000);
+		CTR_WriteU32LE(&currInst->matrix.m[0][2], 0);
+		CTR_WriteU32LE(&currInst->matrix.m[1][1], 0x1000);
 	}
 
 	// currInst is burst[2]
@@ -364,7 +358,7 @@ void RB_Burst_Init(struct Instance *weaponInst)
 
 	// rotate 90 degrees (Y -> X)
 	currInst->matrix.m[1][0] = 0x1000;
-	*(int *)&currInst->matrix.m[1][1] = 0;
+	CTR_WriteU32LE(&currInst->matrix.m[1][1], 0);
 
 	// ========= Collisions ===========
 
@@ -388,7 +382,7 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	}
 	else
 	{
-		if ((tw->flags & 1) == 0)
+		if ((tw->flags & TRACKER_FLAG_POWERED_UP) == 0)
 		{
 			// hitRadius and hitRadiusSquared
 			sps->Input1.hitRadius = 0x140;
@@ -487,7 +481,7 @@ void RB_Burst_DrawAll(struct GameTracker *gGT)
 			pos.vz = burstInst->matrix.t[2];
 
 			CTR_GteLoadSV0(&pos);
-			gte_mvmva(0, 0, 0, 3, 0);
+			gte_rt();
 			CTR_GteStoreMAC(&transformed.vx);
 
 			absX = transformed.vx;

@@ -13,8 +13,6 @@ void RB_Bubbles_RoosTubes()
 	int numFreeParticles;
 	struct Particle *p;
 	struct Driver *d;
-	SVec3 posCurr;
-	SVec3 posPrev;
 	int velX;
 	int velZ;
 	int i;
@@ -36,7 +34,7 @@ void RB_Bubbles_RoosTubes()
 		return;
 	}
 
-	// [1], unused beta [0]?
+	// Roo's Tubes bubble spawn path
 	spawnType2 = &level1->ptrSpawnType2[1];
 	d = gGT->drivers[0];
 
@@ -60,7 +58,7 @@ void RB_Bubbles_RoosTubes()
 			continue;
 		}
 
-		// speed approximation (what on earth is this logic?)
+		// projected driver position check
 		velX = (((d->posCurr.x - d->posPrev.x) >> 4) + (d->posCurr.x >> 8)) - spawnPos->x;
 		velZ = (((d->posCurr.z - d->posPrev.z) >> 4) + (d->posCurr.z >> 8)) - spawnPos->z;
 		if (velX < 0)
@@ -72,7 +70,7 @@ void RB_Bubbles_RoosTubes()
 			velZ = -velZ;
 		}
 
-		// if speed is fast
+		// skip emitters far from projected driver position
 		if (velX + velZ > 0x1680)
 		{
 			// skip emitter, run iterative condition
@@ -90,7 +88,7 @@ void RB_Bubbles_RoosTubes()
 
 		numFreeParticles--;
 
-		p->unk1A = 0x7fff;
+		p->renderDepthLimit = 0x7fff;
 		p->otIndexOffset = 8;
 
 		for (i = 0; i < 3; i++)
@@ -207,7 +205,7 @@ struct ParticleEmitter emSet_TubeBubbles[7] = {[0] =
                                                    {
                                                        .flags = 1,
 
-                                                       // RotX?
+                                                       // rotY
                                                        .initOffset = 4,
 
                                                        .InitTypes.AxisInit.baseValue.startVal = 1,
@@ -216,10 +214,4 @@ struct ParticleEmitter emSet_TubeBubbles[7] = {[0] =
                                                    },
 
                                                // null terminator
-                                               [6] = {}
-
-#if 0
-	// original had [6], [7], [8], and [9]
-	// all null terminators, would bubbles change color?
-#endif
-};
+                                               [6] = {0}};

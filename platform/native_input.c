@@ -871,7 +871,7 @@ void Platform_InputControllerRemoved(int instanceId)
 
 	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
-		if (s_controllers[slot].instanceId == instanceId)
+		if (s_controllers[slot].instanceId == (SDL_JoystickID)instanceId)
 		{
 			NativeInput_CloseController(slot);
 			return;

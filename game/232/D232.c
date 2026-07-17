@@ -5,26 +5,26 @@ struct OverlayDATA_232
     D232 =
         {
             // 800b4ddc
-            .lightDirGem = {{0xA0A, 0xF5F6, 0x787}, {0xA0A, 0xF5F6, 0x787}, {0xA0A, 0xF5F6, 0x787}, {0xA0A, 0xF5F6, 0x787}, {0xA0A, 0xF5F6, 0x787}},
+            .lightDirGem = {{{0xA0A, 0xF5F6, 0x787}}, {{0xA0A, 0xF5F6, 0x787}}, {{0xA0A, 0xF5F6, 0x787}}, {{0xA0A, 0xF5F6, 0x787}}, {{0xA0A, 0xF5F6, 0x787}}},
 
             // 800b4dfc
             .lightDirRelic =
                 {
-                    {0x690, 0xD20, 0x690},
-                    {0x690, 0xD20, 0x690},
-                    {0x690, 0xD20, 0x690},
-                    {0x690, 0xD20, 0x690},
-                    {0x690, 0xD20, 0x690},
+                    {{0x690, 0xD20, 0x690}},
+                    {{0x690, 0xD20, 0x690}},
+                    {{0x690, 0xD20, 0x690}},
+                    {{0x690, 0xD20, 0x690}},
+                    {{0x690, 0xD20, 0x690}},
                 },
 
             // 800b4e1c
             .lightDirToken =
                 {
-                    {0xF5F6, 0x787, 0xA0A},
-                    {0xF5F6, 0x787, 0xA0A},
-                    {0xF5F6, 0x787, 0xA0A},
-                    {0xF5F6, 0x787, 0xA0A},
-                    {0xF5F6, 0x787, 0xA0A},
+                    {{0xF5F6, 0x787, 0xA0A}},
+                    {{0xF5F6, 0x787, 0xA0A}},
+                    {{0xF5F6, 0x787, 0xA0A}},
+                    {{0xF5F6, 0x787, 0xA0A}},
+                    {{0xF5F6, 0x787, 0xA0A}},
                 },
 
             // 800b4e3c
@@ -42,20 +42,20 @@ struct OverlayDATA_232
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0x100803,
+                    .state = RECTMENU_STATE_CENTERED | MENU_CANT_GO_BACK,
                     .rows = &D232.rowsTokenRelic[0],
                     .funcPtr = AH_WarpPad_MenuProc,
                     .drawStyle = 4,
                 },
 
             // 800b4e7c
-            .arrKeysNeeded = {2, 1, 2, 3, 4},
+            .keysNeededByHub = {2, 1, 2, 3, 4},
 
             // 800b4e86
             .levelID = -1,
 
             // 800b4e88
-            .timeCrystalChallenge =
+            .battleCrystalEventTime =
                 {
                     0x1c200, // NITRO_COURT
                     0x13ec0, // RAMPAGE_RUINS
@@ -67,63 +67,74 @@ struct OverlayDATA_232
                 },
 
             // 800b4ea4
-            .saveObjCameraOffset = {0x800, 0, 0},
+            .saveObjCameraOffset = {{0x800, 0, 0}},
 
             // 800b4eac
-            .primOffsetXY_LoadSave = {0, 0, -2, 0, 2, 0, 0, -1, 0, 1},
+            .loadSavePrimOffset = {{{0, 0}}, {{-2, 0}}, {{2, 0}}, {{0, -1}}, {{0, 1}}},
 
             // 800b4ec0
-            .primOffsetXY_HubArrow = {0, 0, -2, 0, 2, 0, 0, -1, 0, 1},
+            .hubArrowPrimOffset = {{{0, 0}}, {{-2, 0}}, {{2, 0}}, {{0, -1}}, {{0, 1}}},
 
             // 800b4ed4
-            .hubItems_hub1 = {{0xB780, 0x3D00, 0, 4}, {0xC824, 0x46e, 0, -2}, {0xFB50, 0x44c0, 0xc00, -3}, {0xbcd0, 0x1482, 0x800, 100}, {-1}},
+            .hubItems_hub1 = {{0xB780, 0x3D00, 0, AH_HUB_ITEM_OXIDE_WARPPAD},
+                              {0xC824, 0x46e, 0, AH_HUB_ITEM_ROUTE_OPEN_A},
+                              {0xFB50, 0x44c0, 0xc00, AH_HUB_ITEM_ROUTE_OPEN_B},
+                              {0xbcd0, 0x1482, 0x800, AH_HUB_ITEM_SAVE_LOAD_MARKER},
+                              {.posX = AH_HUB_ITEM_LIST_END_POS_X}},
 
             // 800b4efc
-            .hubItems_hub2 = {{0xC178, 0xE493, 0, 0}, {0xD6FC, 0x1093, 0x800, -1}, {0xE890, 0xDECC, 0xc00, -4}, {0xCC0C, 0xE764, 0x400, 100}, {-1}},
+            .hubItems_hub2 = {{0xC178, 0xE493, 0, AH_HUB_ITEM_RIPPER_ROO_GARAGE},
+                              {0xD6FC, 0x1093, 0x800, AH_HUB_ITEM_ROUTE_KEY1_IF_BEACH},
+                              {0xE890, 0xDECC, 0xc00, AH_HUB_ITEM_ROUTE_KEY2},
+                              {0xCC0C, 0xE764, 0x400, AH_HUB_ITEM_SAVE_LOAD_MARKER},
+                              {.posX = AH_HUB_ITEM_LIST_END_POS_X}},
 
             // 800b4f24
-            .hubItems_hub3 = {{0x1099, 0x38b3, 0, 1}, {0x23C9, 0x1ffc, 0, -4}, {0xDE99, 0x3EB3, 0x400, -1}, {0xEA6, 0x4556, 0x400, 100}, {-1}},
+            .hubItems_hub3 = {{0x1099, 0x38b3, 0, AH_HUB_ITEM_PAPU_PAPU_GARAGE},
+                              {0x23C9, 0x1ffc, 0, AH_HUB_ITEM_ROUTE_KEY2},
+                              {0xDE99, 0x3EB3, 0x400, AH_HUB_ITEM_ROUTE_KEY1_IF_BEACH},
+                              {0xEA6, 0x4556, 0x400, AH_HUB_ITEM_SAVE_LOAD_MARKER},
+                              {.posX = AH_HUB_ITEM_LIST_END_POS_X}},
 
             // 800b4f4c
-            .hubItems_hub4 =
-                {{0x2AF8, 0xEE13, 0, 2}, {0xd5f8, 0xc993, 0x400, -2}, {0x1678, 0xc593, 0, -5}, {0x2ee0, 0x32c8, 0x800, -3}, {0x109a, 0xdcd8, 0x576, 100}, {-1}},
+            .hubItems_hub4 = {{0x2AF8, 0xEE13, 0, AH_HUB_ITEM_KOMODO_JOE_GARAGE},
+                              {0xd5f8, 0xc993, 0x400, AH_HUB_ITEM_ROUTE_OPEN_A},
+                              {0x1678, 0xc593, 0, AH_HUB_ITEM_ROUTE_KEY3},
+                              {0x2ee0, 0x32c8, 0x800, AH_HUB_ITEM_ROUTE_OPEN_B},
+                              {0x109a, 0xdcd8, 0x576, AH_HUB_ITEM_SAVE_LOAD_MARKER},
+                              {.posX = AH_HUB_ITEM_LIST_END_POS_X}},
 
             // 800b4f7c
-            .hubItems_hub5 = {{0x9f8, 0xac93, 0, 3}, {0x5dc, 0xd493, 0x800, -4}, {0x157c, 0xab3c, 0, 100}, {-1}},
+            .hubItems_hub5 = {{0x9f8, 0xac93, 0, AH_HUB_ITEM_PINSTRIPE_GARAGE},
+                              {0x5dc, 0xd493, 0x800, AH_HUB_ITEM_ROUTE_KEY2},
+                              {0x157c, 0xab3c, 0, AH_HUB_ITEM_SAVE_LOAD_MARKER},
+                              {.posX = AH_HUB_ITEM_LIST_END_POS_X}},
 
             .hubItemsXY_ptrArray =
                 {
-                    &D232.hubItems_hub1[0].posX,
-                    &D232.hubItems_hub2[0].posX,
-                    &D232.hubItems_hub3[0].posX,
-                    &D232.hubItems_hub4[0].posX,
-                    &D232.hubItems_hub5[0].posX,
+                    &D232.hubItems_hub1[0],
+                    &D232.hubItems_hub2[0],
+                    &D232.hubItems_hub3[0],
+                    &D232.hubItems_hub4[0],
+                    &D232.hubItems_hub5[0],
                 },
 
-            .hubArrowXY_Inner = {3, 4, 6, 2, 5, 4},
+            .hubArrowInnerOffset = {{{3, 4}}, {{6, 2}}, {{5, 4}}},
 
-            .hubArrowXY_Outter =
+            .hubArrowOuterOffset =
                 {
-                    0,
-                    3,
-                    -2,
-                    1,
-                    0,
-                    0,
-                    2,
-                    1,
+                    {{0, 3}},
+                    {{-2, 1}},
+                    {{0, 0}},
+                    {{2, 1}},
                 },
 
-            .loadSave_pos =
+            .loadSavePos =
                 {
-                    -4,
-                    -2,
-                    4,
-                    -2,
-                    -4,
-                    2,
-                    4,
-                    2,
+                    {{-4, -2}},
+                    {{4, -2}},
+                    {{-4, 2}},
+                    {{4, 2}},
                 },
 
             .loadSave_col =
@@ -134,7 +145,7 @@ struct OverlayDATA_232
                     0xBEFFBE,
                 },
 
-            .hubArrow_pos = {0, 0xFFF8, 0xFFF8, 8, 8, 8},
+            .hubArrowPos = {{{0, 0xFFF8}}, {{0xFFF8, 8}}, {{8, 8}}},
 
             .hubArrow_col1 =
                 {
@@ -167,52 +178,52 @@ struct OverlayDATA_232
             .advPausePages =
                 {
                     // hubs and bosses
-                    {0x19, -1, 0, 0xF},
-                    {0x1A, -1, 0, 0xA},
-                    {0x1B, -1, 0, 0x9},
-                    {0x1C, -1, 0, 0xB},
-                    {0x1D, -1, 0, 0x8},
+                    {GEM_STONE_VALLEY, -1, AH_PAUSE_PAGE_HUB, 0xF},
+                    {N_SANITY_BEACH, -1, AH_PAUSE_PAGE_HUB, 0xA},
+                    {THE_LOST_RUINS, -1, AH_PAUSE_PAGE_HUB, 0x9},
+                    {GLACIER_PARK, -1, AH_PAUSE_PAGE_HUB, 0xB},
+                    {CITADEL_CITY, -1, AH_PAUSE_PAGE_HUB, 0x8},
 
                     // gems and relics
-                    {-1, 0x10, 1, 0},
-                    {-1, 0x11, 2, 0},
+                    {-1, LNG_CTR_TOKENS, AH_PAUSE_PAGE_TOKEN_TOTALS, 0},
+                    {-1, LNG_RELICS, AH_PAUSE_PAGE_RELIC_TOTALS, 0},
                 },
 
             .advPauseInst =
                 {// gems: red, green, blue, yellow, purple
-                 {0x5F, 0xAF0, 0x8086c, USE_SPECULAR_LIGHT, {0xfa5b, 0xf0f, 0xfe1f}},
-                 {0x5F, 0xAF0, 0x86c08, USE_SPECULAR_LIGHT, {0xfa5b, 0xf0f, 0xfe1f}},
-                 {0x5F, 0xAF0, 0x808000, USE_SPECULAR_LIGHT, {0xfa5b, 0xf0f, 0xfe1f}},
-                 {0x5F, 0xAF0, 0x8080, USE_SPECULAR_LIGHT, {0xfa5b, 0xf0f, 0xfe1f}},
-                 {0x5F, 0xAF0, 0x6c086c, USE_SPECULAR_LIGHT, {0xfa5b, 0xf0f, 0xfe1f}},
+                 {0x5F, 0xAF0, 0x8086c, USE_SPECULAR_LIGHT, {{0xfa5b, 0xf0f, 0xfe1f}}},
+                 {0x5F, 0xAF0, 0x86c08, USE_SPECULAR_LIGHT, {{0xfa5b, 0xf0f, 0xfe1f}}},
+                 {0x5F, 0xAF0, 0x808000, USE_SPECULAR_LIGHT, {{0xfa5b, 0xf0f, 0xfe1f}}},
+                 {0x5F, 0xAF0, 0x8080, USE_SPECULAR_LIGHT, {{0xfa5b, 0xf0f, 0xfe1f}}},
+                 {0x5F, 0xAF0, 0x6c086c, USE_SPECULAR_LIGHT, {{0xfa5b, 0xf0f, 0xfe1f}}},
 
                  // key
-                 {0x63, 0x30D, 0xA6DC, USE_SPECULAR_LIGHT, {0xf368, 0x99f, 0xfd28}},
+                 {0x63, 0x30D, 0xA6DC, USE_SPECULAR_LIGHT, {{0xf368, 0x99f, 0xfd28}}},
 
                  // relic: blue, gold, platinum
-                 {0x61, 0x30D, 0xFFA560, USE_SPECULAR_LIGHT, {0xf368, 0x99f, 0x232}},
-                 {0x61, 0x30D, 0x9d2d8, USE_SPECULAR_LIGHT, {0xf368, 0x99f, 0x232}},
-                 {0x61, 0x30D, 0xe9edff, USE_SPECULAR_LIGHT, {0xf368, 0x99f, 0x232}},
+                 {0x61, 0x30D, 0xFFA560, USE_SPECULAR_LIGHT, {{0xf368, 0x99f, 0x232}}},
+                 {0x61, 0x30D, 0x9d2d8, USE_SPECULAR_LIGHT, {{0xf368, 0x99f, 0x232}}},
+                 {0x61, 0x30D, 0xe9edff, USE_SPECULAR_LIGHT, {{0xf368, 0x99f, 0x232}}},
 
                  // token: red, green, blue, yellow, purple
-                 {0x7d, 0x500, 0x8086c, USE_SPECULAR_LIGHT, {0xf5f6, 0x787, 0xa0a}},
-                 {0x7d, 0x500, 0x86c08, USE_SPECULAR_LIGHT, {0xf5f6, 0x787, 0xa0a}},
-                 {0x7d, 0x500, 0x800000, USE_SPECULAR_LIGHT, {0xf5f6, 0x787, 0xa0a}},
-                 {0x7d, 0x500, 0x8080, USE_SPECULAR_LIGHT, {0xf5f6, 0x787, 0xa0a}},
-                 {0x7d, 0x500, 0x6c086c, USE_SPECULAR_LIGHT, {0xf5f6, 0x787, 0xa0a}},
+                 {0x7d, 0x500, 0x8086c, USE_SPECULAR_LIGHT, {{0xf5f6, 0x787, 0xa0a}}},
+                 {0x7d, 0x500, 0x86c08, USE_SPECULAR_LIGHT, {{0xf5f6, 0x787, 0xa0a}}},
+                 {0x7d, 0x500, 0x800000, USE_SPECULAR_LIGHT, {{0xf5f6, 0x787, 0xa0a}}},
+                 {0x7d, 0x500, 0x8080, USE_SPECULAR_LIGHT, {{0xf5f6, 0x787, 0xa0a}}},
+                 {0x7d, 0x500, 0x6c086c, USE_SPECULAR_LIGHT, {{0xf5f6, 0x787, 0xa0a}}},
 
                  // trophy
-                 {0x62, 0x500, 0x808080, 0, {0xf368, 0x99f, 0x232}}},
+                 {0x62, 0x500, 0x808080, 0, {{0xf368, 0x99f, 0x232}}}},
 
             .menuHintMenu =
                 {
-                    .stringIndexTitle = 0xFFFF,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
 
                     .unk1 = 0,
 
-                    .state = 0x8A3,
+                    .state = RECTMENU_STATE_SMALL_CALLBACK_CENTERED,
                     .rows = 0,
                     .funcPtr = AH_HintMenu_MenuProc,
                     .drawStyle = 4,
@@ -220,34 +231,27 @@ struct OverlayDATA_232
                     // rest of variables all default zero
                 },
 
-            .fiveArrow_pos = {0, -5, -0x18, 6, 0x18, 6},
+            .fiveArrowPos = {{{0, -5}}, {{-0x18, 6}}, {{0x18, 6}}},
 
             .fiveArrow_col1 = {0xC8FF, 0xFF, 0xFF},
 
             .fiveArrow_col2 = {0x80c8ff, 0x80ff, 0x80ff},
 
-            .maskPos = {-0xA0, -0xA, 0x100},
+            .maskPos = {{-0xA0, -0xA, 0x100}},
 
-            .maskRot = {0, 0x180, 0},
+            .maskRot = {{0, 0x180, 0}},
 
             .maskScale = 0x1000,
 
-            .maskOffsetPos = {-0x14, 0, 0x50},
+            .maskOffsetPos = {{-0x14, 0, 0x50}},
 
-            .maskOffsetRot = {0x7AF, 0x258, 0x78},
+            .maskOffsetRot = {{0x7AF, 0x258, 0x78}},
 
-            .maskVars =
-                {// pos1
-                 -0x46, 0, 0x140,
-
-                 // pos2
-                 -0x3C, 0, 0x118,
-
-                 // rot1
-                 0x7af, 0x258, 0x78,
-
-                 // rot2
-                 0x800, 0x64, 0},
+            .maskHintOffsets =
+                {
+                    .pos = {{{-0x46, 0, 0x140}}, {{-0x3C, 0, 0x118}}},
+                    .rot = {{{0x7af, 0x258, 0x78}}, {{0x800, 0x64, 0}}},
+                },
 
             .maskFrameCurr = 0,
 
@@ -553,14 +557,14 @@ struct OverlayDATA_232
                                 // null terminator
                                 [9] = {0}},
 
-            .maskAudioSettings = {0x0, 0x28, 0xFF},
+            .maskAudioTargetVolume = {0x0, 0x28, 0xFF},
 
-            .hintMenu_lngIndexArr = {0x17d, 0x17f, 0x181, 0x183, 0x185, 0x189, 0x19f, 0x187, 0x197, 0x199, 0x19b,
-                                     0x19d, 0x1a7, 0x1a9, 0x1ab, 0x1ad, 0x1af, 0x1b1, 0x1b3, 0x1b5, -1,    0},
+            .hintMenuLngIndex = {0x17d, 0x17f, 0x181, 0x183, 0x185, 0x189, 0x19f, 0x187, 0x197, 0x199, 0x19b,
+                                 0x19d, 0x1a7, 0x1a9, 0x1ab, 0x1ad, 0x1af, 0x1b1, 0x1b3, 0x1b5, -1,    0},
 
-            .eyePos = {0x6d, 0x84, 0x85},
+            .eyePos = {{0x6d, 0x84, 0x85}},
 
-            .lookAtPos = {-0x2E5, -0x12D, -0xF1}
+            .lookAtPos = {{-0x2E5, -0x12D, -0xF1}}
 
             // the rest all initialize to zeros
 };

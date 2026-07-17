@@ -4,23 +4,18 @@
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80030fdc-0x8003105c.
 void JitPool_Clear(struct JitPool *AP)
 {
-	int loopIndex;
-	uintptr_t currSlot;
-
-	currSlot = (uintptr_t)AP->ptrPoolData;
+	uintptr_t currSlot = (uintptr_t)AP->ptrPoolData;
 
 	// clear list of free and taken
 	LIST_Clear(&AP->free);
 	LIST_Clear(&AP->taken);
 
-	for (loopIndex = 0; loopIndex < AP->maxItems; loopIndex++)
+	for (s32 loopIndex = 0; loopIndex < AP->maxItems; loopIndex++)
 	{
 		// add all pool items to the free list
 		LIST_AddFront(&AP->free, (struct Item *)currSlot);
 
-		// same as & 0xfffffffc, but more optimal,
-		// this is aligning down, not up
-		currSlot += ((AP->itemSize) >> 2) << 2;
+		currSlot += JITPOOL_ALIGN_ITEM_STRIDE(AP->itemSize);
 	}
 }
 
@@ -42,8 +37,7 @@ void JitPool_Init(struct JitPool *AP, int maxItems, int itemSize, char *name)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800310d4-0x8003112c.
 int JitPool_Add(struct JitPool *AP)
 {
-	struct Item *item;
-	item = AP->free.first;
+	struct Item *item = AP->free.first;
 
 	if (item != 0)
 	{
@@ -51,7 +45,7 @@ int JitPool_Add(struct JitPool *AP)
 		LIST_AddFront(&AP->taken, item);
 	}
 
-	return (int)item;
+	return (s32)item;
 }
 
 

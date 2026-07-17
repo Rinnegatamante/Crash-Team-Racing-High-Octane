@@ -233,7 +233,7 @@ static void RenderLists_PushChild(struct BSP *bspRoot, const int *visLeafList, s
 }
 
 static int RenderLists_Walk1P2P(struct BSP *bspRoot, const int *visLeafList, struct PushBuffer *pb, void *LevRenderList, struct VisMemBspListNode *bspList,
-                                char numPlyr)
+                                u8 numPlyr)
 {
 	struct RenderListsScratchRecord *stackBase = CTR_SCRATCHPAD_PTR(struct RenderListsScratchRecord, RENDER_LISTS_STACK_OFFSET);
 	struct RenderListsScratchRecord *stackEnd = CTR_SCRATCHPAD_PTR(struct RenderListsScratchRecord, CTR_SCRATCHPAD_SIZE);
@@ -360,7 +360,7 @@ void RenderLists_PreInit()
 	}
 }
 
-int RenderLists_Init1P2P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList, char numPlyr)
+int RenderLists_Init1P2P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList, u8 numPlyr)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006fe70-0x800702d4.
 	RenderLists_Load1P2PGteState(pb);

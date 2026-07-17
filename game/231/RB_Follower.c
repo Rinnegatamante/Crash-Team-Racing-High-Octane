@@ -94,9 +94,9 @@ void RB_Follower_ThTick(struct Thread *t)
 void RB_Follower_Init(struct Driver *d, struct Thread *mineTh)
 {
 	struct Thread *t;
-	struct Instance *iVar1;
+	struct Instance *followerInst;
 	struct Follower *fObj;
-	struct Instance *iVar3;
+	struct Instance *mineInst;
 
 	// disable for slow speed
 	if (d->speedApprox <= 0x1e00)
@@ -110,31 +110,31 @@ void RB_Follower_Init(struct Driver *d, struct Thread *mineTh)
 		return;
 	}
 
-	// disable for airborne camera
-	if (((sdata->gGT->cameraDC[d->driverID].flags) & 0x10000) != 0)
+	// disable for reverse camera
+	if (((sdata->gGT->cameraDC[d->driverID].flags) & CAMERA_FLAG_REVERSE) != 0)
 	{
 		return;
 	}
 
 	// create a thread and an Instance
-	iVar1 = INSTANCE_BirthWithThread(mineTh->modelIndex, "follower", SMALL, FOLLOWER, RB_Follower_ThTick, sizeof(struct Follower), 0);
+	followerInst = INSTANCE_BirthWithThread(mineTh->modelIndex, "follower", SMALL, FOLLOWER, RB_Follower_ThTick, sizeof(struct Follower), 0);
 
-	if (iVar1 == NULL)
+	if (followerInst == NULL)
 	{
 		return;
 	}
 
 	// followerInst scale
-	iVar1->scale.x = 0x200;
-	iVar1->scale.y = 0x200;
-	iVar1->scale.z = 0x200;
+	followerInst->scale.x = 0x200;
+	followerInst->scale.y = 0x200;
+	followerInst->scale.z = 0x200;
 
 	// mineInst
-	iVar3 = mineTh->inst;
+	mineInst = mineTh->inst;
 
-	memcpy(&iVar1->matrix, &iVar3->matrix, sizeof(iVar1->matrix));
+	memcpy(&followerInst->matrix, &mineInst->matrix, sizeof(followerInst->matrix));
 
-	t = iVar1->thread;
+	t = followerInst->thread;
 	t->funcThDestroy = PROC_DestroyInstance;
 
 	fObj = t->object;
@@ -146,6 +146,6 @@ void RB_Follower_Init(struct Driver *d, struct Thread *mineTh)
 	// backup original position
 	for (int i = 0; i < 3; i++)
 	{
-		fObj->realPos.v[i] = iVar3->matrix.t[i];
+		fObj->realPos.v[i] = mineInst->matrix.t[i];
 	}
 }

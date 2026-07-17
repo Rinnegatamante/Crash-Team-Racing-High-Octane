@@ -4,6 +4,7 @@
 
 int RB_CtrLetter_ThCollide(struct Thread *letterTh, struct Thread *driverTh, void *funcThCollide, struct ScratchpadStruct *sps)
 {
+	(void)funcThCollide;
 	s16 posScreen[2];
 	struct Driver *driver;
 	struct Instance *letterInst;
@@ -42,7 +43,6 @@ int RB_CtrLetter_ThCollide(struct Thread *letterTh, struct Thread *driverTh, voi
 
 int RB_CtrLetter_LInC(struct Instance *letterInst, struct Thread *driverTh, struct ScratchpadStruct *sps)
 {
-	typedef int (*CtrLetterCollideFunc)(struct Thread *, struct Thread *, void *, struct ScratchpadStruct *);
 	struct Thread *letterTh;
 
 	letterTh = letterInst->thread;
@@ -57,7 +57,7 @@ int RB_CtrLetter_LInC(struct Instance *letterInst, struct Thread *driverTh, stru
 		}
 
 		letterTh->inst = letterInst;
-		letterTh->funcThCollide = (void (*)(struct Thread *))RB_CtrLetter_ThCollide;
+		letterTh->funcThCollide = (void *)RB_CtrLetter_ThCollide;
 		letterTh = letterInst->thread;
 	}
 
@@ -71,16 +71,15 @@ int RB_CtrLetter_LInC(struct Instance *letterInst, struct Thread *driverTh, stru
 		return 0;
 	}
 
-	return ((CtrLetterCollideFunc)letterTh->funcThCollide)(letterTh, driverTh, letterTh->funcThCollide, sps);
+	return ((ThreadScratchCollideFunc)letterTh->funcThCollide)(letterTh, driverTh, letterTh->funcThCollide, sps);
 }
 
-SVec3 letterLightDir = {0x94F, 0x94F, -0x94F};
+SVec3 letterLightDir = {{0x94F, 0x94F, -0x94F}};
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b52dc-0x800b5334.
 
 void RB_CtrLetter_ThTick(struct Thread *t)
 {
-	int sine;
 	struct Instance *letterInst;
 	struct CtrLetter *letterObj;
 
@@ -118,7 +117,7 @@ void RB_CtrLetter_LInB(struct Instance *inst)
 			return;
 		}
 
-		t->funcThCollide = (void (*)(struct Thread *))RB_CtrLetter_ThCollide;
+		t->funcThCollide = (void *)RB_CtrLetter_ThCollide;
 		t->inst = inst;
 
 		letterObj = ((struct CtrLetter *)t->object);

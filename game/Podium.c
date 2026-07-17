@@ -1,5 +1,18 @@
 #include <common.h>
 
+enum PodiumConstants
+{
+	PODIUM_DRIVER_COUNT = 8,
+	PODIUM_RANK_FIRST = 0,
+	PODIUM_RANK_SECOND = 1,
+	PODIUM_RANK_THIRD = 2,
+};
+
+CTR_STATIC_ASSERT(PODIUM_DRIVER_COUNT == 8);
+CTR_STATIC_ASSERT(PODIUM_RANK_FIRST == 0);
+CTR_STATIC_ASSERT(PODIUM_RANK_SECOND == 1);
+CTR_STATIC_ASSERT(PODIUM_RANK_THIRD == 2);
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80041c84-0x80041dc0.
 void Podium_InitModels(struct GameTracker *gGT)
 {
@@ -10,7 +23,7 @@ void Podium_InitModels(struct GameTracker *gGT)
 
 	u8 *podiumModelIndexArr = &gGT->podium_modelIndex_First;
 
-	for (int i = 0; i < 8; i++)
+	for (int i = 0; i < PODIUM_DRIVER_COUNT; i++)
 	{
 		struct Driver *driver = gGT->drivers[i];
 
@@ -21,30 +34,34 @@ void Podium_InitModels(struct GameTracker *gGT)
 
 		s16 rank = driver->driverRank;
 
-		if (rank < 3)
+		switch (rank)
+		{
+		case PODIUM_RANK_FIRST:
+		case PODIUM_RANK_SECOND:
+		case PODIUM_RANK_THIRD:
 		{
 			u8 characterID = data.characterIDs[driver->driverID];
 			podiumModelIndexArr[rank] = characterID + STATIC_CRASHDANCE;
 
-			if (rank != 0)
+			if (rank != PODIUM_RANK_FIRST)
 			{
-				continue;
+				break;
 			}
 
 			switch (characterID)
 			{
-			case 0:
-			case 3:
+			case CRASH_BANDICOOT:
+			case COCO_BANDICOOT:
 				gGT->podium_modelIndex_tawna = STATIC_TAWNA2;
 				break;
 
-			case 6:
-			case 7:
+			case POLAR:
+			case PURA:
 				gGT->podium_modelIndex_tawna = STATIC_TAWNA3;
 				break;
 
-			case 1:
-			case 4:
+			case NEO_CORTEX:
+			case N_GIN:
 				gGT->podium_modelIndex_tawna = STATIC_TAWNA4;
 				break;
 
@@ -52,6 +69,11 @@ void Podium_InitModels(struct GameTracker *gGT)
 				gGT->podium_modelIndex_tawna = STATIC_TAWNA1;
 				break;
 			}
+			break;
+		}
+
+		default:
+			break;
 		}
 	}
 }

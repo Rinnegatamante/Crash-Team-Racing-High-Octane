@@ -108,8 +108,8 @@ void RB_Potion_ThTick_InAir(struct Thread *t)
 		RB_GenericMine_ThDestroy(t, inst, mw);
 	}
 
-	int iVar4;
-	int iVar5;
+	int hitY;
+	int prevY;
 
 	// did not hit BSP hitbox
 	if (sps->boolDidTouchHitbox == 0)
@@ -118,10 +118,10 @@ void RB_Potion_ThTick_InAir(struct Thread *t)
 		{
 			VehPhysForce_RotAxisAngle(&inst->matrix, sps->hit.plane.normal.v, 0);
 
-			iVar4 = sps->Union.QuadBlockColl.hitPos.y;
-			iVar5 = inst->matrix.t[1];
+			hitY = sps->Union.QuadBlockColl.hitPos.y;
+			prevY = inst->matrix.t[1];
 
-			if (iVar4 + 0x30 < iVar5)
+			if (hitY + 0x30 < prevY)
 			{
 				return;
 			}
@@ -130,29 +130,29 @@ void RB_Potion_ThTick_InAir(struct Thread *t)
 			if (mw->cooldown == 0)
 			{
 				// set position to where quadblock was hit
-				inst->matrix.t[1] = iVar4;
+				inst->matrix.t[1] = hitY;
 
-				mw->stopFallAtY = iVar4;
+				mw->stopFallAtY = hitY;
 				mw->cooldown = 0xf00; // 3.84s
 				mw->velocity.x = 0;
 				mw->velocity.y = 0;
 				mw->velocity.z = 0;
-				mw->extraFlags &= 0xfffd; // remove "thrown" flag
+				mw->flags &= ~MINE_WEAPON_FLAG_THROWN;
 
 				ThTick_SetAndExec(t, RB_GenericMine_ThTick);
 				return;
 			}
 
 			// if instance is under hitPos, move up
-			if (iVar5 <= iVar4)
+			if (prevY <= hitY)
 			{
-				inst->matrix.t[1] = iVar4;
+				inst->matrix.t[1] = hitY;
 			}
 
 			// if distance to move back to quadblock < velocity
-			if (mw->velocity.y < (inst->matrix.t[1] - iVar5) + 0x28)
+			if (mw->velocity.y < (inst->matrix.t[1] - prevY) + 0x28)
 			{
-				mw->velocity.y = (inst->matrix.t[1] - iVar5) + 0x28;
+				mw->velocity.y = (inst->matrix.t[1] - prevY) + 0x28;
 			}
 
 			return;

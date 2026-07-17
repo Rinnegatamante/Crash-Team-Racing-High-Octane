@@ -17,7 +17,7 @@ enum PlantAnim
 struct HitboxDesc plantBoxDesc = {.inst = (struct Instance *)0,
                                   .thread = (struct Thread *)0,
                                   .bucket = (struct Thread *)0,
-                                  .bbox = {.min = {0xFFC0, 0xFFC0, 0}, .max = {0x40, 0x80, 0x1E0}},
+                                  .bbox = {.min = {{0xFFC0, 0xFFC0, 0}}, .max = {{0x40, 0x80, 0x1E0}}},
                                   .threadHit = (struct Thread *)0,
                                   .funcThCollide = (void *)0};
 
@@ -460,7 +460,7 @@ void RB_Plant_LInB(struct Instance *inst)
 
 		plantID = inst->name[strlen(inst->name) - 1] - '0';
 		plantObj->cooldown = metaArray[plantID * 2 + 0];
-		plantObj->LeftOrRight = metaArray[plantID * 2 + 1];
+		plantObj->side = metaArray[plantID * 2 + 1];
 	}
 }
 

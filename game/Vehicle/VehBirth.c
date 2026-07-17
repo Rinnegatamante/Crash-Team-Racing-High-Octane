@@ -1,5 +1,50 @@
 #include <common.h>
 
+enum
+{
+	VEH_BIRTH_ADV_RETURN_LEVEL_COUNT = 0x14,
+	VEH_BIRTH_DRIVER_BOTTOM_Y_OFFSET = 0x80,
+	VEH_BIRTH_COLL_PROBE_TOP_Y_OFFSET = 0x100,
+	VEH_BIRTH_DOOR_FORWARD_OFFSET = 800,
+	VEH_BIRTH_DOOR_SIDE_OFFSET = 0x200,
+	VEH_BIRTH_DOOR_Y_OFFSET = 0x17a,
+	VEH_BIRTH_DOOR_EXIT_SPEED = 0xa00,
+	VEH_BIRTH_DRIVER_INSTANCE_SCALE = 0xccc,
+	VEH_BIRTH_CHEAT_WUMPA_COUNT = 99,
+	VEH_BIRTH_CHEAT_ITEM_TURBO = HELD_ITEM_TURBO,
+	VEH_BIRTH_CHEAT_ITEM_BOMB = HELD_ITEM_BOMB_1X,
+	VEH_BIRTH_CHEAT_ITEM_MASK = HELD_ITEM_MASK,
+	VEH_BIRTH_CHEAT_ITEM_COUNT = 9,
+	VEH_BIRTH_CHEAT_DURATION = 0x2d00,
+	VEH_BIRTH_META_PHYS_COUNT = len(data.metaPhys),
+	VEH_BIRTH_WHEEL_SIZE = 0xccc,
+	VEH_BIRTH_RESERVED_0x412_INITIAL = 0x600,
+	VEH_BIRTH_STEERING_FRAMES_RESET = 10000,
+	VEH_BIRTH_QUIP_NONE = -1,
+	VEH_BIRTH_PLAYER_THREAD_FLAGS = SIZE_RELATIVE_POOL_BUCKET(DRIVER_NTSC_RETAIL_SIZE, NONE, LARGE, PLAYER),
+};
+
+CTR_STATIC_ASSERT(VEH_BIRTH_ADV_RETURN_LEVEL_COUNT == 0x14);
+CTR_STATIC_ASSERT(VEH_BIRTH_DRIVER_BOTTOM_Y_OFFSET == 0x80);
+CTR_STATIC_ASSERT(VEH_BIRTH_COLL_PROBE_TOP_Y_OFFSET == 0x100);
+CTR_STATIC_ASSERT(VEH_BIRTH_DOOR_FORWARD_OFFSET == 800);
+CTR_STATIC_ASSERT(VEH_BIRTH_DOOR_SIDE_OFFSET == 0x200);
+CTR_STATIC_ASSERT(VEH_BIRTH_DOOR_Y_OFFSET == 0x17a);
+CTR_STATIC_ASSERT(VEH_BIRTH_DOOR_EXIT_SPEED == 0xa00);
+CTR_STATIC_ASSERT(VEH_BIRTH_DRIVER_INSTANCE_SCALE == 0xccc);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_WUMPA_COUNT == 99);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_ITEM_TURBO == 0);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_ITEM_BOMB == 1);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_ITEM_MASK == 7);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_ITEM_COUNT == 9);
+CTR_STATIC_ASSERT(VEH_BIRTH_CHEAT_DURATION == 0x2d00);
+CTR_STATIC_ASSERT(VEH_BIRTH_META_PHYS_COUNT == 65);
+CTR_STATIC_ASSERT(VEH_BIRTH_WHEEL_SIZE == 0xccc);
+CTR_STATIC_ASSERT(VEH_BIRTH_RESERVED_0x412_INITIAL == 0x600);
+CTR_STATIC_ASSERT(VEH_BIRTH_STEERING_FRAMES_RESET == 10000);
+CTR_STATIC_ASSERT(VEH_BIRTH_QUIP_NONE == -1);
+CTR_STATIC_ASSERT(VEH_BIRTH_PLAYER_THREAD_FLAGS == 0x62c0100);
+
 static int VehBirth_IsDoor5InstDef(struct InstDef *instDef)
 {
 	if (instDef->modelID != STATIC_DOOR)
@@ -13,7 +58,7 @@ static int VehBirth_IsDoor5InstDef(struct InstDef *instDef)
 		return 0;
 	}
 
-	for (int i = 6; i < 0x10; i++)
+	for (int i = 6; i < (int)len(instDef->name); i++)
 	{
 		if (instDef->name[i] != '\0')
 		{
@@ -50,13 +95,13 @@ static int VehBirth_ShouldSpawnOutsideBoss(struct GameTracker *gGT)
 	{
 		int trackID = data.advHubTrackIDs[base + i];
 
-		if (CHECK_ADV_BIT(sdata->advProgress.rewards, trackID + ADV_REWARD_FIRST_TROPHY) == 0)
+		if (!CHECK_ADV_BIT(sdata->advProgress.rewards, trackID + ADV_REWARD_FIRST_TROPHY))
 		{
 			return 0;
 		}
 	}
 
-	if (CHECK_ADV_BIT(sdata->advProgress.rewards, gGT->levelID - N_SANITY_BEACH + ADV_REWARD_FIRST_BOSS_KEY) != 0)
+	if (CHECK_ADV_BIT(sdata->advProgress.rewards, gGT->levelID - N_SANITY_BEACH + ADV_REWARD_FIRST_BOSS_KEY))
 	{
 		return 0;
 	}
@@ -69,7 +114,7 @@ static int VehBirth_ShouldUseStartlineInAdv(struct GameTracker *gGT, s16 *warppa
 	int prevLEV = gGT->prevLEV;
 
 	return (prevLEV == MAIN_MENU_LEVEL) || (prevLEV == ADVENTURE_GARAGE) || (prevLEV == -1) || (prevLEV == SCRAPBOOK) ||
-	       ((u32)(prevLEV - CREDITS_CRASH) < 0x14) || (warppadRot == NULL);
+	       ((u32)(prevLEV - CREDITS_CRASH) < VEH_BIRTH_ADV_RETURN_LEVEL_COUNT) || (warppadRot == NULL);
 }
 
 static struct SpawnPosRot *VehBirth_SpawnType2PosRot(struct Level *level)
@@ -80,7 +125,7 @@ static struct SpawnPosRot *VehBirth_SpawnType2PosRot(struct Level *level)
 static void VehBirth_SetBottomFromPos(SVec3 *posBottom, const SVec3 *pos)
 {
 	posBottom->x = pos->x;
-	posBottom->y = (s16)CTR_MipsAddLo(pos->y, 0x80);
+	posBottom->y = (s16)CTR_MipsAddLo(pos->y, VEH_BIRTH_DRIVER_BOTTOM_Y_OFFSET);
 	posBottom->z = pos->z;
 }
 
@@ -114,13 +159,13 @@ static void VehBirth_SetStartlineRotation(struct Driver *d, struct Level *level)
 	u8 spawnIndex = VehBirth_GetStartlineIndex(d);
 
 	d->rotCurr.x = level->DriverSpawn[spawnIndex].rot.x;
-	d->rotCurr.y = (level->DriverSpawn[spawnIndex].rot.y + 0x400) & 0xfff;
+	d->rotCurr.y = ANG_MODULO_TWO_PI(level->DriverSpawn[spawnIndex].rot.y + ANG_HALF_PI);
 	d->rotCurr.z = level->DriverSpawn[spawnIndex].rot.z;
 }
 
 static int VehBirth_ScaleTrig(int trig, int scale)
 {
-	return CTR_MipsSra(CTR_MipsMulLo(trig, scale), 0xc);
+	return CTR_MipsSra(CTR_MipsMulLo(trig, scale), FRACTIONAL_BITS);
 }
 
 // NOTE(aalhendi): PSX path ASM-verified NTSC-U 926 0x80057c8c-0x80058898.
@@ -162,9 +207,9 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 
 	if ((spawnFlag & VEH_BIRTH_SPAWN_USE_LEVEL_POSITION) == 0)
 	{
-		posBottom.x = (s16)CTR_MipsSra(d->posCurr.x, 8);
-		posBottom.y = (s16)CTR_MipsAddLo(CTR_MipsSra(d->posCurr.y, 8), 0x80);
-		posBottom.z = (s16)CTR_MipsSra(d->posCurr.z, 8);
+		posBottom.x = (s16)CTR_MipsSra(d->posCurr.x, FRACTIONAL_BITS_8);
+		posBottom.y = (s16)CTR_MipsAddLo(CTR_MipsSra(d->posCurr.y, FRACTIONAL_BITS_8), VEH_BIRTH_DRIVER_BOTTOM_Y_OFFSET);
+		posBottom.z = (s16)CTR_MipsSra(d->posCurr.z, FRACTIONAL_BITS_8);
 	}
 	else
 	{
@@ -187,9 +232,11 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 			int rotY = doorInst->rot.y;
 
 			gGT->gameMode2 |= VEH_FREEZE_DOOR;
-			posBottom.x = doorInst->pos.x + VehBirth_ScaleTrig(MATH_Cos(rotY), 800) + VehBirth_ScaleTrig(MATH_Cos(rotY + 0x400), 0x200);
-			posBottom.y = doorInst->pos.y + 0x17a;
-			posBottom.z = doorInst->pos.z + VehBirth_ScaleTrig(MATH_Sin(rotY), 800) + VehBirth_ScaleTrig(MATH_Sin(rotY + 0x400), 0x200);
+			posBottom.x = doorInst->pos.x + VehBirth_ScaleTrig(MATH_Cos(rotY), VEH_BIRTH_DOOR_FORWARD_OFFSET) +
+			              VehBirth_ScaleTrig(MATH_Cos(rotY + ANG_HALF_PI), VEH_BIRTH_DOOR_SIDE_OFFSET);
+			posBottom.y = doorInst->pos.y + VEH_BIRTH_DOOR_Y_OFFSET;
+			posBottom.z = doorInst->pos.z + VehBirth_ScaleTrig(MATH_Sin(rotY), VEH_BIRTH_DOOR_FORWARD_OFFSET) +
+			              VehBirth_ScaleTrig(MATH_Sin(rotY + ANG_HALF_PI), VEH_BIRTH_DOOR_SIDE_OFFSET);
 		}
 		else if (spawnOutsideBoss != 0)
 		{
@@ -203,7 +250,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 		else if (gGT->podiumRewardID == NOFUNC)
 		{
 			if ((gGT->prevLEV == MAIN_MENU_LEVEL) || (gGT->prevLEV == ADVENTURE_GARAGE) || (gGT->prevLEV == -1) || (gGT->prevLEV == SCRAPBOOK) ||
-			    ((u32)(gGT->prevLEV - CREDITS_CRASH) < 0x14))
+			    ((u32)(gGT->prevLEV - CREDITS_CRASH) < VEH_BIRTH_ADV_RETURN_LEVEL_COUNT))
 			{
 				VehBirth_SetStartlinePosition(d, level1, &posBottom);
 			}
@@ -221,7 +268,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	}
 
 	posTop.x = posBottom.x;
-	posTop.y = (s16)CTR_MipsSubLo(posBottom.y, 0x100);
+	posTop.y = (s16)CTR_MipsSubLo(posBottom.y, VEH_BIRTH_COLL_PROBE_TOP_Y_OFFSET);
 	posTop.z = posBottom.z;
 
 	COLL_SearchBSP_CallbackQUADBLK(&posTop, &posBottom, sps, 0);
@@ -240,19 +287,19 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	d->AxisAngle2_normalVec = d->AxisAngle3_normalVec;
 	d->AxisAngle4_normalVec = d->AxisAngle2_normalVec;
 
-	d->posCurr.x = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.x, 8);
-	d->posCurr.y = CTR_MipsSll(CTR_MipsAddLo(sps->Union.QuadBlockColl.hitPos.y, spawnPosY), 8);
-	d->posCurr.z = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.z, 8);
+	d->posCurr.x = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.x, FRACTIONAL_BITS_8);
+	d->posCurr.y = CTR_MipsSll(CTR_MipsAddLo(sps->Union.QuadBlockColl.hitPos.y, spawnPosY), FRACTIONAL_BITS_8);
+	d->posCurr.z = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.z, FRACTIONAL_BITS_8);
 	d->posPrev.x = d->posCurr.x;
 	d->posPrev.y = d->posCurr.y;
 	d->posPrev.z = d->posCurr.z;
-	d->quadBlockHeight = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.y, 8);
+	d->quadBlockHeight = CTR_MipsSll(sps->Union.QuadBlockColl.hitPos.y, FRACTIONAL_BITS_8);
 
 	if ((spawnFlag & VEH_BIRTH_SPAWN_USE_LEVEL_POSITION) != 0)
 	{
 		if (doorInst != NULL)
 		{
-			d->rotCurr.y = (doorInst->rot.y + 0x800) & 0xfff;
+			d->rotCurr.y = ANG_MODULO_TWO_PI(doorInst->rot.y + ANG_PI);
 			gGT->gameMode2 &= ~GAME_MODE2_SPAWN_CLEAR_MASK;
 		}
 		else if (spawnOutsideBoss != 0)
@@ -262,21 +309,21 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 				advSpawn = VehBirth_SpawnType2PosRot(level1);
 			}
 
-			u16 rotY = (advSpawn[1].rot.y + 0x400) & 0xfff;
+			u16 rotY = ANG_MODULO_TWO_PI(advSpawn[1].rot.y + ANG_HALF_PI);
 
 			d->rotCurr.y = rotY;
 			if (spawnAtBoss != 0)
 			{
 				if (gGT->levelID == CITADEL_CITY)
 				{
-					rotY += 0x400;
+					rotY += ANG_HALF_PI;
 				}
 				else if (!((gGT->levelID == GEM_STONE_VALLEY) && (gGT->prevLEV == HOT_AIR_SKYWAY)))
 				{
-					rotY += 0x800;
+					rotY += ANG_PI;
 				}
 
-				d->rotCurr.y = rotY & 0xfff;
+				d->rotCurr.y = ANG_MODULO_TWO_PI(rotY);
 			}
 
 			gGT->gameMode2 &= ~GAME_MODE2_SPAWN_CLEAR_MASK;
@@ -292,7 +339,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 				advSpawn = VehBirth_SpawnType2PosRot(level1);
 			}
 
-			d->rotCurr.y = advSpawn[0].rot.y & 0xfff;
+			d->rotCurr.y = ANG_MODULO_TWO_PI(advSpawn[0].rot.y);
 		}
 		else if (VehBirth_ShouldUseStartlineInAdv(gGT, warppadRot))
 		{
@@ -301,7 +348,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 		else
 		{
 			d->rotCurr.x = warppadRot[0];
-			d->rotCurr.y = (warppadRot[1] + 0x400) & 0xfff;
+			d->rotCurr.y = ANG_MODULO_TWO_PI(warppadRot[1] + ANG_HALF_PI);
 			d->rotCurr.z = warppadRot[2];
 		}
 	}
@@ -311,7 +358,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	d->jumpHeightCurr = 0;
 	d->jumpHeightPrev = 0;
 	d->forwardAccelImpulse = 0;
-	d->matrixArray = 0;
+	d->matrixArray = BAKED_GTE_MATRIX_NONE;
 	d->matrixIndex = 0;
 	d->jump_LandingBoost = 0;
 	d->jumpMeter = 0;
@@ -335,7 +382,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 
 	if ((doorInst != NULL) && ((spawnFlag & VEH_BIRTH_SPAWN_USE_LEVEL_POSITION) != 0))
 	{
-		d->speed = 0xa00;
+		d->speed = VEH_BIRTH_DOOR_EXIT_SPEED;
 	}
 
 	// set animation to zero
@@ -344,9 +391,9 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	dInst->animFrame = VehFrameInst_GetStartFrame(0, VehFrameInst_GetNumAnimFrames(dInst, 0));
 
 	// Set Scale (x, y, z)
-	dInst->scale.x = 0xCCC;
-	dInst->scale.y = 0xCCC;
-	dInst->scale.z = 0xCCC;
+	dInst->scale.x = VEH_BIRTH_DRIVER_INSTANCE_SCALE;
+	dInst->scale.y = VEH_BIRTH_DRIVER_INSTANCE_SCALE;
+	dInst->scale.z = VEH_BIRTH_DRIVER_INSTANCE_SCALE;
 
 	d->actionsFlagSet &= ~(ACTION_AIRBORNE | ACTION_HIGH_JUMP);
 
@@ -357,7 +404,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 
 	if (dInst->thread->modelIndex == DYNAMIC_PLAYER)
 	{
-		for (int i = 0; i < 0xd; i++)
+		for (int i = 0; i < DRIVER_FUNC_COUNT; i++)
 		{
 			d->funcPtrs[i] = NULL;
 		}
@@ -379,7 +426,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 
 	if ((gGT->gameMode2 & CHEAT_WUMPA) != 0)
 	{
-		d->numWumpas = 99;
+		d->numWumpas = VEH_BIRTH_CHEAT_WUMPA_COUNT;
 	}
 
 	d->numHeldItems = 0;
@@ -387,25 +434,25 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	d->BattleHUD.numLives = gGT->battleSetup.lifeLimit;
 
 	// no item
-	char weaponId = 0xf;
+	DriverHeldItem weaponId = HELD_ITEM_NONE;
 	u32 gameMode2 = gGT->gameMode2;
 	if ((gameMode2 & CHEAT_MASK) != 0)
 	{
-		weaponId = 7;
+		weaponId = VEH_BIRTH_CHEAT_ITEM_MASK;
 	}
 	else if ((gameMode2 & CHEAT_TURBO) != 0)
 	{
-		weaponId = 0;
+		weaponId = VEH_BIRTH_CHEAT_ITEM_TURBO;
 	}
 	else if ((gameMode2 & CHEAT_BOMBS) != 0)
 	{
-		weaponId = 1;
+		weaponId = VEH_BIRTH_CHEAT_ITEM_BOMB;
 	}
 	d->heldItemID = weaponId;
 
-	if (weaponId != 0xf)
+	if (weaponId != HELD_ITEM_NONE)
 	{
-		d->numHeldItems = 9;
+		d->numHeldItems = VEH_BIRTH_CHEAT_ITEM_COUNT;
 	}
 
 	if (
@@ -419,12 +466,12 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 
 		dInst->flags |= GHOST_DRAW_TRANSPARENT;
 
-		d->invisibleTimer = 0x2d00;
+		d->invisibleTimer = VEH_BIRTH_CHEAT_DURATION;
 	}
 
 	if ((gameMode2 & CHEAT_ENGINE) != 0)
 	{
-		d->superEngineTimer = 0x2d00;
+		d->superEngineTimer = VEH_BIRTH_CHEAT_DURATION;
 	}
 }
 
@@ -437,7 +484,7 @@ void VehBirth_TeleportAll(struct GameTracker *gGT, u32 spawnFlags)
 
 	struct Driver *d;
 
-	for (int i = 0; i < 8; i++)
+	for (int i = 0; i < (int)len(gGT->drivers); i++)
 	{
 		d = gGT->drivers[i];
 
@@ -460,24 +507,14 @@ void VehBirth_TeleportAll(struct GameTracker *gGT, u32 spawnFlags)
 
 enum
 {
-	VEH_MODEL_NAME_WORD_COUNT = 4,
 	VEH_EXTRA_DRIVER_MODEL_COUNT = 3,
 };
 
-CTR_STATIC_ASSERT(sizeof(((struct Model *)0)->name) == VEH_MODEL_NAME_WORD_COUNT * sizeof(u32));
-
-internal u32 VehBirth_ReadModelNameWord(const char *name, int wordIndex)
-{
-	u32 word;
-	memcpy(&word, &name[wordIndex * (int)sizeof(word)], sizeof(word));
-	return word;
-}
-
 internal b32 VehBirth_ModelNameEquals(const struct Model *model, const char *name)
 {
-	for (int wordIndex = 0; wordIndex < VEH_MODEL_NAME_WORD_COUNT; wordIndex++)
+	for (s32 wordIndex = 0; wordIndex < MODEL_NAME_WORD_COUNT; wordIndex++)
 	{
-		if (VehBirth_ReadModelNameWord(model->name, wordIndex) != VehBirth_ReadModelNameWord(name, wordIndex))
+		if (ModelName_ReadWord(model->name, wordIndex) != ModelName_ReadWord(name, wordIndex))
 		{
 			return false;
 		}
@@ -489,15 +526,11 @@ internal b32 VehBirth_ModelNameEquals(const struct Model *model, const char *nam
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058948-0x80058a60.
 struct Model *VehBirth_GetModelByName(char *searchName)
 {
-	struct Model *m;
-	struct Model **models;
-	int i;
-
 	// array to character models loaded,
 	// maximum of 4, used in VS mode
-	for (i = 0; i < VEH_EXTRA_DRIVER_MODEL_COUNT; i++)
+	for (int i = 0; i < VEH_EXTRA_DRIVER_MODEL_COUNT; i++)
 	{
-		m = data.driverModelExtras[i].model;
+		struct Model *m = data.driverModelExtras[i].model;
 
 		if ((m != NULL) && VehBirth_ModelNameEquals(m, searchName))
 		{
@@ -506,15 +539,17 @@ struct Model *VehBirth_GetModelByName(char *searchName)
 		}
 	}
 
-	models = (struct Model **)sdata->PLYROBJECTLIST;
+	struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
 
 	if (
 	    // list is valid, and first element is valid
 	    (models != NULL) && (models[0] != NULL))
 	{
 		// loop until all strings are checked (until current is not nullptr)
-		for (i = 0, m = models[i]; m != NULL; i++, m = models[i])
+		for (int i = 0; models[i] != NULL; i++)
 		{
+			struct Model *m = models[i];
+
 			if (VehBirth_ModelNameEquals(m, searchName))
 			{
 				// character found, return pointer
@@ -528,20 +563,15 @@ struct Model *VehBirth_GetModelByName(char *searchName)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058a60-0x80058ba4.
 void VehBirth_SetConsts(struct Driver *driver)
 {
-	u32 metaPhysSize;
-	u32 i;
-	struct MetaPhys *metaPhys;
-	u8 *d;
-
-	d = (u8 *)driver;
+	u8 *d = (u8 *)driver;
 
 	int engineID = data.MetaDataCharacters[data.characterIDs[driver->driverID]].engineID;
 
-	for (i = 0; i < 65; i++)
+	for (u32 i = 0; i < VEH_BIRTH_META_PHYS_COUNT; i++)
 	{
-		metaPhys = &data.metaPhys[i];
+		struct MetaPhys *metaPhys = &data.metaPhys[i];
 
-		metaPhysSize = metaPhys->size;
+		u32 metaPhysSize = metaPhys->size;
 
 		u32 rawValue = (u32)metaPhys->value[engineID];
 		u8 *dst = &d[metaPhys->offset];
@@ -574,11 +604,9 @@ void VehBirth_SetConsts(struct Driver *driver)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058ba4-0x80058c44.
 void VehBirth_EngineAudio_AllPlayers(void)
 {
-	struct Thread *th;
-	struct GameTracker *gGT;
-	gGT = sdata->gGT;
+	struct GameTracker *gGT = sdata->gGT;
 
-	for (th = gGT->threadBuckets[PLAYER].thread; th != 0; th = th->siblingThread)
+	for (struct Thread *th = gGT->threadBuckets[PLAYER].thread; th != 0; th = th->siblingThread)
 	{
 		struct Driver *d = th->object;
 
@@ -593,6 +621,7 @@ void VehBirth_EngineAudio_AllPlayers(void)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058c44-0x80058c4c.
 void VehBirth_NullThread(struct Thread *t)
 {
+	(void)t;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058c4c-0x80058d2c.
@@ -606,13 +635,13 @@ void VehBirth_TireSprites(struct Thread *t)
 	struct Icon **tire = ICONGROUP_GETICONS(tireAnim);
 	d->wheelSprites = tire;
 
-	d->wheelSize = 0xccc;
+	d->wheelSize = VEH_BIRTH_WHEEL_SIZE;
 
 	// compiler might reuse these registers in the IF,
 	// first set item to "none" and driverID, then
 	// check for Oxide in characterIDs
 
-	d->heldItemID = 0xf;
+	d->heldItemID = HELD_ITEM_NONE;
 	d->BattleHUD.teamID = driverID;
 
 	if (
@@ -627,17 +656,17 @@ void VehBirth_TireSprites(struct Thread *t)
 
 	d->engineSoundMode = ENGINE_SOUND_DYNAMIC;
 
-	d->AxisAngle1_normalVec.y = 0x1000;
-	d->AxisAngle2_normalVec.y = 0x1000;
-	d->reserved_0x412 = 0x600;
-	d->numFramesSpentSteering = 10000;
+	d->AxisAngle1_normalVec.y = FP_ONE;
+	d->AxisAngle2_normalVec.y = FP_ONE;
+	d->reserved_0x412 = VEH_BIRTH_RESERVED_0x412_INITIAL;
+	d->numFramesSpentSteering = VEH_BIRTH_STEERING_FRAMES_RESET;
 
 	d->terrainMeta1 = VehAfterColl_GetTerrain(TERRAIN_NONE);
 
 	d->BattleHUD.numLives = gGT->battleLifeLimit;
 
-	d->quip1 = 0xffff;
-	d->quip3 = 0xffff;
+	d->quip1 = VEH_BIRTH_QUIP_NONE;
+	d->quip3 = VEH_BIRTH_QUIP_NONE;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058d2c-0x80058ec0.
@@ -721,10 +750,10 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058ec0-0x80058f54.
 struct Driver *VehBirth_Player(int index)
 {
-	struct Thread *t = PROC_BirthWithObject(0x62c0100, 0, sdata->s_player, 0);
+	struct Thread *t = PROC_BirthWithObject(VEH_BIRTH_PLAYER_THREAD_FLAGS, 0, sdata->s_player, 0);
 
 	struct Driver *d = t->object;
-	memset(d, 0, 0x62c);
+	memset(d, 0, DRIVER_NTSC_RETAIL_SIZE);
 
 	VehBirth_NonGhost(t, index);
 

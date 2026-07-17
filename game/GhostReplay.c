@@ -1,29 +1,5 @@
 #include <common.h>
 
-enum
-{
-	GHOST_OP_POSITION = 0x80,
-	GHOST_OP_ANIMATION,
-	GHOST_OP_BOOST,
-	GHOST_OP_INSTANCE,
-	GHOST_OP_IDLE,
-};
-typedef u8 GhostOpcode;
-
-CTR_STATIC_ASSERT(sizeof(GhostOpcode) == 0x1);
-CTR_STATIC_ASSERT(GHOST_OP_POSITION == 0x80);
-CTR_STATIC_ASSERT(GHOST_OP_IDLE == 0x84);
-
-static const u8 GHOST_SIZE_POSITION = 11;
-static const u8 GHOST_SIZE_ANIMATION = 3;
-static const u8 GHOST_SIZE_BOOST = 6;
-static const u8 GHOST_SIZE_INSTANCE = 2;
-static const u8 GHOST_SIZE_IDLE = 1;
-static const u8 GHOST_SIZE_VELOCITY = 5;
-
-#define GHOST_IS_OPCODE(b) ((u8)((b) + 0x80) < 5)
-#define Ghost_ReadBE16(p)  ((u16)((p)[0] << 8 | (p)[1]))
-
 internal s16 Ghost_LerpRot12(s16 curr, s16 next, u16 t)
 {
 	s32 delta = ((s32)next - (s32)curr) & 0xFFF;
@@ -65,13 +41,10 @@ void GhostReplay_ThTick(struct Thread *t)
 		return;
 	}
 
-	if (d->reserves > 0)
+	d->reserves = (s16)CTR_MipsSubLo((u16)d->reserves, gGT->elapsedTimeMS);
+	if (d->reserves < 0)
 	{
-		d->reserves -= gGT->elapsedTimeMS;
-		if (d->reserves < 0)
-		{
-			d->reserves = 0;
-		}
+		d->reserves = 0;
 	}
 
 	if ((gGT->trafficLightsTimer < 1) && (d->ghostBoolStarted == 0))
@@ -306,11 +279,11 @@ void GhostReplay_ThTick(struct Thread *t)
 				}
 				else if (maxFrame > 0)
 				{
-					inst->animFrame = maxFrame;
+					inst->animFrame = 0;
 				}
 				else
 				{
-					inst->animFrame = 0;
+					inst->animFrame = maxFrame;
 				}
 
 				buffer += GHOST_SIZE_ANIMATION;
@@ -318,7 +291,7 @@ void GhostReplay_ThTick(struct Thread *t)
 			break;
 
 			case GHOST_OP_BOOST:
-				if (gGT->trafficLightsTimer < 1 && ((gGT->gameMode1 & START_OF_RACE) == 0) && (RaceFlag_IsFullyOnScreen() == 0))
+				if (gGT->trafficLightsTimer < 1 && ((gGT->gameMode1 & START_OF_RACE) == 0) && !RaceFlag_IsFullyOnScreen())
 				{
 					VehFire_Increment(d, Ghost_ReadBE16(&buffer[1]), buffer[3], Ghost_ReadBE16(&buffer[4]));
 				}

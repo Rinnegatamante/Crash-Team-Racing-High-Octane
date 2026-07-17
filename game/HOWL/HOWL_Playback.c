@@ -101,7 +101,7 @@ void howl_InitChannelAttr_EngineFX(struct EngineFX *engineFX, struct ChannelAttr
 
 	s16 pitch = engineFX->pitch;
 
-	if (distort != 0x80)
+	if (distort != HOWL_SFX_DISTORTION_NONE)
 	{
 		pitch = ((u32)pitch * data.distortConst_Engine[distort]) >> 0x10;
 	}
@@ -131,7 +131,7 @@ void howl_InitChannelAttr_OtherFX(struct OtherFX *otherFX, struct ChannelAttr *a
 
 	s16 pitch = otherFX->pitch;
 
-	if (distort != 0x80)
+	if (distort != HOWL_SFX_DISTORTION_NONE)
 	{
 		pitch = ((int)pitch * (int)data.distortConst_OtherFX[distort]) >> 0x10;
 	}
@@ -204,20 +204,17 @@ void howl_UnPauseChannel(struct ChannelStats *stats)
 	type = stats->type;
 	soundID = stats->soundID & 0xffff;
 
-	// engineFX
-	if (type == 0)
+	if (type == HOWL_CHANNEL_TYPE_ENGINE_FX)
 	{
 		howl_InitChannelAttr_EngineFX(&sdata->howl_metaEngineFX[soundID], &attr, stats->vol, stats->LR, stats->distort);
 	}
 
-	// otherFX
-	else if (type == 1)
+	else if (type == HOWL_CHANNEL_TYPE_OTHER_FX)
 	{
 		howl_InitChannelAttr_OtherFX(&sdata->howl_metaOtherFX[soundID], &attr, stats->vol, stats->LR, stats->distort);
 	}
 
-	// music
-	else if (type == 2)
+	else if (type == HOWL_CHANNEL_TYPE_MUSIC)
 	{
 		howl_InitChannelAttr_Music(&sdata->songSeq[soundID], &attr, stats->drumIndex_pitchIndex, stats->vol);
 	}
@@ -227,21 +224,16 @@ void howl_UnPauseChannel(struct ChannelStats *stats)
 	}
 
 	// enable all bits in ChannelUpdate flag
-	sdata->ChannelUpdateFlags[stats->channelID] |= 0x7e;
+	sdata->ChannelUpdateFlags[stats->channelID] |= HOWL_CHANNEL_UPDATE_RESUME;
 
-	int *dest = (int *)&sdata->channelAttrNew[stats->channelID];
-	int *src = (int *)&attr;
-	dest[0] = src[0];
-	dest[1] = src[1];
-	dest[2] = src[2];
-	dest[3] = src[3];
+	memcpy(&sdata->channelAttrNew[stats->channelID], &attr, sizeof(attr));
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002c784-0x8002c8a8
 void howl_UnPauseAudio()
 {
 	int i;
-	char backupID;
+	u8 backupID;
 	struct ChannelStats *backupPrev;
 	struct ChannelStats *curr, *backupNext;
 	struct ChannelStats *pausedStats;
@@ -257,6 +249,11 @@ void howl_UnPauseAudio()
 	Smart_EnterCriticalSection();
 	for (i = 0, curr = (struct ChannelStats *)sdata->channelFree.first; i < sdata->numBackup_ChannelStats; i++, curr = backupNext)
 	{
+		if (curr == NULL)
+		{
+			break;
+		}
+
 		backupID = curr->channelID;
 		backupPrev = curr->prev;
 		backupNext = curr->next;

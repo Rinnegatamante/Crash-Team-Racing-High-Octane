@@ -589,6 +589,19 @@ static void ThTick_PushPending(struct Thread **pending, int *count, struct Threa
 	(*count)++;
 }
 
+#if defined(CTR_NATIVE)
+internal struct Thread *ThTick_RunThreadNative(struct ThTickNativeContext *context, struct Thread *thread)
+{
+	context->currentThread = thread;
+	if (setjmp(context->env) == 0)
+	{
+		thread->funcThTick(thread);
+	}
+
+	return context->currentThread;
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800715e8-0x80071694 with native SetAndExec bridge.
 void ThTick_RunBucket(struct Thread *thread)
 {
@@ -624,12 +637,7 @@ void ThTick_RunBucket(struct Thread *thread)
 		if (t->funcThTick != NULL)
 		{
 #if defined(CTR_NATIVE)
-			context.currentThread = t;
-			if (setjmp(context.env) == 0)
-			{
-				t->funcThTick(t);
-			}
-			t = context.currentThread;
+			t = ThTick_RunThreadNative(&context, t);
 #else
 			t->funcThTick(t);
 #endif

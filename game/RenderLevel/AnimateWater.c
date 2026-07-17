@@ -8,10 +8,10 @@ struct AnimateQuadTrig
 
 static struct AnimateQuadTrig AnimateQuad_GetTrig(s32 angle)
 {
-	u32 packed = *(u32 *)&data.trigApprox[angle & 0x3ff];
+	u32 packed = CTR_ReadU32LE(&data.trigApprox[ANG_MODULO_HALF_PI(angle)]);
 	struct AnimateQuadTrig trig;
 
-	if ((angle & 0x400) == 0)
+	if (IS_ANG_FIRST_OR_THIRD_QUADRANT(angle))
 	{
 		trig.sin = (s16)packed;
 		trig.cos = (s32)packed >> 16;
@@ -22,7 +22,7 @@ static struct AnimateQuadTrig AnimateQuad_GetTrig(s32 angle)
 		trig.cos = -(s16)packed;
 	}
 
-	if ((angle & 0x800) != 0)
+	if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 	{
 		trig.sin = -trig.sin;
 		trig.cos = -trig.cos;
@@ -54,7 +54,7 @@ void AnimateQuadVertex(int timer, struct SCVert *scVert, u32 *visBits)
 		u32 animatedXy = offsetPosXy + (u32)(trig.sin >> 7);
 		u32 animatedZw = offsetPosZw + (u32)(trig.cos >> 7);
 
-		*(u32 *)&levVert->pos = animatedXy | originalY;
+		CTR_WriteU32LE(&levVert->pos, animatedXy | originalY);
 		levVert->pos.z = (s16)animatedZw;
 	}
 
@@ -65,15 +65,14 @@ void AnimateQuadVertex(int timer, struct SCVert *scVert, u32 *visBits)
 		gte_dpcs();
 
 		u32 color = MFC2(22);
-		*(u32 *)&levVert->color_hi[0] = color;
-		*(u32 *)&levVert->color_lo[0] = color;
+		CTR_WriteU32LE(&levVert->color_hi[0], color);
+		CTR_WriteU32LE(&levVert->color_lo[0], color);
 	}
 }
 
-void AnimateQuad(int timer, int numSCVert, void *ptrSCVert, int *visSCVertList)
+void AnimateQuad(int timer, int numSCVert, struct SCVert *scVert, int *visSCVertList)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80069e70-0x80069f0c.
-	struct SCVert *scVert = (struct SCVert *)ptrSCVert;
 	u32 *visList = (u32 *)visSCVertList;
 	u32 visBits = *visList++;
 	int bitCount = 32;
@@ -116,8 +115,8 @@ void AnimateWaterVertex(struct WaterVert *waterVert, u16 colorOffset, int firstO
 
 	struct LevVertex *levVert = waterVert->v;
 	struct OVert *waterColor = waterVert->w;
-	u16 first = *(u16 *)((char *)waterColor + firstOffset);
-	u16 second = *(u16 *)((char *)waterColor + secondOffset);
+	u16 first = CTR_ReadU16LE((char *)waterColor + firstOffset);
+	u16 second = CTR_ReadU16LE((char *)waterColor + secondOffset);
 
 	u32 rgb = (first & 0x3f);
 	u32 farR = (second & 0x3f) << 4;
@@ -136,17 +135,15 @@ void AnimateWaterVertex(struct WaterVert *waterVert, u16 colorOffset, int firstO
 	gte_dpcs();
 
 	u32 color = MFC2(22);
-	*(u16 *)&levVert->color_lo[0] = (u16)(color + colorOffset);
+	CTR_WriteU16LE(&levVert->color_lo[0], (u16)(color + colorOffset));
 
 	color = (color >> 16) & 0xff;
-	*(u32 *)&levVert->color_hi[0] = (color << 16) | (color << 8) | color;
+	CTR_WriteU32LE(&levVert->color_hi[0], (color << 16) | (color << 8) | color);
 }
 
 static u16 AnimateWater_ReadTextureHalf(const struct TextureLayout *layout, int offset)
 {
-	const u8 *bytes = (const u8 *)layout + offset;
-
-	return (u16)((u16)bytes[0] | ((u16)bytes[1] << 8));
+	return CTR_ReadU16LE((const u8 *)layout + offset);
 }
 
 static void AnimateWater_Common(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int numLists,
@@ -210,32 +207,33 @@ static void AnimateWater_Common(int timer, int numWaterVertices, struct WaterVer
 	}
 }
 
-void AnimateWater1P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *param_5)
+void AnimateWater1P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006d79c-0x8006d864.
-	int *visLists[1] = {param_5};
+	int *visLists[1] = {visOVertList};
 	AnimateWater_Common(timer, numWaterVertices, waterVert, waterEnvMap, 1, visLists);
 }
 
-void AnimateWater2P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *param_5, int *param_6)
+void AnimateWater2P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
+                    int *visOVertList1)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006d864-0x8006d948.
-	int *visLists[2] = {param_5, param_6};
+	int *visLists[2] = {visOVertList0, visOVertList1};
 	AnimateWater_Common(timer, numWaterVertices, waterVert, waterEnvMap, 2, visLists);
 }
 
-void AnimateWater3P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *param_5, int *param_6,
-                    int *param_7)
+void AnimateWater3P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
+                    int *visOVertList1, int *visOVertList2)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006d948-0x8006da50.
-	int *visLists[3] = {param_5, param_6, param_7};
+	int *visLists[3] = {visOVertList0, visOVertList1, visOVertList2};
 	AnimateWater_Common(timer, numWaterVertices, waterVert, waterEnvMap, 3, visLists);
 }
 
-void AnimateWater4P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *param_5, int *param_6,
-                    int *param_7, int *param_8)
+void AnimateWater4P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
+                    int *visOVertList1, int *visOVertList2, int *visOVertList3)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006da50-0x8006db7c.
-	int *visLists[4] = {param_5, param_6, param_7, param_8};
+	int *visLists[4] = {visOVertList0, visOVertList1, visOVertList2, visOVertList3};
 	AnimateWater_Common(timer, numWaterVertices, waterVert, waterEnvMap, 4, visLists);
 }

@@ -274,36 +274,6 @@ internal int Lm_G2(s64 a)
 	return (int)(a);
 }
 
-internal int Lm_G1_ia(s64 a)
-{
-	if (a > 0x3ffffff)
-	{
-		return 0x3ffffff;
-	}
-
-	if (a < -0x4000000)
-	{
-		return -0x4000000;
-	}
-
-	return (int)(a);
-}
-
-internal int Lm_G2_ia(s64 a)
-{
-	if (a > 0x3ffffff)
-	{
-		return 0x3ffffff;
-	}
-
-	if (a < -0x4000000)
-	{
-		return -0x4000000;
-	}
-
-	return (int)(a);
-}
-
 internal int Lm_H(s64 value, int sf)
 {
 	s64 value_sf = gte_shift(value, sf);

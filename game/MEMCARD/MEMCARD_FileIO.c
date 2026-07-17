@@ -3,6 +3,7 @@
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003db98-0x8003dbf8.
 int MEMCARD_NewTask(int slotIdx, char *name, u8 *ptrMemcard, int memcardFileSize, int unused)
 {
+	(void)unused;
 	sdata->memcardSlot = slotIdx;
 
 	MEMCARD_StringSet(sdata->s_memcardFileCurr, slotIdx, name);

@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_MEMCARD_H
+#define CTR_NATIVE_NAMESPACE_MEMCARD_H
+
 // Modified from original game
 enum MC_STAGE
 {
@@ -87,11 +90,34 @@ enum MC_SCREEN
 	MC_SCREEN_ERROR_NODATA = 9,
 };
 
+enum HighScoreConstants
+{
+	MEMCARD_HIGH_SCORE_TRACK_COUNT = 0x12,
+	MEMCARD_HIGH_SCORE_MODE_COUNT = 2,
+	MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE = 6,
+	MEMCARD_HIGH_SCORE_ENTRIES_PER_TRACK = MEMCARD_HIGH_SCORE_MODE_COUNT * MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE,
+	MEMCARD_HIGH_SCORE_NAME_LENGTH = 18,
+	MEMCARD_HIGH_SCORE_DEFAULT_TIME = 0x8c640,
+};
+
+enum GameProgressConstants
+{
+	GAME_PROGRESS_UNLOCK_WORD_COUNT = 2,
+	GAME_PROGRESS_CUP_COUNT = 4,
+	GAME_PROGRESS_CUP_DIFFICULTY_COUNT = 3,
+	GAME_PROGRESS_CUP_WIN_COUNT = GAME_PROGRESS_CUP_COUNT * GAME_PROGRESS_CUP_DIFFICULTY_COUNT,
+	GAME_PROGRESS_CUP_CURRENT_WIN_FIRST_BIT = 0x0c,
+	GAME_PROGRESS_CUP_PREVIOUS_WIN_OFFSET = GAME_PROGRESS_CUP_WIN_COUNT,
+	ADV_OXIDE_FINAL_RELIC_COUNT = 18,
+	MEMCARD_ADV_PROFILE_COUNT = 4,
+	MEMCARD_PROFILE_VERSION = -18,
+};
+
 // 0x18 (24) bytes each
 struct HighScoreEntry
 {
 	u32 time;
-	char name[18];
+	char name[MEMCARD_HIGH_SCORE_NAME_LENGTH];
 	u16 characterID;
 };
 
@@ -102,7 +128,7 @@ struct HighScoreTrack
 	// Time Trial Best Race (5)
 	// Relic Race Best Lap -- unused
 	// Relic Race Best Race (5)
-	struct HighScoreEntry scoreEntry[12];
+	struct HighScoreEntry scoreEntry[MEMCARD_HIGH_SCORE_ENTRIES_PER_TRACK];
 
 #define TT_NTROPY_OPEN   0x1
 #define TT_NTROPY_BEATEN 0x2
@@ -124,7 +150,7 @@ struct GameProgress
 	// characters, tracks, cups, scrapbook
 	union
 	{
-		u32 unlocks[2];
+		u32 unlocks[GAME_PROGRESS_UNLOCK_WORD_COUNT];
 		struct
 		{
 			u32 unlockFlags;
@@ -133,7 +159,7 @@ struct GameProgress
 	};
 
 	// 8008e6f4 -- 0x1488 bytes large
-	struct HighScoreTrack highScoreTracks[18];
+	struct HighScoreTrack highScoreTracks[MEMCARD_HIGH_SCORE_TRACK_COUNT];
 };
 
 #define MEMCARD_BIT_WORD(bitIndex) ((bitIndex) >> 5)
@@ -166,11 +192,16 @@ enum AdvMaskHintId
 	ADV_MASK_HINT_ID_MUST_HAVE_ONE_BOSS_KEY = 5,
 	ADV_MASK_HINT_ID_SAVE_LOAD_SCREEN = 6,
 	ADV_MASK_HINT_ID_NEW_WORLD_GREETING = 7,
+	ADV_MASK_HINT_ID_TROPHY_AWARDED = 0x0c,
+	ADV_MASK_HINT_ID_KEY_AWARDED = 0x0d,
 	ADV_MASK_HINT_ID_HANG_TIME_TURBO = 0x0e,
 	ADV_MASK_HINT_ID_POWER_SLIDE = 0x0f,
 	ADV_MASK_HINT_ID_TURBO_BOOST = 0x10,
 	ADV_MASK_HINT_ID_BRAKE_SLIDE = 0x11,
 	ADV_MASK_HINT_ID_MUST_HAVE_TWO_BOSS_KEYS = 0x12,
+	ADV_MASK_HINT_ID_RELIC_AWARDED = 0x13,
+	ADV_MASK_HINT_ID_CTR_TOKEN_AWARDED = 0x14,
+	ADV_MASK_HINT_ID_GEM_AWARDED = 0x15,
 	ADV_MASK_HINT_ID_WUMPA_FRUIT = 0x16,
 	ADV_MASK_HINT_ID_TNT = 0x17,
 	ADV_MASK_HINT_ID_MAP_INFORMATION = 0x18,
@@ -179,6 +210,7 @@ enum AdvMaskHintId
 	ADV_MASK_HINT_ID_GEM_CUPS_CHALLENGE = 0x1b,
 	ADV_MASK_HINT_ID_MUST_GET_10_RELICS = 0x1c,
 	ADV_MASK_HINT_ID_RELIC_CHALLENGE = 0x1d,
+	ADV_MASK_HINT_UKA_UKA_XA_OFFSET = 0x1f,
 };
 
 enum AdvRewardBitIndex
@@ -228,7 +260,16 @@ enum AdvRewardBitIndex
 
 enum AdvRewardConstants
 {
+	ADV_REWARD_HUB_COUNT = 4,
+	ADV_REWARD_RACE_TRACK_COUNT = 0x10,
+	ADV_REWARD_TROPHY_TRACK_COUNT = ADV_REWARD_RACE_TRACK_COUNT,
+	ADV_REWARD_CTR_TOKEN_TRACK_COUNT = ADV_REWARD_RACE_TRACK_COUNT,
+	ADV_REWARD_RELIC_TRACK_COUNT = 0x12,
 	ADV_REWARD_RELIC_TIER_STRIDE = 0x12,
+	ADV_REWARD_BOSS_KEY_COUNT = ADV_REWARD_HUB_COUNT,
+	ADV_REWARD_PURPLE_TOKEN_COUNT = ADV_REWARD_HUB_COUNT,
+	ADV_REWARD_GEM_COUNT = 5,
+	ADV_REWARD_OXIDE_BEAT_COUNT = 2,
 };
 
 enum AdvRewardWordMask
@@ -268,9 +309,11 @@ enum AdvRewardWordMask
 	ADV_REWARD_OXIDE_SECOND_WIN_FLAGS = ADV_REWARD_BEAT_OXIDE_SECOND_BOSS_MASK | ADV_REWARD_BEAT_OXIDE_SECOND_MASK,
 };
 
-#define CHECK_ADV_BIT(rewards, bitIndex)  (((rewards)[MEMCARD_BIT_WORD(bitIndex)] >> ((bitIndex) & 0x1f)) & 1)
+#define CHECK_MEMCARD_BIT(words, bitIndex)  (((words)[MEMCARD_BIT_WORD(bitIndex)] >> ((bitIndex) & 0x1f)) & 1)
+#define UNLOCK_MEMCARD_BIT(words, bitIndex) ((words)[MEMCARD_BIT_WORD(bitIndex)] |= MEMCARD_BIT_MASK(bitIndex))
 
-#define UNLOCK_ADV_BIT(rewards, bitIndex) ((rewards)[MEMCARD_BIT_WORD(bitIndex)] |= MEMCARD_BIT_MASK(bitIndex))
+#define CHECK_ADV_BIT(rewards, bitIndex)    CHECK_MEMCARD_BIT(rewards, bitIndex)
+#define UNLOCK_ADV_BIT(rewards, bitIndex)   UNLOCK_MEMCARD_BIT(rewards, bitIndex)
 
 struct AdvProgress
 {
@@ -556,13 +599,21 @@ struct GameOptions
 #endif
 };
 
+enum GameOptionsVolume
+{
+	GAME_OPTIONS_VOLUME_FX,
+	GAME_OPTIONS_VOLUME_MUSIC,
+	GAME_OPTIONS_VOLUME_VOICE,
+	GAME_OPTIONS_VOLUME_COUNT,
+};
+
 struct MemcardProfile
 {
 	// 0x0
 	s16 header[2];
 
 	// 0x4
-	struct AdvProgress advProgress[4];
+	struct AdvProgress advProgress[MEMCARD_ADV_PROFILE_COUNT];
 
 	// 0x144
 	struct GameProgress gameProgress;
@@ -575,6 +626,7 @@ struct MemcardProfile
 
 CTR_STATIC_ASSERT(sizeof(struct HighScoreEntry) == 0x18);
 CTR_STATIC_ASSERT(sizeof(struct HighScoreTrack) == 0x124);
+CTR_STATIC_ASSERT((u16)MEMCARD_PROFILE_VERSION == 0xffee);
 CTR_STATIC_ASSERT(OFFSETOF(struct GameProgress, unlockFlags) == 0x4);
 CTR_STATIC_ASSERT(OFFSETOF(struct GameProgress, extendedUnlockFlags) == 0x8);
 CTR_STATIC_ASSERT(OFFSETOF(struct GameProgress, highScoreTracks) == 0xc);
@@ -586,8 +638,12 @@ CTR_STATIC_ASSERT(OFFSETOF(struct AdvProgress, reservedRewardFlags) == 0x14);
 CTR_STATIC_ASSERT(OFFSETOF(struct AdvProgress, name) == 0x18);
 CTR_STATIC_ASSERT(sizeof(struct AdvProgress) == 0x50);
 CTR_STATIC_ASSERT(sizeof(struct GhostProfile) == 0x34);
+CTR_STATIC_ASSERT(OFFSETOF(struct GameOptions, volMusic) == OFFSETOF(struct GameOptions, volFx) + sizeof(s16));
+CTR_STATIC_ASSERT(OFFSETOF(struct GameOptions, volVoice) == OFFSETOF(struct GameOptions, volFx) + sizeof(s16) * 2);
 #if BUILD >= UsaRetail
 CTR_STATIC_ASSERT(sizeof(struct GameOptions) == 0x28);
 #else
 CTR_STATIC_ASSERT(sizeof(struct GameOptions) == 0x24);
+#endif
+
 #endif

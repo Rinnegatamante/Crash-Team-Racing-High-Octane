@@ -266,7 +266,8 @@ force_inline void addLineG3(uint32_t *ot, LINE_G3 *p)
 	CtrGpu_LinkPrimToOT(ot, p);
 	p->code = 0x58;
 	p->pad = 0x55555555;
-	p->p1, p->p2 = 0;
+	p->p1 = 0;
+	p->p2 = 0;
 }
 
 force_inline void addLineF4(uint32_t *ot, LINE_F4 *p)
@@ -283,7 +284,8 @@ force_inline void addLineG4(uint32_t *ot, LINE_G4 *p)
 	CtrGpu_LinkPrimToOT(ot, p);
 	p->code = 0x5c;
 	p->pad = 0x55555555;
-	p->p1, p->p2 = 0;
+	p->p1 = 0;
+	p->p2 = 0;
 }
 
 #ifndef CTR_NATIVE
@@ -300,19 +302,22 @@ force_inline void addFill(uint32_t *ot, FILL *p)
 // this produces bugs if any of the X values are negative and not cast to u16
 // this is terrible code
 // please avoid writing something like this, unless you really really need it
-#define setXY4CompilerHack(p, s0, t0, s1, t1, s2, t2, s3, t3) \
-	*(u32 *)&p->x0 = s0 | (t0 << 16), *(u32 *)&p->x1 = s1 | (t1 << 16), *(u32 *)&p->x2 = s2 | (t2 << 16), *(u32 *)&p->x3 = s3 | (t3 << 16)
+#define setXY4CompilerHack(p, s0, t0, s1, t1, s2, t2, s3, t3)                                                           \
+	CtrGpu_WritePackedXY(&(p)->x0, (s0) | ((u32)(t0) << 16)), CtrGpu_WritePackedXY(&(p)->x1, (s1) | ((u32)(t1) << 16)), \
+	    CtrGpu_WritePackedXY(&(p)->x2, (s2) | ((u32)(t2) << 16)), CtrGpu_WritePackedXY(&(p)->x3, (s3) | ((u32)(t3) << 16))
 
 // like psn00bsdk's setColor macros but with terrible compiler hacks
 // as the color values are read and written as 32-bit ints these have to be used prior to setting code
-#define setInt32RGB0(p, color0)                         *(u32 *)&p->r0 = color0
+#define setInt32RGB0(p, color0) CtrGpu_WriteColorCode(&(p)->r0, (color0))
 
-#define setInt32RGB4(p, color0, color1, color2, color3) *(u32 *)&p->r0 = color0, *(u32 *)&p->r1 = color1, *(u32 *)&p->r2 = color2, *(u32 *)&p->r3 = color3
+#define setInt32RGB4(p, color0, color1, color2, color3)                                                                              \
+	CtrGpu_WriteColorCode(&(p)->r0, (color0)), CtrGpu_WriteColorCode(&(p)->r1, (color1)), CtrGpu_WriteColorCode(&(p)->r2, (color2)), \
+	    CtrGpu_WriteColorCode(&(p)->r3, (color3))
 
 // clear blending mode bits of the texpage using AND, then set them using OR
 // then set image to use semi-transparent mode using the setSemiTrans macro
 // (which enables the 2 bit on the primitive's code field)
-#define setTransparency(p, transparency)                p->tpage = (p->tpage & 0xff9f) | ((transparency - 1) << 5), p->code |= 2
+#define setTransparency(p, transparency) p->tpage = (p->tpage & 0xff9f) | ((transparency - 1) << 5), p->code |= 2
 
 // version of psn00bsdk's setColor macro that simultaneously accepts 4 colors
 #define setColor4(p, rgb0, rgb1, rgb2, rgb3)                                                                                         \

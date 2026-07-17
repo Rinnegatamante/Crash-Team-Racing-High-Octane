@@ -1,33 +1,35 @@
 #include <common.h>
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004caa8-0x8004cac8.
-int UI_ConvertX_2(int oldPosX, int newPosX)
+enum
 {
-#define midpointX 0x100
-	newPosX = (oldPosX - midpointX) * newPosX;
+	UI_CONVERT_CENTER_X = 0x100,
+	UI_CONVERT_CENTER_Y = 0x6c,
+	UI_CONVERT_NEGATIVE_ROUND_BIAS = 0xff,
+	UI_CONVERT_FIXED_SHIFT = 8,
+};
 
-	// If new posX is on the left of the screen
-	if (newPosX < 0)
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004caa8-0x8004cac8.
+int UI_ConvertX_2(int posX, int scale)
+{
+	int scaledPosX = (posX - UI_CONVERT_CENTER_X) * scale;
+
+	if (scaledPosX < 0)
 	{
-		newPosX += 0xff;
+		scaledPosX += UI_CONVERT_NEGATIVE_ROUND_BIAS;
 	}
 
-	// divide by 256 (0x100)
-	return newPosX >> 8;
+	return scaledPosX >> UI_CONVERT_FIXED_SHIFT;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004cac8-0x8004cae8.
-int UI_ConvertY_2(int oldPosY, int newPosY)
+int UI_ConvertY_2(int posY, int scale)
 {
-#define midpointY 0x6c
-	newPosY = (oldPosY - midpointY) * newPosY;
+	int scaledPosY = (posY - UI_CONVERT_CENTER_Y) * scale;
 
-	// If new posY is under the screen
-	if (newPosY < 0)
+	if (scaledPosY < 0)
 	{
-		newPosY += 0xff;
+		scaledPosY += UI_CONVERT_NEGATIVE_ROUND_BIAS;
 	}
 
-	// divide by 256 (0x100)
-	return newPosY >> 8;
+	return scaledPosY >> UI_CONVERT_FIXED_SHIFT;
 }

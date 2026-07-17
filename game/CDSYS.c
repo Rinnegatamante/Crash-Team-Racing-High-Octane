@@ -5,11 +5,11 @@
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c360-0x8001c420.
-int CDSYS_Init(b32 boolUseDisc)
+b32 CDSYS_Init(b32 boolUseDisc)
 {
 	sdata->boolUseDisc = boolUseDisc;
 
-	*(s16 *)&sdata->unused400[0] = 0;
+	CTR_WriteU16LE(&sdata->unused400[0], 0);
 
 	// if using parallel port (Naughty Dog Devs only)
 	if (boolUseDisc != 0)
@@ -19,7 +19,7 @@ int CDSYS_Init(b32 boolUseDisc)
 		{
 			// use parallel port (Naughty Dog Devs only)
 			sdata->boolUseDisc = 0;
-			return 0;
+			return false;
 		}
 
 		CdSetDebug(1);
@@ -58,12 +58,11 @@ int CDSYS_Init(b32 boolUseDisc)
 
 	CDSYS_SetMode_StreamData();
 
-	// 1 - English
-	CDSYS_SetXAToLang(1);
+	CDSYS_SetXAToLang(CDSYS_LANGUAGE_ENGLISH);
 
 	Voiceline_PoolClear();
 
-	return 1;
+	return true;
 }
 
 
@@ -85,7 +84,7 @@ u32 CDSYS_GetFilePosInt(char *fileString, int *filePos)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c470-0x8001c4f4.
 void CDSYS_SetMode_StreamData()
 {
-	char buf[8];
+	u8 buf[8];
 
 #if defined(CTR_NATIVE)
 	// NOTE(aalhendi): Native has no disc-mode switch, but retail force-stops
@@ -143,7 +142,7 @@ void CDSYS_SetMode_StreamData()
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c4f4-0x8001c56c.
 void CDSYS_SetMode_StreamAudio()
 {
-	char buf[8];
+	u8 buf[8];
 
 	if (sdata->boolUseDisc == 0)
 	{
@@ -167,7 +166,7 @@ void CDSYS_SetMode_StreamAudio()
 	// param_3: 0 = normal speed, 1 = double speed
 
 	// Set Mode to Audio
-	buf[0] = 0xE8;
+	buf[0] = CDSYS_CD_MODE_XA_AUDIO;
 	CdControl(CdlSetmode, buf, 0);
 
 	sdata->discMode = DM_AUDIO;
@@ -189,7 +188,7 @@ int CDSYS_SetXAToLang(int lang)
 	{
 		return 1;
 	}
-	if (lang >= 8)
+	if (lang >= CDSYS_LANGUAGE_COUNT)
 	{
 		return 0;
 	}
@@ -198,9 +197,9 @@ int CDSYS_SetXAToLang(int lang)
 	CDSYS_SetMode_StreamData();
 
 	xaLang = data.xaLanguagePtrs[lang];
-	strncpy(&data.s_XA_ENG_XNF[4], xaLang, 3);
-	strncpy(&data.s_XA_ENG_EXTRA[4], xaLang, 3);
-	strncpy(&data.s_XA_ENG_GAME[4], xaLang, 3);
+	strncpy(&data.s_XA_ENG_XNF[CDSYS_LANGUAGE_CODE_OFFSET], xaLang, CDSYS_LANGUAGE_CODE_LENGTH);
+	strncpy(&data.s_XA_ENG_EXTRA[CDSYS_LANGUAGE_CODE_OFFSET], xaLang, CDSYS_LANGUAGE_CODE_LENGTH);
+	strncpy(&data.s_XA_ENG_GAME[CDSYS_LANGUAGE_CODE_OFFSET], xaLang, CDSYS_LANGUAGE_CODE_LENGTH);
 
 	// store on heap
 	void *ptrDst = 0;
@@ -214,13 +213,13 @@ int CDSYS_SetXAToLang(int lang)
 	}
 
 	// header error
-	if (xnf->magic != *(int *)&sdata->s_XINF[0])
+	if (xnf->magic != (s32)CTR_ReadU32LE(&sdata->s_XINF[0]))
 	{
 		return 0;
 	}
 
 	// Aug5=100, Sep3=101, Retail=102
-	if (xnf->version != 102)
+	if (xnf->version != CDSYS_XNF_VERSION_RETAIL)
 	{
 		return 0;
 	}
@@ -244,8 +243,8 @@ int CDSYS_SetXAToLang(int lang)
 
 		for (int xaID = 0; xaID < sdata->ptrArray_NumXAs[categoryID]; xaID++)
 		{
-			am->name[am->stringIndex_char1] = '0' + (xaID / 10);
-			am->name[am->stringIndex_char2] = '0' + (xaID % 10);
+			am->name[(s32)am->stringIndex_char1] = '0' + (xaID / 10);
+			am->name[(s32)am->stringIndex_char2] = '0' + (xaID % 10);
 
 			int firstXaIndex = sdata->ptrArray_firstXaIndex[categoryID];
 			int *returnPtr_xaCdPos = &sdata->ptrArray_XaCdPos[firstXaIndex + xaID];
@@ -266,6 +265,7 @@ int CDSYS_SetXAToLang(int lang)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c7a4-0x8001c7fc.
 void CDSYS_XaCallbackCdSync(u8 result, u8 *unk) //+unk to adhere to *CdlCB
 {
+	(void)unk;
 	u8 com;
 
 	if (result == CdlComplete)
@@ -288,6 +288,7 @@ void CDSYS_XaCallbackCdSync(u8 result, u8 *unk) //+unk to adhere to *CdlCB
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c7fc-0x8001c8e4.
 void CDSYS_XaCallbackCdReady(u8 result, u8 *unk) //+unk to adhere to *CdlCB
 {
+	(void)unk;
 	if (result == CdlDataReady)
 	{
 		CdGetSector(&sdata->cdlFile_CdReady[0], 3);
@@ -311,7 +312,7 @@ void CDSYS_XaCallbackCdReady(u8 result, u8 *unk) //+unk to adhere to *CdlCB
 			sdata->XA_State = XA_FADING;
 
 			// disable music
-			sdata->XA_VolumeDeduct = 0x400;
+			sdata->XA_VolumeDeduct = CDSYS_XA_FADE_VOLUME_STEP;
 		}
 
 		sdata->countPass_CdReadyCallback++;
@@ -372,7 +373,7 @@ void CDSYS_SpuCallbackTransfer()
 {
 	if (sdata->irqAddr == 0)
 	{
-		sdata->irqAddr = 0x200;
+		sdata->irqAddr = CDSYS_SPU_DECODED_IRQ_ADDR;
 	}
 	else
 	{
@@ -391,7 +392,7 @@ void CDSYS_SpuCallbackTransfer()
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001c9e4-0x8001ca64.
 void CDSYS_SpuEnableIRQ()
 {
-	for (int i = 0; i < 0x200; i++)
+	for (int i = 0; i < CDSYS_SPU_DECODED_BUFFER_SAMPLES; i++)
 	{
 		sdata->SpuDecodedBuf[i] = 0;
 	}
@@ -403,10 +404,10 @@ void CDSYS_SpuEnableIRQ()
 	SpuSetTransferCallback(CDSYS_SpuCallbackTransfer);
 	SpuSetIRQCallback(CDSYS_SpuCallbackIRQ);
 
-	sdata->irqAddr = 0x200;
+	sdata->irqAddr = CDSYS_SPU_DECODED_IRQ_ADDR;
 	sdata->unused_8008d700 = 0;
 
-	SpuSetIRQAddr(0x200);
+	SpuSetIRQAddr(CDSYS_SPU_DECODED_IRQ_ADDR);
 	SpuSetIRQ(1);
 }
 
@@ -452,12 +453,12 @@ static void CDSYS_SaveMaxSample(int max)
 
 	// Cycle through ring buffer
 	sdata->XA_MaxSampleIndex++;
-	if (sdata->XA_MaxSampleIndex >= 3)
+	if (sdata->XA_MaxSampleIndex >= CDSYS_XA_MAX_SAMPLE_WINDOW)
 	{
 		sdata->XA_MaxSampleIndex = 0;
 	}
 
-	if (sdata->XA_MaxSampleNumSaved < 3)
+	if (sdata->XA_MaxSampleNumSaved < CDSYS_XA_MAX_SAMPLE_WINDOW)
 	{
 		sdata->XA_MaxSampleNumSaved++;
 	}
@@ -471,7 +472,7 @@ static void CDSYS_SaveMaxSample(int max)
 		index--;
 		if (index < 0)
 		{
-			index = 2;
+			index = CDSYS_XA_MAX_SAMPLE_WINDOW - 1;
 		}
 
 		if (sdata->XA_MaxSampleValInArr < sdata->XA_MaxSampleValArr[index])
@@ -516,12 +517,12 @@ void CDSYS_SpuGetMaxSample(void)
 		return;
 	}
 
-	int start = 0x100;
-	int end = 0x200;
+	int start = CDSYS_SPU_DECODED_HALF_SAMPLES;
+	int end = CDSYS_SPU_DECODED_BUFFER_SAMPLES;
 	if (sdata->irqAddr == 0)
 	{
 		start = 0;
-		end = 0x100;
+		end = CDSYS_SPU_DECODED_HALF_SAMPLES;
 	}
 
 	s16 *ptrSpuBuf = (s16 *)&sdata->SpuDecodedBuf[start];
@@ -549,10 +550,10 @@ void CDSYS_SpuGetMaxSample(void)
 
 	// Cycle through ring buffer
 	sdata->XA_MaxSampleIndex++;
-	if (sdata->XA_MaxSampleIndex >= 3)
+	if (sdata->XA_MaxSampleIndex >= CDSYS_XA_MAX_SAMPLE_WINDOW)
 		sdata->XA_MaxSampleIndex = 0;
 
-	if (sdata->XA_MaxSampleNumSaved < 3)
+	if (sdata->XA_MaxSampleNumSaved < CDSYS_XA_MAX_SAMPLE_WINDOW)
 		sdata->XA_MaxSampleNumSaved++;
 
 	// Find max of last 3 block maxes,
@@ -563,7 +564,7 @@ void CDSYS_SpuGetMaxSample(void)
 	{
 		index--;
 		if (index < 0)
-			index = 2;
+			index = CDSYS_XA_MAX_SAMPLE_WINDOW - 1;
 
 		if (sdata->XA_MaxSampleValInArr < sdata->XA_MaxSampleValArr[index])
 			sdata->XA_MaxSampleValInArr = sdata->XA_MaxSampleValArr[index];
@@ -673,8 +674,8 @@ int CDSYS_XAGetTrackLength(int categoryID, int xaID)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001cdb4-0x8001cf98
 int CDSYS_XAPlay(int categoryID, int xaID)
 {
-	char buf1[8];
-	char buf2[8];
+	u8 buf1[8];
+	u8 buf2[8];
 
 	if (sdata->boolUseDisc == 0)
 	{
@@ -684,7 +685,7 @@ int CDSYS_XAPlay(int categoryID, int xaID)
 		// NOTE(aalhendi): Native CD has no CD-XA IRQ stream. Feed extracted
 		// XA assets to the native audio backend and synthesize the minimal
 		// retail XA state gates.
-		if (NativeAudio_PlayXATrack(categoryID, xaID, nativeVol << 7, nativeVol << 7) == 0)
+		if (NativeAudio_PlayXATrack(categoryID, xaID, nativeVol << CDSYS_XA_VOLUME_SHIFT, nativeVol << CDSYS_XA_VOLUME_SHIFT) == 0)
 		{
 			return 0;
 		}
@@ -692,14 +693,15 @@ int CDSYS_XAPlay(int categoryID, int xaID)
 		sdata->XA_State = XA_PLAYING;
 		sdata->XA_Playing_Index = xaID;
 		sdata->XA_Playing_Category = categoryID;
-		sdata->XA_VolumeBitshift = nativeVol << 7;
+		sdata->XA_VolumeBitshift = nativeVol << CDSYS_XA_VOLUME_SHIFT;
 		sdata->XA_boolFinished = 0;
 		sdata->XA_CurrOffset = 0;
 		sdata->XA_MaxSampleIndex = 0;
 		sdata->XA_MaxSampleNumSaved = 0;
-		sdata->XA_MaxSampleValArr[0] = 0;
-		sdata->XA_MaxSampleValArr[1] = 0;
-		sdata->XA_MaxSampleValArr[2] = 0;
+		for (int i = 0; i < CDSYS_XA_MAX_SAMPLE_WINDOW; i++)
+		{
+			sdata->XA_MaxSampleValArr[i] = 0;
+		}
 		sdata->XA_MaxSampleVal = 0;
 		sdata->XA_MaxSampleValInArr = 0;
 		return 1;
@@ -741,7 +743,7 @@ int CDSYS_XAPlay(int categoryID, int xaID)
 		vol = sdata->vol_Music;
 	}
 
-	sdata->XA_VolumeBitshift = vol << 7;
+	sdata->XA_VolumeBitshift = vol << CDSYS_XA_VOLUME_SHIFT;
 	SpuSetCommonCDVolume((s16)sdata->XA_VolumeBitshift, (s16)sdata->XA_VolumeBitshift);
 
 	sdata->XA_Playing_Index = xaID;
@@ -795,7 +797,7 @@ void CDSYS_XAPauseRequest()
 		if ((sdata->XA_State >= XA_STARTING) && (sdata->XA_State <= XA_PLAYING))
 		{
 			sdata->XA_State = XA_FADING;
-			sdata->XA_VolumeDeduct = 0x400;
+			sdata->XA_VolumeDeduct = CDSYS_XA_FADE_VOLUME_STEP;
 		}
 #endif
 		return;
@@ -814,7 +816,7 @@ void CDSYS_XAPauseRequest()
 	}
 
 	sdata->XA_State = XA_FADING;
-	sdata->XA_VolumeDeduct = 0x400;
+	sdata->XA_VolumeDeduct = CDSYS_XA_FADE_VOLUME_STEP;
 }
 
 

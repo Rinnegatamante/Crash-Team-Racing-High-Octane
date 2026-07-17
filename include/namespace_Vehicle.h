@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_VEHICLE_H
+#define CTR_NATIVE_NAMESPACE_VEHICLE_H
+
 #include <ctr_math.h>
 
 struct Thread;
@@ -101,6 +104,13 @@ enum DriverAccelTap
 	DRIVER_ACCEL_TAP_STEER_COUNT = 7,
 };
 
+enum DriverWallRub
+{
+	DRIVER_WALL_RUB_TIMER_START = 0xf0,
+};
+
+CTR_STATIC_ASSERT(DRIVER_WALL_RUB_TIMER_START == 0xf0);
+
 enum DriverTireColorCycle
 {
 	DRIVER_TIRE_COLOR_DEFAULT = 0x2e808080,
@@ -117,6 +127,14 @@ enum DriverSkidmarks
 {
 	DRIVER_SKIDMARK_FRAME_COUNT = 8,
 	DRIVER_SKIDMARK_TIRE_COUNT = 4,
+	DRIVER_SKIDMARK_BACK_LEFT = 0x1,
+	DRIVER_SKIDMARK_BACK_RIGHT = 0x2,
+	DRIVER_SKIDMARK_FRONT_LEFT = 0x4,
+	DRIVER_SKIDMARK_FRONT_RIGHT = 0x8,
+	DRIVER_SKIDMARK_CURRENT_FRAME_MASK = DRIVER_SKIDMARK_BACK_LEFT | DRIVER_SKIDMARK_BACK_RIGHT | DRIVER_SKIDMARK_FRONT_LEFT | DRIVER_SKIDMARK_FRONT_RIGHT,
+	DRIVER_SKIDMARK_HISTORY_MASK = 0xfffff,
+	DRIVER_SKIDMARK_HISTORY_SHIFT = 4,
+	DRIVER_SKIDMARK_FRAME_INDEX_MASK = DRIVER_SKIDMARK_FRAME_COUNT - 1,
 };
 
 union VehEmitterSkidmark
@@ -139,6 +157,24 @@ struct DriverCheckpointState
 
 	// 0x1
 	u8 currentIndex;
+};
+
+struct DriverWarpState
+{
+	// 0x0
+	s32 timer;
+
+	// 0x4
+	s32 heightOffset;
+
+	// 0x8
+	s32 quadHeight;
+
+	// 0xc - angular phase for the warp dust rings
+	s32 dustAngle;
+
+	// 0x10
+	s32 beamHeight;
 };
 
 // NOTE(aalhendi): Retail reuses this scratch range as transformed tire words,
@@ -576,9 +612,10 @@ enum
 	ACTION_HUMAN_HUMAN_COLLISION = 0x10000000,
 	ACTION_REVERSE_STEER_LEFT = 0x20000000,
 	ACTION_REVERSE_STEER_RIGHT = 0x40000000,
-	ACTION_DROPPING_MINE = 0x80000000u,
 };
 typedef u32 Actions;
+
+#define ACTION_DROPPING_MINE 0x80000000u
 
 enum
 {
@@ -600,6 +637,40 @@ enum
 	RAIN_CLOUD_EFFECT_RESERVE_RELEASE = 6,
 };
 typedef s16 RainCloudEffect;
+
+enum
+{
+	HELD_ITEM_TURBO = 0,
+	HELD_ITEM_BOMB_1X = 1,
+	HELD_ITEM_MISSILE_1X = 2,
+	HELD_ITEM_BOMB_MISSILE_SHARED = HELD_ITEM_MISSILE_1X,
+	HELD_ITEM_TNT = 3,
+	HELD_ITEM_POTION = 4,
+	HELD_ITEM_SPRING = 5,
+	HELD_ITEM_SHIELD = 6,
+	HELD_ITEM_MASK = 7,
+	HELD_ITEM_CLOCK = 8,
+	HELD_ITEM_WARPBALL = 9,
+	HELD_ITEM_BOMB_3X = 0xa,
+	HELD_ITEM_MISSILE_3X = 0xb,
+	HELD_ITEM_INVISIBILITY = 0xc,
+	HELD_ITEM_SUPER_ENGINE = 0xd,
+	HELD_ITEM_NONE = 0xf,
+	HELD_ITEM_ROULETTE = 0x10,
+};
+typedef u8 DriverHeldItem;
+
+enum HeldItemConstants
+{
+	HELD_ITEM_STACK_COUNT = 3,
+};
+
+enum DriverWumpaConstants
+{
+	DRIVER_WUMPA_JUICED_COUNT = 10,
+	DRIVER_WUMPA_MAX_COUNT = DRIVER_WUMPA_JUICED_COUNT,
+	DRIVER_WUMPA_JUICED_HUD_COOLDOWN_FRAMES = 10,
+};
 
 enum
 {
@@ -849,9 +920,9 @@ struct Driver
 	// 0x30
 	s8 numWumpas;
 	// 0x31
-	char numCrystals;
+	s8 numCrystals;
 	// 0x32
-	char numTimeCrates;
+	s8 numTimeCrates;
 	// 0x33
 	s8 accelConst;
 	// 0x34
@@ -863,7 +934,7 @@ struct Driver
 	s8 turboConst;
 
 	// 0x36
-	u8 heldItemID;
+	DriverHeldItem heldItemID;
 	// 0x37
 	u8 numHeldItems;
 	// 0x38
@@ -1060,7 +1131,7 @@ struct Driver
 	// 0x304 = No sound yet defined* (VehEmitter.c: VehEmitter_DriverMain)
 	// 0x308 = Kart "kirb_dirt" sound
 	// 0x30C = Kart "engine_jet" sound
-	void *driverAudioPtrs[4];
+	u32 driverAudioPtrs[4];
 
 	// 0x310
 	MATRIX matrixMovingDir;
@@ -1678,7 +1749,7 @@ struct Driver
 	RainCloudEffect rainCloudEffect;
 
 	// 0x50C
-	char numTimesAttackingPlayer[8];
+	u8 numTimesAttackingPlayer[8];
 
 	// 0x514
 	int timeElapsedInRace;
@@ -1735,46 +1806,46 @@ struct Driver
 	s16 numberOfJumps;
 
 	// 0x556
-	char numTimesMovingPotionHitSomeone;
+	u8 numTimesMovingPotionHitSomeone;
 
 	// 0x557
-	char numTimesMissileHitSomeone;
+	u8 numTimesMissileHitSomeone;
 
 	// 0x558
-	char numTimesClockWeaponUsed;
+	u8 numTimesClockWeaponUsed;
 
 	// 0x559
-	char numTimesAttacking;
+	u8 numTimesAttacking;
 
 	// 0x55a
-	char numTimesBombsHitSomeone;
+	u8 numTimesBombsHitSomeone;
 
 	// 0x55b
-	char numTimesSquishedSomeone;
+	u8 numTimesSquishedSomeone;
 
 	// 0x55c
-	char numTimesMissileLaunched;
+	u8 numTimesMissileLaunched;
 
 	// 0x55d
-	char numTimesMissileHitYou;
+	u8 numTimesMissileHitYou;
 
 	// 0x55e
-	char numTimesBombHitYou;
+	u8 numTimesBombHitYou;
 
 	// 0x55f
-	char numTimesMotionlessPotionHitYou;
+	u8 numTimesMotionlessPotionHitYou;
 
 	// 0x560
-	char numTimesAttackedByPlayer[8];
+	u8 numTimesAttackedByPlayer[8];
 
 	// 0x568
-	char numTimesHitWeaponBox;
+	u8 numTimesHitWeaponBox;
 
 	// 0x569
 	u8 numTimesWumpa;
 
 	// 0x56a
-	char numTimesMaskGrab;
+	u8 numTimesMaskGrab;
 
 	// 0x56b
 	// padding for the next int
@@ -1917,19 +1988,7 @@ struct Driver
 		} Blasted;
 
 		// state 10
-		struct
-		{
-			// 0x580
-			int timer;
-			// 0x584
-			int heightOffset;
-			// 0x588
-			int quadHeight;
-			// 0x58c
-			int numParticle;
-			// 0x590
-			int beamHeight;
-		} Warp;
+		struct DriverWarpState Warp;
 
 	} KartStates;
 
@@ -1994,6 +2053,12 @@ CTR_STATIC_ASSERT(DRIVER_FUNC_COUNT == 13);
 CTR_STATIC_ASSERT(sizeof(struct DriverCheckpointState) == 0x2);
 CTR_STATIC_ASSERT(offsetof(struct DriverCheckpointState, branchChoiceIndex) == 0x0);
 CTR_STATIC_ASSERT(offsetof(struct DriverCheckpointState, currentIndex) == 0x1);
+CTR_STATIC_ASSERT(sizeof(struct DriverWarpState) == 0x14);
+CTR_STATIC_ASSERT(offsetof(struct DriverWarpState, timer) == 0x0);
+CTR_STATIC_ASSERT(offsetof(struct DriverWarpState, heightOffset) == 0x4);
+CTR_STATIC_ASSERT(offsetof(struct DriverWarpState, quadHeight) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct DriverWarpState, dustAngle) == 0xc);
+CTR_STATIC_ASSERT(offsetof(struct DriverWarpState, beamHeight) == 0x10);
 
 CTR_STATIC_ASSERT(sizeof(struct BotPhysics) == 0x34);
 CTR_STATIC_ASSERT(offsetof(struct BotPhysics, rotXZ) == 0x0);
@@ -2065,11 +2130,42 @@ CTR_STATIC_ASSERT(ACTION_HUMAN_HUMAN_COLLISION == 0x10000000);
 CTR_STATIC_ASSERT(ACTION_REVERSE_STEER_LEFT == 0x20000000);
 CTR_STATIC_ASSERT(ACTION_REVERSE_STEER_RIGHT == 0x40000000);
 CTR_STATIC_ASSERT(ACTION_DROPPING_MINE == 0x80000000u);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_BACK_LEFT == 0x1);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_BACK_RIGHT == 0x2);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_FRONT_LEFT == 0x4);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_FRONT_RIGHT == 0x8);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_CURRENT_FRAME_MASK == 0xf);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_HISTORY_MASK == 0xfffff);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_HISTORY_SHIFT == 4);
+CTR_STATIC_ASSERT(DRIVER_SKIDMARK_FRAME_INDEX_MASK == 0x7);
 CTR_STATIC_ASSERT(sizeof(DriverCollisionFlags) == 0x2);
 CTR_STATIC_ASSERT(sizeof(RainCloudEffect) == 0x2);
+CTR_STATIC_ASSERT(sizeof(DriverHeldItem) == 0x1);
+CTR_STATIC_ASSERT(HELD_ITEM_TURBO == 0);
+CTR_STATIC_ASSERT(HELD_ITEM_BOMB_1X == 1);
+CTR_STATIC_ASSERT(HELD_ITEM_MISSILE_1X == 2);
+CTR_STATIC_ASSERT(HELD_ITEM_BOMB_MISSILE_SHARED == 2);
+CTR_STATIC_ASSERT(HELD_ITEM_TNT == 3);
+CTR_STATIC_ASSERT(HELD_ITEM_POTION == 4);
+CTR_STATIC_ASSERT(HELD_ITEM_SPRING == 5);
+CTR_STATIC_ASSERT(HELD_ITEM_SHIELD == 6);
+CTR_STATIC_ASSERT(HELD_ITEM_MASK == 7);
+CTR_STATIC_ASSERT(HELD_ITEM_CLOCK == 8);
+CTR_STATIC_ASSERT(HELD_ITEM_WARPBALL == 9);
+CTR_STATIC_ASSERT(HELD_ITEM_BOMB_3X == 0xa);
+CTR_STATIC_ASSERT(HELD_ITEM_MISSILE_3X == 0xb);
+CTR_STATIC_ASSERT(HELD_ITEM_INVISIBILITY == 0xc);
+CTR_STATIC_ASSERT(HELD_ITEM_SUPER_ENGINE == 0xd);
+CTR_STATIC_ASSERT(HELD_ITEM_NONE == 0xf);
+CTR_STATIC_ASSERT(HELD_ITEM_ROULETTE == 0x10);
+CTR_STATIC_ASSERT(HELD_ITEM_STACK_COUNT == 3);
+CTR_STATIC_ASSERT(DRIVER_WUMPA_JUICED_COUNT == 10);
+CTR_STATIC_ASSERT(DRIVER_WUMPA_MAX_COUNT == 10);
+CTR_STATIC_ASSERT(DRIVER_WUMPA_JUICED_HUD_COOLDOWN_FRAMES == 10);
+CTR_STATIC_ASSERT(sizeof(((struct Driver *)0)->heldItemID) == 0x1);
 CTR_STATIC_ASSERT(sizeof(union VehEmitterSkidmark) == 0x10);
-CTR_STATIC_ASSERT(offsetof(union VehEmitterSkidmark, edge[0]) == 0x0);
-CTR_STATIC_ASSERT(offsetof(union VehEmitterSkidmark, edge[1]) == 0x8);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_ARRAY(union VehEmitterSkidmark, edge, 0) == 0x0);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_ARRAY(union VehEmitterSkidmark, edge, 1) == 0x8);
 CTR_STATIC_ASSERT(offsetof(union VehEmitterSkidmark, edge0) == 0x0);
 CTR_STATIC_ASSERT(offsetof(union VehEmitterSkidmark, color) == 0x6);
 CTR_STATIC_ASSERT(offsetof(union VehEmitterSkidmark, flags) == 0x7);
@@ -2201,6 +2297,9 @@ CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.RevEngine.releaseCooldownTi
 CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.RevEngine.emptyCooldownTimerMS) == 0x590);
 CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.RevEngine.chargeState) == 0x592);
 CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.RevEngine.lockoutFlags) == 0x593);
+CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.Warp) == 0x580);
+CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.Warp.dustAngle) == 0x58c);
+CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.Warp.beamHeight) == 0x590);
 CTR_STATIC_ASSERT(offsetof(struct Driver, rotCurr.x) == 0x2ec);
 CTR_STATIC_ASSERT(offsetof(struct Driver, rotCurr.y) == 0x2ee);
 CTR_STATIC_ASSERT(offsetof(struct Driver, rotCurr.z) == 0x2f0);
@@ -2210,3 +2309,5 @@ CTR_STATIC_ASSERT(offsetof(struct Driver, rotPrev.y) == 0x2f6);
 CTR_STATIC_ASSERT(offsetof(struct Driver, rotPrev.z) == 0x2f8);
 CTR_STATIC_ASSERT(offsetof(struct Driver, rotPrev.w) == 0x2fa);
 CTR_STATIC_ASSERT(offsetof(struct Driver, KartStates.MaskGrab.AngleAxis_NormalVec) == 0x584);
+
+#endif

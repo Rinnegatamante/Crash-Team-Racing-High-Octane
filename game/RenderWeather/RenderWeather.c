@@ -3,12 +3,6 @@
 #define RENDER_WEATHER_XY_MASK   0xfffeffffu
 #define RENDER_WEATHER_WRAP_MASK 0x07fe07ffu
 
-struct RenderWeatherTrigPair
-{
-	s32 sin;
-	s32 cos;
-};
-
 struct RenderWeatherScratch
 {
 	u32 colorTop;
@@ -35,21 +29,21 @@ static u32 RenderWeather_ReadWord(const void *base, int offset)
 	return *(const u32 *)(const void *)((const char *)base + offset);
 }
 
-static struct RenderWeatherTrigPair RenderWeather_TrigAngleSinCos(int angle)
+static struct TrigPair RenderWeather_TrigAngleSinCos(int angle)
 {
-	u32 packed = RenderWeather_ReadWord(&data.trigApprox[angle & 0x3ff], 0);
-	struct RenderWeatherTrigPair pair;
+	u32 packed = RenderWeather_ReadWord(&data.trigApprox[ANG_MODULO_HALF_PI(angle)], 0);
+	struct TrigPair pair;
 
 	// NOTE(aalhendi): PSX-backfeed blocker: retail calls
 	// TRIG_AngleSinCos_r16r17r18 with angle in s0 and returns sine/cosine in
 	// s1/s2. Native C uses an explicit helper; restore the register ABI before
 	// PSX backfeed.
-	if ((angle & 0x400) == 0)
+	if (IS_ANG_FIRST_OR_THIRD_QUADRANT(angle))
 	{
 		pair.sin = (s16)packed;
 		pair.cos = (s16)(packed >> 16);
 
-		if ((angle & 0x800) != 0)
+		if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			pair.sin = -pair.sin;
 			pair.cos = -pair.cos;
@@ -60,7 +54,7 @@ static struct RenderWeatherTrigPair RenderWeather_TrigAngleSinCos(int angle)
 		pair.sin = (s16)(packed >> 16);
 		pair.cos = (s16)packed;
 
-		if ((angle & 0x800) != 0)
+		if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			pair.sin = -pair.sin;
 		}
@@ -117,7 +111,7 @@ static int RenderWeather_IsVisible(u32 gteFlag, u32 sxy0, u32 sxy1, u32 screenBo
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006f9a8-0x8006fe08
-void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBuffer *rainBuffer, char numPlyr, int gameMode1)
+void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBuffer *rainBuffer, u8 numPlyr, int gameMode1)
 {
 	u32 *prim = (u32 *)primMem->cursor;
 	u32 *rainWords = (u32 *)(void *)rainBuffer;
@@ -125,7 +119,8 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	// registers in scratchpad 0x00-0x2c. Native C relies on the host ABI; restore
 	// the scratchpad register-save prologue/epilogue before PSX backfeed.
 	struct RenderWeatherScratch *scratch = CTR_SCRATCHPAD_PTR(struct RenderWeatherScratch, 0x30);
-	struct RenderWeatherTrigPair trig;
+	struct TrigPair trig;
+	u32 centerX;
 	u32 screenBounds;
 	uint32_t *ot;
 	s32 currentParticles;
@@ -171,7 +166,8 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	CTC2(RenderWeather_ReadWord(&pb->matrix_ViewProj, 0x10), 4);
 
 	trig = RenderWeather_TrigAngleSinCos(pb->rot.y);
-	scratch->packedCenterXY = 0x04000000u | (u32)((trig.sin >> 2) + 0x400);
+	centerX = (u32)((trig.sin >> 2) + 0x400);
+	scratch->packedCenterXY = 0x04000000u | centerX;
 	scratch->centerZ = (u32)((trig.cos >> 2) + 0x400);
 
 	screenBounds = RenderWeather_ReadWord(pb, 0x20);
@@ -244,9 +240,9 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	smoothedCameraXY = (cameraXY - cameraCorrectionXY) & RENDER_WEATHER_XY_MASK;
 	smoothedCameraZ = cameraZ - ((cameraZ - prevCameraZ) >> 3);
 
-	startXY = ((scrollXYStart - smoothedCameraXY) & RENDER_WEATHER_XY_MASK) + scratch->packedCenterXY;
+	startXY = ((scrollXYStart - smoothedCameraXY) & RENDER_WEATHER_XY_MASK) + centerX;
 	startXY &= RENDER_WEATHER_XY_MASK;
-	endXY = ((scrollXYEnd - cameraXY) & RENDER_WEATHER_XY_MASK) + scratch->packedCenterXY;
+	endXY = ((scrollXYEnd - cameraXY) & RENDER_WEATHER_XY_MASK) + centerX;
 	endXY &= RENDER_WEATHER_XY_MASK;
 	startZ = (scrollZStart - smoothedCameraZ) + (s32)scratch->centerZ;
 	endZ = (scrollZEnd - cameraZ) + (s32)scratch->centerZ;

@@ -8,18 +8,18 @@ int LOAD_HowlHeaderSectors(CdlFILE *cdlFileHWL, void *ptrDestination, int firstS
 	CDSYS_SetMode_StreamData();
 
 	// Return error, if reading out-of-bounds after the end of KART HWL
-	int sizeOver = ((firstSector + numSector) * 0x800 - cdlFileHWL->size);
-	if (sizeOver >= 0x800)
+	int sizeOver = ((firstSector + numSector) * LOAD_CD_DATA_SECTOR_SIZE - cdlFileHWL->size);
+	if (sizeOver >= LOAD_CD_DATA_SECTOR_SIZE)
 	{
 		return 0;
 	}
 
 	CdIntToPos(CdPosToInt(&cdlFileHWL->pos) + firstSector, &loc);
 
-	char buf[8];
+	u8 buf[8];
 	CdControl(CdlSetloc, (u8 *)&loc, buf);
 
-	if (CdRead(numSector, ptrDestination, 0x80) == 0)
+	if (CdRead(numSector, ptrDestination, CdlModeSpeed) == 0)
 	{
 		return 0;
 	}
@@ -35,6 +35,7 @@ int LOAD_HowlHeaderSectors(CdlFILE *cdlFileHWL, void *ptrDestination, int firstS
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003254c-0x80032594.
 void LOAD_HowlCallback(u8 result, u8 *unk)
 {
+	(void)unk;
 	// disable callback
 	CdReadCallback(0);
 
@@ -67,21 +68,21 @@ int LOAD_HowlSectorChainStart(CdlFILE *cdlFileHWL, void *ptrDestination, int fir
 	CDSYS_SetMode_StreamData();
 
 	// Return error, if reading out-of-bounds after the end of KART HWL
-	int sizeOver = ((firstSector + numSector) * 0x800 - cdlFileHWL->size);
-	if (sizeOver >= 0x800)
+	int sizeOver = ((firstSector + numSector) * LOAD_CD_DATA_SECTOR_SIZE - cdlFileHWL->size);
+	if (sizeOver >= LOAD_CD_DATA_SECTOR_SIZE)
 	{
 		return 0;
 	}
 
 	CdIntToPos(CdPosToInt(&cdlFileHWL->pos) + firstSector, &loc);
 
-	char buf[8];
+	u8 buf[8];
 	CdControl(CdlSetloc, (u8 *)&loc, buf);
 
 	sdata->howlChainState = 1;
 
 	CdReadCallback(LOAD_HowlCallback);
-	return (CdRead(numSector, ptrDestination, 0x80) != 0);
+	return (CdRead(numSector, ptrDestination, CdlModeSpeed) != 0);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003266c-0x800326b4.

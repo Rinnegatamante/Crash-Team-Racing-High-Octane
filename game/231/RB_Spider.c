@@ -100,8 +100,8 @@ void RB_Spider_DrawWebs(struct Thread *t, struct PushBuffer *pb)
 				p->tpage = 0xe1000a20;
 				p->f2.tag = 0;
 
-				*(u32 *)&p->f2.x0 = MFC2(12);
-				*(u32 *)&p->f2.x1 = MFC2(13);
+				CtrGpu_WritePackedXY(&p->f2.x0, MFC2(12));
+				CtrGpu_WritePackedXY(&p->f2.x1, MFC2(13));
 
 				lineColor = 0x3f;
 				if (depth > 0xa00)
@@ -149,9 +149,6 @@ s16 spiderArr[] = {
 
 void RB_Spider_ThTick(struct Thread *t)
 {
-	s16 sVar2;
-	int iVar3;
-
 	u8 prevKartState;
 	struct GameTracker *gGT;
 	struct Instance *hitInst;
@@ -171,26 +168,26 @@ void RB_Spider_ThTick(struct Thread *t)
 	spider->unused++;
 
 	// If spider is on ground
-	if (spider->boolNearRoof == 0)
+	if (spider->isNearRoof == 0)
 	{
 		if (4 < spider->animLoopCount)
 		{
 			// Play animation backwards
-			sVar2 = spiderInst->animFrame - 1;
+			s16 animFrame = spiderInst->animFrame - 1;
 
 			// if animation is at beginning
-			if (sVar2 < 1)
+			if (animFrame < 1)
 			{
 				spiderInst->animFrame = 0;
 				spider->animLoopCount = 0;
-				spider->boolNearRoof = 1;
+				spider->isNearRoof = 1;
 				goto setWiggleAnimation;
 			}
 
-			spiderInst->animFrame = sVar2;
+			spiderInst->animFrame = animFrame;
 
 			// last frame of last animation
-			if (sVar2 == 0xc)
+			if (animFrame == 0xc)
 			{
 				PlaySound3D(0x79, spiderInst);
 			}
@@ -198,16 +195,16 @@ void RB_Spider_ThTick(struct Thread *t)
 			goto updatePosScale;
 		}
 
-		sVar2 = spiderInst->animFrame;
-		iVar3 = INSTANCE_GetNumAnimFrames(spiderInst, spiderInst->animIndex);
+		s16 animFrame = spiderInst->animFrame;
+		int numAnimFrames = INSTANCE_GetNumAnimFrames(spiderInst, spiderInst->animIndex);
 
-		if (iVar3 <= sVar2 + 1)
+		if (numAnimFrames <= animFrame + 1)
 		{
 			spiderInst->animFrame = 0;
-			sVar2 = spider->animLoopCount;
-			spider->animLoopCount = sVar2 + 1;
+			s16 animLoopCount = spider->animLoopCount;
+			spider->animLoopCount = animLoopCount + 1;
 
-			if ((s16)(sVar2 + 1) == 5)
+			if ((s16)(animLoopCount + 1) == 5)
 			{
 				spiderInst->animIndex = 0;
 				spiderInst->animFrame = INSTANCE_GetNumAnimFrames(spiderInst, 0) - 1;
@@ -222,17 +219,17 @@ void RB_Spider_ThTick(struct Thread *t)
 	{
 		if (4 < spider->animLoopCount)
 		{
-			sVar2 = spiderInst->animFrame;
-			iVar3 = INSTANCE_GetNumAnimFrames(spiderInst, 0);
+			s16 animFrame = spiderInst->animFrame;
+			int numAnimFrames = INSTANCE_GetNumAnimFrames(spiderInst, 0);
 
-			if (sVar2 + 1 < iVar3)
+			if (animFrame + 1 < numAnimFrames)
 			{
 				spiderInst->animFrame++;
 			}
 			else
 			{
 				spider->animLoopCount = 0;
-				spider->boolNearRoof = 0;
+				spider->isNearRoof = 0;
 			setWiggleAnimation:
 				spiderInst->animIndex = 1;
 			}
@@ -249,16 +246,16 @@ void RB_Spider_ThTick(struct Thread *t)
 			goto checkCollision;
 		}
 
-		sVar2 = spiderInst->animFrame;
-		iVar3 = INSTANCE_GetNumAnimFrames(spiderInst, spiderInst->animIndex);
+		s16 animFrame = spiderInst->animFrame;
+		int numAnimFrames = INSTANCE_GetNumAnimFrames(spiderInst, spiderInst->animIndex);
 
-		if (iVar3 <= sVar2 + 1)
+		if (numAnimFrames <= animFrame + 1)
 		{
 			spiderInst->animFrame = 0;
-			sVar2 = spider->animLoopCount;
-			spider->animLoopCount = sVar2 + 1;
+			s16 animLoopCount = spider->animLoopCount;
+			spider->animLoopCount = animLoopCount + 1;
 
-			if ((s16)(sVar2 + 1) == 5)
+			if ((s16)(animLoopCount + 1) == 5)
 			{
 				spiderInst->animIndex = 0;
 				spiderInst->animFrame = 0;
@@ -283,7 +280,7 @@ checkCollision:
 			hitInst = (struct Instance *)LinkedCollide_Radius(spiderInst, t, gGT->threadBuckets[MINE].thread, 0x9000);
 			if (hitInst != NULL)
 			{
-				hitInst->thread->funcThCollide(hitInst->thread);
+				((ThreadSimpleCollideFunc)hitInst->thread->funcThCollide)(hitInst->thread);
 			}
 
 			return;
@@ -337,7 +334,7 @@ void RB_Spider_LInB(struct Instance *inst)
 	}
 
 	spider = t->object;
-	t->funcThCollide = (void (*)(struct Thread *))RB_Spider_ThCollide;
+	t->funcThCollide = (void *)RB_Spider_ThCollide;
 	t->inst = inst;
 
 	inst->scale.x = 0x1c00;
@@ -347,7 +344,7 @@ void RB_Spider_LInB(struct Instance *inst)
 
 	spiderID = inst->name[strlen(inst->name) - 1] - '0';
 	spider->spiderID = spiderID;
-	spider->boolNearRoof = 1;
+	spider->isNearRoof = 1;
 	spider->animLoopCount = 0;
 
 	if (spiderID == 3)
@@ -367,11 +364,7 @@ void RB_Spider_LInB(struct Instance *inst)
 
 	spider->shadowInst = shadowInst;
 
-	*(int *)&shadowInst->matrix.m[0][0] = *(int *)&inst->matrix.m[0][0];
-	*(int *)&shadowInst->matrix.m[0][2] = *(int *)&inst->matrix.m[0][2];
-	*(int *)&shadowInst->matrix.m[1][1] = *(int *)&inst->matrix.m[1][1];
-	*(int *)&shadowInst->matrix.m[2][0] = *(int *)&inst->matrix.m[2][0];
-	shadowInst->matrix.m[2][2] = inst->matrix.m[2][2];
+	CTR_MatrixCopyRot(&shadowInst->matrix, &inst->matrix);
 
 	shadowInst->matrix.t[0] = inst->matrix.t[0];
 	shadowInst->matrix.t[1] = inst->matrix.t[1] - 8;

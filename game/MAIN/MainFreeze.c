@@ -50,7 +50,7 @@ void MainFreeze_ConfigDrawArrows(s16 offsetX, s16 offsetY, char *str)
 {
 	int lineWidth;
 	int color;
-	u8 **colorPtr;
+	u32 *colorPtr;
 	struct GameTracker *gGT = sdata->gGT;
 
 	// orange color
@@ -65,7 +65,7 @@ void MainFreeze_ConfigDrawArrows(s16 offsetX, s16 offsetY, char *str)
 	lineWidth = DecalFont_GetLineWidth(str, 1) >> 1;
 
 	// get color data
-	colorPtr = (u8 **)&data.ptrColor[color];
+	colorPtr = data.ptrColor[color];
 
 	struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[4]);
 
@@ -83,7 +83,7 @@ void MainFreeze_ConfigDrawArrows(s16 offsetX, s16 offsetY, char *str)
 	    gGT->pushBuffer_UI.ptrOT,
 
 	    // color data
-	    *colorPtr[0], *colorPtr[1], *colorPtr[2], *colorPtr[3],
+	    colorPtr[0], colorPtr[1], colorPtr[2], colorPtr[3],
 
 	    0, FP(1.0), 0x800);
 
@@ -101,7 +101,7 @@ void MainFreeze_ConfigDrawArrows(s16 offsetX, s16 offsetY, char *str)
 	    gGT->pushBuffer_UI.ptrOT,
 
 	    // color data
-	    *colorPtr[0], *colorPtr[1], *colorPtr[2], *colorPtr[3],
+	    colorPtr[0], colorPtr[1], colorPtr[2], colorPtr[3],
 
 	    0, FP(1.0), 0);
 
@@ -369,6 +369,7 @@ typedef struct
 
 force_inline void IDENTIFYGAMEPADS_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAMEPAD_MainFreeze_MenuPtrOptions *gamepad)
 {
+	(void)menu;
 	struct GameTracker *gGT = sdata->gGT;
 
 	// get number of ordinary gamepads and/or "analog controllers" connected, and which players are using which
@@ -463,7 +464,7 @@ force_inline b32 PROCESSINPUTS_MainFreeze_MenuPtrOptions(struct RectMenu *menu, 
 			OptionsMenu_TestSound(menu->rowSelected, 1);
 			if (sdata->AnyPlayerHold & (BTN_LEFT | BTN_RIGHT))
 			{
-				int volume = howl_VolumeGet(menu->rowSelected);
+				int volume = howl_VolumeGet(menu->rowSelected) & 0xff;
 
 				if (sdata->AnyPlayerHold & BTN_LEFT)
 				{
@@ -592,11 +593,10 @@ force_inline void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *men
 		}
 	}
 
-	// drawStyle needs research...
-	menu->drawStyle &= 0xfeff;
+	menu->drawStyle &= ~RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 	if (gGT->numPlyrCurrGame > 2)
 	{
-		menu->drawStyle |= 0x100;
+		menu->drawStyle |= RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 	}
 
 	int volumeSliderTriangleLeftMargin = 0;
@@ -795,7 +795,7 @@ void MainFreeze_MenuPtrQuit(struct RectMenu *menu)
 	s16 row;
 	struct GameTracker *gGT = sdata->gGT;
 
-	if (menu->unk1e == 0)
+	if (menu->funcState == RECTMENU_FUNC_STATE_INPUT)
 	{
 		row = menu->rowSelected;
 		if (row == 0)
@@ -822,17 +822,17 @@ void MainFreeze_MenuPtrQuit(struct RectMenu *menu)
 
 		if ((row == 1) || (row == -1))
 		{
-			sdata->ptrActiveMenu = MainFreeze_GetMenuPtr();
+			sdata->ptrDesiredMenu = MainFreeze_GetMenuPtr();
 		}
 	}
 	else
 	{
-		menu->drawStyle &= ~0x100;
+		menu->drawStyle &= ~RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 
 		// if more than 2 screens
 		if (gGT->numPlyrCurrGame > 2)
 		{
-			menu->drawStyle |= 0x100;
+			menu->drawStyle |= RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 		}
 
 		MainFreeze_SafeAdvDestroy();
@@ -850,7 +850,7 @@ void MainFreeze_SafeAdvDestroy(void)
 	}
 
 	// check if Adv Hub is loaded
-	if (LOAD_IsOpen_AdvHub() == 0)
+	if (!LOAD_IsOpen_AdvHub())
 	{
 		return;
 	}
@@ -869,8 +869,6 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 	struct GameTracker *gGT = sdata->gGT;
 	gameMode = gGT->gameMode1;
 
-	u8 ADV_CUP = 100;
-
 	// if you have not waited 5 frames since the game was paused then quit
 	if (gGT->cooldownfromPauseUntilUnpause != 0)
 	{
@@ -879,14 +877,14 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 
 	// assume 5 frames have passed since paused
 
-	if (menu->unk1e != 0)
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
 	{
-		menu->drawStyle &= 0xfeff;
+		menu->drawStyle &= ~RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 
 		// if more than 2 screens
 		if (2 < gGT->numPlyrCurrGame)
 		{
-			menu->drawStyle |= 0x100;
+			menu->drawStyle |= RECTMENU_DRAW_STYLE_3P4P_LAYOUT;
 		}
 
 		if (((gameMode & ADVENTURE_ARENA) == 0) || (menu->state & NEEDS_TO_CLOSE))
@@ -895,7 +893,7 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 		}
 
 		// quit adv hub if it's not loaded
-		if (LOAD_IsOpen_AdvHub() == 0)
+		if (!LOAD_IsOpen_AdvHub())
 		{
 			return;
 		}
@@ -960,7 +958,7 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 		// get rid of pause flag
 		gGT->gameMode1 &= ~PAUSE_1;
 
-		if (RaceFlag_IsFullyOffScreen() == 1)
+		if (RaceFlag_IsFullyOffScreen())
 		{
 			// checkered flag, begin transition on-screen
 			RaceFlag_BeginTransition(1);
@@ -1103,7 +1101,7 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 			sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_CUP | RELIC_RACE | CRYSTAL_CHALLENGE;
 
 			// Level ID
-			gGT->levelID = gGT->cup.cupID + ADV_CUP;
+			gGT->levelID = gGT->cup.cupID + ADVENTURE_CUP_SYNTHETIC_LEVEL_ID_BASE;
 		}
 		break;
 	default:
@@ -1162,12 +1160,12 @@ void MainFreeze_IfPressStart(void)
 	u32 gameMode1;
 	struct RectMenu *menu;
 
-	if (RaceFlag_IsFullyOnScreen() != 0)
+	if (RaceFlag_IsFullyOnScreen())
 	{
 		return;
 	}
 
-	if ((gGT->renderFlags & 0x1000) != 0)
+	if ((gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0)
 	{
 		return;
 	}

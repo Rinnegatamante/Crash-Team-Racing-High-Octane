@@ -1,18 +1,33 @@
 #include <macros.h>
 #include <platform/native_assets.h>
 #include <platform/native_cd.h>
+#include <platform/native_disc_image.h>
 #include <platform/native_path.h>
 #include <psx/libcd.h>
 
 #include <stdio.h>
 #include <string.h>
 
-// NOTE(aalhendi): Native exports the retail Cd* API, but backs data loads with
-// extracted host files. This is not a full PS1 CD-ROM/STR streaming emulator.
+// NOTE(aalhendi): Native exports the retail Cd* API. Extracted host files stay
+// as dev/modding overrides; missing files can fall back to assets/ctr-u.bin.
 
 #define NATIVE_CD_SECTOR_WORDS   512
 #define NATIVE_CD_MAX_OPEN_FILES 8
 #define NATIVE_CD_SECTOR_SIZE    0x800
+
+enum NativeCDFileSource
+{
+	NATIVE_CD_FILE_NONE,
+	NATIVE_CD_FILE_HOST,
+	NATIVE_CD_FILE_DISC,
+};
+
+struct NativeCDOpenFile
+{
+	int source;
+	FILE *hostFile;
+	struct NativeDiscImageFile discFile;
+};
 
 global_variable s32 s_cdDebugLevel;
 global_variable s32 s_cdLastCom;
@@ -20,9 +35,10 @@ global_variable CdlCB s_cdReadyCallback;
 global_variable CdlCB s_cdSyncCallback;
 global_variable u32 s_cdSectorData[NATIVE_CD_SECTOR_WORDS];
 global_variable CdlCB s_nativeCdReadCallback;
-global_variable FILE *s_nativeCdFiles[NATIVE_CD_MAX_OPEN_FILES];
+global_variable struct NativeCDOpenFile s_nativeCdFiles[NATIVE_CD_MAX_OPEN_FILES];
 global_variable s32 s_nativeCdFileCount;
 global_variable s32 s_nativeCdCurrentFile;
+global_variable s32 s_nativeCdCurrentSector;
 
 int boolDecodeXaDuringVsyncCallback;
 
@@ -58,12 +74,13 @@ internal NativeStr8 NativeCD_PathAfterRoot(NativeStr8 filename)
 	return filename;
 }
 
-internal s32 NativeCD_OpenHostFile(const char *filename, s32 *outSize)
+internal s32 NativeCD_OpenFile(const char *filename, s32 *outSize)
 {
 	char normalized[256];
 	char rootlessPath[256];
 	NativeStr8 rootless;
 	FILE *file;
+	struct NativeDiscImageFile discFile;
 	s32 fileIndex;
 	long fileSize;
 
@@ -79,7 +96,7 @@ internal s32 NativeCD_OpenHostFile(const char *filename, s32 *outSize)
 
 	rootless = NativeCD_PathAfterRoot(NativeStr8_FromCString(normalized));
 
-	file = NativeAssets_OpenStr8(rootless, "rb");
+	file = NativeAssets_OpenHostStr8(rootless, "rb");
 	if ((file == NULL) && NativeStr8_CopyToCString(rootlessPath, sizeof(rootlessPath), rootless))
 	{
 		file = fopen(rootlessPath, "rb");
@@ -87,7 +104,17 @@ internal s32 NativeCD_OpenHostFile(const char *filename, s32 *outSize)
 
 	if (file == NULL)
 	{
-		return -1;
+		if (!NativeStr8_CopyToCString(rootlessPath, sizeof(rootlessPath), rootless) || !NativeDiscImage_FindFile(rootlessPath, &discFile))
+		{
+			return -1;
+		}
+
+		fileIndex = s_nativeCdFileCount++;
+		memset(&s_nativeCdFiles[fileIndex], 0, sizeof(s_nativeCdFiles[fileIndex]));
+		s_nativeCdFiles[fileIndex].source = NATIVE_CD_FILE_DISC;
+		s_nativeCdFiles[fileIndex].discFile = discFile;
+		*outSize = (s32)discFile.size;
+		return fileIndex;
 	}
 
 	if (fseek(file, 0, SEEK_END) != 0)
@@ -110,12 +137,14 @@ internal s32 NativeCD_OpenHostFile(const char *filename, s32 *outSize)
 	}
 
 	fileIndex = s_nativeCdFileCount++;
-	s_nativeCdFiles[fileIndex] = file;
+	memset(&s_nativeCdFiles[fileIndex], 0, sizeof(s_nativeCdFiles[fileIndex]));
+	s_nativeCdFiles[fileIndex].source = NATIVE_CD_FILE_HOST;
+	s_nativeCdFiles[fileIndex].hostFile = file;
 	*outSize = (s32)fileSize;
 	return fileIndex;
 }
 
-internal s32 NativeCD_SearchHostFile(CdlFILE *loc, const char *filename)
+internal s32 NativeCD_SearchFile(CdlFILE *loc, const char *filename)
 {
 	char normalized[256];
 	char rootlessPath[256];
@@ -129,7 +158,7 @@ internal s32 NativeCD_SearchHostFile(CdlFILE *loc, const char *filename)
 		return 0;
 	}
 
-	fileIndex = NativeCD_OpenHostFile(filename, &fileSize);
+	fileIndex = NativeCD_OpenFile(filename, &fileSize);
 	if (fileIndex < 0)
 	{
 		return 0;
@@ -151,12 +180,17 @@ internal s32 NativeCD_SearchHostFile(CdlFILE *loc, const char *filename)
 	memcpy(&loc->pos, &encodedPos, sizeof(encodedPos));
 	loc->size = fileSize;
 	memset(loc->name, 0, sizeof(loc->name));
-	strncpy(loc->name, rootlessPath, sizeof(loc->name) - 1);
+	size_t nameLen = rootless.len;
+	if (nameLen >= sizeof(loc->name))
+	{
+		nameLen = sizeof(loc->name) - 1;
+	}
+	memcpy(loc->name, rootless.ptr, nameLen);
 
 	return 1;
 }
 
-internal s32 NativeCD_HostPosToInt(const CdlLOC *pos)
+internal s32 NativeCD_PosToInt(const CdlLOC *pos)
 {
 	s32 value;
 
@@ -164,43 +198,60 @@ internal s32 NativeCD_HostPosToInt(const CdlLOC *pos)
 	return value;
 }
 
-internal void NativeCD_HostIntToPos(s32 value, CdlLOC *pos)
+internal void NativeCD_IntToPos(s32 value, CdlLOC *pos)
 {
 	memcpy(pos, &value, sizeof(value));
 }
 
-internal s32 NativeCD_SetHostLoc(const CdlLOC *pos)
+internal s32 NativeCD_SetLoc(const CdlLOC *pos)
 {
 	s32 encodedPos;
 	s32 fileIndex;
 	s32 sector;
 
-	encodedPos = NativeCD_HostPosToInt(pos);
+	encodedPos = NativeCD_PosToInt(pos);
 	fileIndex = (encodedPos >> 24) & 0xff;
 	sector = encodedPos & 0xffffff;
 
-	if ((fileIndex < 0) || (fileIndex >= s_nativeCdFileCount) || (s_nativeCdFiles[fileIndex] == NULL))
+	if ((fileIndex < 0) || (fileIndex >= s_nativeCdFileCount) || (s_nativeCdFiles[fileIndex].source == NATIVE_CD_FILE_NONE))
 	{
 		return 0;
 	}
 
 	s_nativeCdCurrentFile = fileIndex;
+	s_nativeCdCurrentSector = sector;
 
-	return fseek(s_nativeCdFiles[s_nativeCdCurrentFile], sector * NATIVE_CD_SECTOR_SIZE, SEEK_SET) == 0;
+	if (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_DISC)
+	{
+		return 1;
+	}
+
+	return fseek(s_nativeCdFiles[s_nativeCdCurrentFile].hostFile, sector * NATIVE_CD_SECTOR_SIZE, SEEK_SET) == 0;
 }
 
-internal s32 NativeCD_ReadHostSectors(s32 sectors, void *dst)
+internal s32 NativeCD_ReadSectors(s32 sectors, void *dst)
 {
 	size_t byteCount;
 
-	if ((s_nativeCdCurrentFile < 0) || (s_nativeCdCurrentFile >= s_nativeCdFileCount) || (s_nativeCdFiles[s_nativeCdCurrentFile] == NULL))
+	if ((s_nativeCdCurrentFile < 0) || (s_nativeCdCurrentFile >= s_nativeCdFileCount) || (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_NONE))
 	{
 		return 0;
 	}
 
 	byteCount = (size_t)sectors * NATIVE_CD_SECTOR_SIZE;
 
-	return fread(dst, 1, byteCount, s_nativeCdFiles[s_nativeCdCurrentFile]) == byteCount;
+	if (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_DISC)
+	{
+		if (!NativeDiscImage_ReadDataSectors(&s_nativeCdFiles[s_nativeCdCurrentFile].discFile, (u32)s_nativeCdCurrentSector, (u32)sectors, dst))
+		{
+			return 0;
+		}
+
+		s_nativeCdCurrentSector += sectors;
+		return 1;
+	}
+
+	return fread(dst, 1, byteCount, s_nativeCdFiles[s_nativeCdCurrentFile].hostFile) == byteCount;
 }
 
 internal void NativeCD_SetLastCom(int com)
@@ -210,11 +261,25 @@ internal void NativeCD_SetLastCom(int com)
 
 int NativeCD_Init(void)
 {
+	s32 i;
+
+	for (i = 0; i < s_nativeCdFileCount; i++)
+	{
+		if (s_nativeCdFiles[i].hostFile != NULL)
+		{
+			fclose(s_nativeCdFiles[i].hostFile);
+		}
+	}
+
 	s_cdDebugLevel = 0;
 	s_cdLastCom = 0;
 	s_cdReadyCallback = NULL;
 	s_cdSyncCallback = NULL;
 	s_nativeCdReadCallback = NULL;
+	memset(s_nativeCdFiles, 0, sizeof(s_nativeCdFiles));
+	s_nativeCdFileCount = 0;
+	s_nativeCdCurrentFile = -1;
+	s_nativeCdCurrentSector = 0;
 	memset(s_cdSectorData, 0, sizeof(s_cdSectorData));
 	return 0;
 }
@@ -222,6 +287,8 @@ int NativeCD_Init(void)
 int CdInit(void)
 {
 	s_cdLastCom = 0;
+	s_nativeCdCurrentFile = -1;
+	s_nativeCdCurrentSector = 0;
 	memset(s_cdSectorData, 0, sizeof(s_cdSectorData));
 	return 1;
 }
@@ -280,18 +347,18 @@ CdlCB CdReadCallback(CdlCB func)
 
 int CdPosToInt(CdlLOC *p)
 {
-	return NativeCD_HostPosToInt(p);
+	return NativeCD_PosToInt(p);
 }
 
 CdlLOC *CdIntToPos(int val, CdlLOC *p)
 {
-	NativeCD_HostIntToPos(val, p);
+	NativeCD_IntToPos(val, p);
 	return p;
 }
 
 CdlFILE *CdSearchFile(CdlFILE *loc, char *filename)
 {
-	if (NativeCD_SearchHostFile(loc, filename) == 0)
+	if (NativeCD_SearchFile(loc, filename) == 0)
 	{
 		return NULL;
 	}
@@ -307,7 +374,7 @@ int CdControl(uint8_t com, uint8_t *param, uint8_t *result)
 
 	if ((com == CdlSetloc) && (param != NULL))
 	{
-		NativeCD_SetHostLoc((const CdlLOC *)param);
+		NativeCD_SetLoc((const CdlLOC *)param);
 	}
 
 	if ((com == CdlSetmode) && (param != NULL))
@@ -330,7 +397,7 @@ int CdRead(int sectors, uint32_t *buf, int mode)
 {
 	(void)mode;
 
-	NativeCD_ReadHostSectors(sectors, buf);
+	NativeCD_ReadSectors(sectors, buf);
 
 	if (s_nativeCdReadCallback != 0)
 	{

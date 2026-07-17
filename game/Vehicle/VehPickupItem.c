@@ -24,14 +24,220 @@ static inline void VehPickupItem_ClearMineMotion(struct MineWeapon *mine)
 	mine->stopFallAtY = 0;
 }
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80064be4-0x80064c38.
-int VehPickupItem_MaskBoolGoodGuy(struct Driver *d)
+enum
 {
-	int charID;
-	charID = data.characterIDs[d->driverID];
+	MASK_GOOD_GUY_CHARACTER_BITS = 0x20c9,
+	MASK_MODEL_COUNT = 2,
+	MASK_SOUND_ID_OFFSET_FROM_MODEL = 0x1a,
+	MASK_BEAM_MODEL_STRIDE = 2,
+	MASK_INITIAL_ROT_X = 0x40,
+};
+
+enum
+{
+	POTION_THROW_RANDOM = 0x1,
+	POTION_THROW_BACKWARD = 0x2,
+	POTION_THROW_FORWARD = 0x4,
+	POTION_THROW_RANDOM_MASK = 0x1f,
+	POTION_THROW_RANDOM_BIAS = 0x10,
+	POTION_THROW_SPEED = 0x78,
+	POTION_THROW_Y_VELOCITY = 0x30,
+	POTION_THROW_MATRIX_SHIFT = 12,
+};
+
+enum
+{
+	MISSILE_TARGET_DRIVER_COUNT = 8,
+	MISSILE_TARGET_DISTANCE_SENTINEL = 0x7fffffff,
+	MISSILE_TARGET_POS_SHIFT = 8,
+	MISSILE_TARGET_GTE_RTPS_OVERFLOW = 0x40000,
+	MISSILE_TARGET_SCREEN_LEFT = 0x1f,
+	MISSILE_TARGET_SCREEN_RIGHT_MARGIN = 0x1e,
+	MISSILE_TARGET_SCREEN_TOP = 0x15,
+	MISSILE_TARGET_SCREEN_BOTTOM_MARGIN = 0x14,
+};
+
+enum
+{
+	WEAPON_ID_TURBO = 0,
+	WEAPON_ID_BOMB_MISSILE = 2,
+	WEAPON_ID_MINE = 3,
+	WEAPON_ID_BEAKER = 4,
+	WEAPON_ID_SHIELD = 6,
+	WEAPON_ID_MASK = 7,
+	WEAPON_ID_CLOCK = 8,
+	WEAPON_ID_WARPBALL = 9,
+	WEAPON_ID_INVISIBILITY = 0xc,
+	WEAPON_ID_SUPER_ENGINE = 0xd,
+	SHOOT_NOW_NO_FLAGS = 0,
+	SHOOT_NOW_BACKWARD = 0x2,
+	TURBO_ITEM_BOOST_NORMAL = 0x80,
+	TURBO_ITEM_BOOST_JUICED = 0x100,
+	TURBO_ITEM_RESERVES = 0x960,
+	TURBO_ITEM_FIRE_FLAGS = FREEZE_RESERVES_ON_TURBO_PAD | TURBO_ITEM,
+	WEAPON_GAMEPAD_RUMBLE_FRAMES = 8,
+	WEAPON_GAMEPAD_RUMBLE_FORCE = 0x7f,
+	ACTIVE_MISSILE_LIMIT = 12,
+	MISSILE_RACE_FALLBACK_EVENT_MASK = 1,
+	MISSILE_TRACKER_VELOCITY_NUMERATOR = 5,
+	MISSILE_TRACKER_VELOCITY_SHIFT = 8,
+	TRACKER_LAUNCH_VELOCITY_NUMERATOR = 3,
+	TRACKER_LAUNCH_VELOCITY_SHIFT = 7,
+	TRACKER_PARENT_SAFETY_FRAMES = 60,
+	MINE_PARENT_SAFETY_FRAMES = 10,
+	MINE_COLL_PROBE_TOP_Y_OFFSET = -400,
+	MINE_COLL_PROBE_BOTTOM_Y_OFFSET = 64,
+	MINE_COLL_SEARCH_PLAYER_THRESHOLD = 3,
+	MINE_COLL_CALLBACK_FLAGS = 0x40,
+	MINE_COLL_SCRATCH_OFFSET = 0x108,
+	MINE_HITBOX_FRUIT_MODEL = PU_FRUIT_CRATE,
+	MINE_HITBOX_RANDOM_MODEL = PU_RANDOM_CRATE,
+	BEAKER_MODEL_HEADER_CAMERA_FLAG = 0x2,
+	SHIELD_DARK_MODEL = DYNAMIC_SHIELD_DARK,
+	SHIELD_SCALE = 0x700,
+	SHIELD_HIGHLIGHT_ROT_Y = 0xc00,
+	SHIELD_DURATION_NORMAL = 0x2d00,
+	SHIELD_ALPHA_SCALE = 0x400,
+	CLOCK_HURT_DURATION_NORMAL = 0x1e00,
+	CLOCK_HURT_DURATION_JUICED = 0x2d00,
+	CLOCK_FLASH_FRAMES = 4,
+	CLOCK_SELF_SEND_FRAMES = 0x1e,
+	CLOCK_DRIVER_COUNT = 8,
+	CLOCK_HURT_REASON = 1,
+	WARPBALL_MODEL = DYNAMIC_WARPBALL,
+	WARPBALL_MATRIX_IDENTITY_SCALE = FP(1.0),
+	WARPBALL_POS_SHIFT = 8,
+	WARPBALL_PARENT_SAFETY_FRAMES = 10,
+	WARPBALL_VELOCITY_NUMERATOR = 7,
+	WARPBALL_VELOCITY_SHIFT = 8,
+	WARPBALL_PARTICLE_ICON_GROUP = 0,
+	WARPBALL_PARTICLE_OT_OFFSET = -6,
+	INVISIBILITY_CLEAR_DRAW_FLAGS = ~(DRAW_TRANSPARENT | GHOST_DRAW_TRANSPARENT),
+	INVISIBILITY_DURATION_NORMAL = 0x1e00,
+	INVISIBILITY_DURATION_JUICED = 0x2d00,
+	SUPER_ENGINE_DURATION_NORMAL = 0x1e00,
+	SUPER_ENGINE_DURATION_JUICED = 0x2d00,
+	SOUND_BOMB_LAUNCH = 0x47,
+	SOUND_MISSILE_LAUNCH = 0x4a,
+	SOUND_MINE_DROP = 0x52,
+	SOUND_SHIELD = 0x57,
+	SOUND_CLOCK = 0x44,
+	SOUND_WARPBALL = 0x4d,
+	SOUND_INVISIBILITY = 0x61,
+	VOICELINE_BOMB_LAUNCH = 10,
+	VOICELINE_MISSILE_LAUNCH = 11,
+	VOICELINE_MINE_DROP = 0xf,
+	VOICELINE_CLOCK = 0xe,
+	VOICELINE_WARPBALL = 0xc,
+	VOICELINE_WEAPON_PRIORITY = 0x10,
+};
+
+CTR_STATIC_ASSERT(MASK_GOOD_GUY_CHARACTER_BITS == 0x20c9);
+CTR_STATIC_ASSERT(MASK_MODEL_COUNT == 2);
+CTR_STATIC_ASSERT(MASK_SOUND_ID_OFFSET_FROM_MODEL == 0x1a);
+CTR_STATIC_ASSERT(MASK_BEAM_MODEL_STRIDE == 2);
+CTR_STATIC_ASSERT(MASK_INITIAL_ROT_X == 0x40);
+CTR_STATIC_ASSERT((s32)STATIC_UKAUKA - 1 == (s32)STATIC_AKUAKU);
+CTR_STATIC_ASSERT((s32)STATIC_AKUAKU + MASK_SOUND_ID_OFFSET_FROM_MODEL == 0x53);
+CTR_STATIC_ASSERT((s32)STATIC_UKAUKA + MASK_SOUND_ID_OFFSET_FROM_MODEL == 0x54);
+CTR_STATIC_ASSERT(POTION_THROW_RANDOM == 0x1);
+CTR_STATIC_ASSERT(POTION_THROW_BACKWARD == 0x2);
+CTR_STATIC_ASSERT(POTION_THROW_FORWARD == 0x4);
+CTR_STATIC_ASSERT(POTION_THROW_RANDOM_MASK == 0x1f);
+CTR_STATIC_ASSERT(POTION_THROW_RANDOM_BIAS == 0x10);
+CTR_STATIC_ASSERT(POTION_THROW_SPEED == 0x78);
+CTR_STATIC_ASSERT(POTION_THROW_Y_VELOCITY == 0x30);
+CTR_STATIC_ASSERT(POTION_THROW_MATRIX_SHIFT == 12);
+CTR_STATIC_ASSERT(MISSILE_TARGET_DRIVER_COUNT == 8);
+CTR_STATIC_ASSERT(MISSILE_TARGET_DRIVER_COUNT == len(((struct GameTracker *)0)->drivers));
+CTR_STATIC_ASSERT(MISSILE_TARGET_DISTANCE_SENTINEL == 0x7fffffff);
+CTR_STATIC_ASSERT(MISSILE_TARGET_POS_SHIFT == 8);
+CTR_STATIC_ASSERT(MISSILE_TARGET_GTE_RTPS_OVERFLOW == 0x40000);
+CTR_STATIC_ASSERT(MISSILE_TARGET_SCREEN_LEFT == 0x1f);
+CTR_STATIC_ASSERT(MISSILE_TARGET_SCREEN_RIGHT_MARGIN == 0x1e);
+CTR_STATIC_ASSERT(MISSILE_TARGET_SCREEN_TOP == 0x15);
+CTR_STATIC_ASSERT(MISSILE_TARGET_SCREEN_BOTTOM_MARGIN == 0x14);
+CTR_STATIC_ASSERT(WEAPON_ID_TURBO == 0);
+CTR_STATIC_ASSERT(WEAPON_ID_BOMB_MISSILE == 2);
+CTR_STATIC_ASSERT(WEAPON_ID_MINE == 3);
+CTR_STATIC_ASSERT(WEAPON_ID_BEAKER == 4);
+CTR_STATIC_ASSERT(WEAPON_ID_SHIELD == 6);
+CTR_STATIC_ASSERT(WEAPON_ID_MASK == 7);
+CTR_STATIC_ASSERT(WEAPON_ID_CLOCK == 8);
+CTR_STATIC_ASSERT(WEAPON_ID_WARPBALL == 9);
+CTR_STATIC_ASSERT(WEAPON_ID_INVISIBILITY == 0xc);
+CTR_STATIC_ASSERT(WEAPON_ID_SUPER_ENGINE == 0xd);
+CTR_STATIC_ASSERT(SHOOT_NOW_NO_FLAGS == 0);
+CTR_STATIC_ASSERT(SHOOT_NOW_BACKWARD == 0x2);
+CTR_STATIC_ASSERT((s32)SHOOT_NOW_BACKWARD == (s32)POTION_THROW_BACKWARD);
+CTR_STATIC_ASSERT(TURBO_ITEM_BOOST_NORMAL == 0x80);
+CTR_STATIC_ASSERT(TURBO_ITEM_BOOST_JUICED == 0x100);
+CTR_STATIC_ASSERT(TURBO_ITEM_RESERVES == 0x960);
+CTR_STATIC_ASSERT(TURBO_ITEM_FIRE_FLAGS == 9);
+CTR_STATIC_ASSERT(WEAPON_GAMEPAD_RUMBLE_FRAMES == 8);
+CTR_STATIC_ASSERT(WEAPON_GAMEPAD_RUMBLE_FORCE == 0x7f);
+CTR_STATIC_ASSERT(ACTIVE_MISSILE_LIMIT == 12);
+CTR_STATIC_ASSERT(MISSILE_RACE_FALLBACK_EVENT_MASK == 1);
+CTR_STATIC_ASSERT(MISSILE_TRACKER_VELOCITY_NUMERATOR == 5);
+CTR_STATIC_ASSERT(MISSILE_TRACKER_VELOCITY_SHIFT == 8);
+CTR_STATIC_ASSERT(TRACKER_LAUNCH_VELOCITY_NUMERATOR == 3);
+CTR_STATIC_ASSERT(TRACKER_LAUNCH_VELOCITY_SHIFT == 7);
+CTR_STATIC_ASSERT(TRACKER_PARENT_SAFETY_FRAMES == 60);
+CTR_STATIC_ASSERT(MINE_PARENT_SAFETY_FRAMES == 10);
+CTR_STATIC_ASSERT(MINE_COLL_PROBE_TOP_Y_OFFSET == -400);
+CTR_STATIC_ASSERT(MINE_COLL_PROBE_BOTTOM_Y_OFFSET == 64);
+CTR_STATIC_ASSERT(MINE_COLL_SEARCH_PLAYER_THRESHOLD == 3);
+CTR_STATIC_ASSERT(MINE_COLL_CALLBACK_FLAGS == 0x40);
+CTR_STATIC_ASSERT(MINE_COLL_SCRATCH_OFFSET == 0x108);
+CTR_STATIC_ASSERT((s32)MINE_HITBOX_FRUIT_MODEL == (s32)PU_FRUIT_CRATE);
+CTR_STATIC_ASSERT((s32)MINE_HITBOX_RANDOM_MODEL == (s32)PU_RANDOM_CRATE);
+CTR_STATIC_ASSERT(BEAKER_MODEL_HEADER_CAMERA_FLAG == 0x2);
+CTR_STATIC_ASSERT((s32)SHIELD_DARK_MODEL == (s32)DYNAMIC_SHIELD_DARK);
+CTR_STATIC_ASSERT(SHIELD_SCALE == 0x700);
+CTR_STATIC_ASSERT(SHIELD_HIGHLIGHT_ROT_Y == 0xc00);
+CTR_STATIC_ASSERT(SHIELD_DURATION_NORMAL == 0x2d00);
+CTR_STATIC_ASSERT(SHIELD_ALPHA_SCALE == 0x400);
+CTR_STATIC_ASSERT(CLOCK_HURT_DURATION_NORMAL == 0x1e00);
+CTR_STATIC_ASSERT(CLOCK_HURT_DURATION_JUICED == 0x2d00);
+CTR_STATIC_ASSERT(CLOCK_FLASH_FRAMES == 4);
+CTR_STATIC_ASSERT(CLOCK_SELF_SEND_FRAMES == 0x1e);
+CTR_STATIC_ASSERT(CLOCK_DRIVER_COUNT == 8);
+CTR_STATIC_ASSERT(CLOCK_DRIVER_COUNT == len(((struct GameTracker *)0)->drivers));
+CTR_STATIC_ASSERT(CLOCK_HURT_REASON == 1);
+CTR_STATIC_ASSERT((s32)WARPBALL_MODEL == (s32)DYNAMIC_WARPBALL);
+CTR_STATIC_ASSERT(WARPBALL_MATRIX_IDENTITY_SCALE == 0x1000);
+CTR_STATIC_ASSERT(WARPBALL_POS_SHIFT == 8);
+CTR_STATIC_ASSERT(WARPBALL_PARENT_SAFETY_FRAMES == 10);
+CTR_STATIC_ASSERT(WARPBALL_VELOCITY_NUMERATOR == 7);
+CTR_STATIC_ASSERT(WARPBALL_VELOCITY_SHIFT == 8);
+CTR_STATIC_ASSERT(WARPBALL_PARTICLE_ICON_GROUP == 0);
+CTR_STATIC_ASSERT(WARPBALL_PARTICLE_OT_OFFSET == -6);
+CTR_STATIC_ASSERT((u32)INVISIBILITY_CLEAR_DRAW_FLAGS == 0xfff8ffffu);
+CTR_STATIC_ASSERT(INVISIBILITY_DURATION_NORMAL == 0x1e00);
+CTR_STATIC_ASSERT(INVISIBILITY_DURATION_JUICED == 0x2d00);
+CTR_STATIC_ASSERT(SUPER_ENGINE_DURATION_NORMAL == 0x1e00);
+CTR_STATIC_ASSERT(SUPER_ENGINE_DURATION_JUICED == 0x2d00);
+CTR_STATIC_ASSERT(SOUND_BOMB_LAUNCH == 0x47);
+CTR_STATIC_ASSERT(SOUND_MISSILE_LAUNCH == 0x4a);
+CTR_STATIC_ASSERT(SOUND_MINE_DROP == 0x52);
+CTR_STATIC_ASSERT(SOUND_SHIELD == 0x57);
+CTR_STATIC_ASSERT(SOUND_CLOCK == 0x44);
+CTR_STATIC_ASSERT(SOUND_WARPBALL == 0x4d);
+CTR_STATIC_ASSERT(SOUND_INVISIBILITY == 0x61);
+CTR_STATIC_ASSERT(VOICELINE_BOMB_LAUNCH == 10);
+CTR_STATIC_ASSERT(VOICELINE_MISSILE_LAUNCH == 11);
+CTR_STATIC_ASSERT(VOICELINE_MINE_DROP == 0xf);
+CTR_STATIC_ASSERT(VOICELINE_CLOCK == 0xe);
+CTR_STATIC_ASSERT(VOICELINE_WARPBALL == 0xc);
+CTR_STATIC_ASSERT(VOICELINE_WEAPON_PRIORITY == 0x10);
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80064be4-0x80064c38.
+b32 VehPickupItem_MaskBoolGoodGuy(struct Driver *d)
+{
+	s32 charID = data.characterIDs[d->driverID];
 
 	// Crash, Coco, Pura, Polar, Penta
-	u32 maskBits = 0x20c9;
+	u32 maskBits = MASK_GOOD_GUY_CHARACTER_BITS;
 
 	return (maskBits >> charID) & 1;
 }
@@ -51,7 +257,7 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 
 	gGT = sdata->gGT;
 
-	if ((LOAD_IsOpen_RacingOrBattle() == 0) || ((gGT->gameMode1 & ADVENTURE_ARENA) != 0))
+	if (!LOAD_IsOpen_RacingOrBattle() || ((gGT->gameMode1 & ADVENTURE_ARENA) != 0))
 	{
 		// no mask object in adv arena
 		maskObj = NULL;
@@ -64,7 +270,7 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 	for (currThread = t->childThread; currThread != 0; currThread = currThread->siblingThread)
 	{
 		// if thread->modelIndex is NOT Aku or Uka
-		if ((u32)(currThread->modelIndex - STATIC_AKUAKU) >= 2)
+		if ((u32)(currThread->modelIndex - STATIC_AKUAKU) >= MASK_MODEL_COUNT)
 		{
 			continue;
 		}
@@ -72,7 +278,7 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 		currThread->funcThTick = RB_MaskWeapon_ThTick;
 
 		maskObj = currThread->object;
-		maskObj->duration = (driver->numWumpas < 10) ? 0x1e00 : 0x2d00;
+		maskObj->duration = (driver->numWumpas < DRIVER_WUMPA_JUICED_COUNT) ? MASK_HEAD_DURATION_NORMAL : MASK_HEAD_DURATION_JUICED;
 
 		if (
 		    // If this is human and not AI
@@ -80,13 +286,7 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 
 		    (boolPlaySound != 0))
 		{
-			// 0x3a: uka model
-			// 0x39: aku model
-
-			// 0x54: uka sound
-			// 0x53: aku model
-
-			soundID = currThread->modelIndex + 0x1A;
+			soundID = currThread->modelIndex + MASK_SOUND_ID_OFFSET_FROM_MODEL;
 			OtherFX_Play_Echo(soundID, 1, driver->actionsFlagSet & ACTION_ENGINE_ECHO);
 		}
 
@@ -99,13 +299,11 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 
 	b32 boolGoodGuy = VehPickupItem_MaskBoolGoodGuy(driver);
 
-	int modelID = STATIC_UKAUKA - boolGoodGuy;
+	s32 modelID = STATIC_UKAUKA - boolGoodGuy;
 
-	// 0x3a: uka head model idx in modelPtr array
 	instance = INSTANCE_BirthWithThread(modelID, sdata->s_doctor1, SMALL, OTHER, RB_MaskWeapon_ThTick, sizeof(struct MaskHeadWeapon), t);
 
-	soundID = modelID + 0x1A;
-
+	soundID = modelID + MASK_SOUND_ID_OFFSET_FROM_MODEL;
 
 	if (
 	    // If this is human and not AI
@@ -128,13 +326,7 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 		}
 	}
 
-	// 0x3a: uka model
-	// 0x39: aku model
-
-	// 0x40: uka beam
-	// 0x3E: aku beam
-
-	modelPtr = gGT->modelPtr[STATIC_AKUBEAM + ((modelID - STATIC_AKUAKU) * 2)];
+	modelPtr = gGT->modelPtr[STATIC_AKUBEAM + ((modelID - STATIC_AKUAKU) * MASK_BEAM_MODEL_STRIDE)];
 
 	t = instance->thread;
 
@@ -153,18 +345,18 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 	t->flags |= THREAD_FLAG_DISABLE_COLLISION;
 	instance->flags |= HIDE_MODEL;
 	maskObj->maskBeamInst->flags |= HIDE_MODEL;
-	maskObj->duration = (driver->numWumpas > 9) ? 0x2d00 : 0x1e00;
-	maskObj->rot.x = 0x40;
+	maskObj->duration = (driver->numWumpas < DRIVER_WUMPA_JUICED_COUNT) ? MASK_HEAD_DURATION_NORMAL : MASK_HEAD_DURATION_JUICED;
+	maskObj->rot.x = MASK_INITIAL_ROT_X;
 	maskObj->rot.y = 0;
 	maskObj->rot.z = 0;
-	maskObj->scale = 0x1000; // scale
+	maskObj->scale = MASK_HEAD_SCALE_NORMAL;
 
 	return maskObj;
 }
 
 static struct PushBuffer *VehPickupItem_GetDriverPushBuffer(struct GameTracker *gGT, u8 driverID)
 {
-	return (struct PushBuffer *)((u8 *)&gGT->pushBuffer[0] + (driverID * sizeof(struct PushBuffer)));
+	return &gGT->pushBuffer[driverID];
 }
 
 static void VehPickupItem_MissileLoadPlayerView(struct GameTracker *gGT, struct Driver *driver)
@@ -177,11 +369,11 @@ static void VehPickupItem_MissileLoadPlayerView(struct GameTracker *gGT, struct 
 
 static void VehPickupItem_MissileLoadAiView(struct Driver *driver)
 {
-	SVECTOR rot = {driver->rotCurr.x, driver->rotCurr.y, driver->rotCurr.z, 0};
-	MATRIX matrix;
+	SVec3 rot = {.x = driver->rotCurr.x, .y = driver->rotCurr.y, .z = driver->rotCurr.z};
+	MATRIX matrix = {0};
 	MATRIX unusedInverse;
 
-	RotMatrix(&rot, &matrix);
+	ConvertRotToMatrix(&matrix, &rot);
 	matrix.t[0] = CTR_MipsSra(driver->posCurr.x, 8);
 	matrix.t[1] = CTR_MipsSra(driver->posCurr.y, 8);
 	matrix.t[2] = CTR_MipsSra(driver->posCurr.z, 8);
@@ -192,7 +384,7 @@ static void VehPickupItem_MissileLoadAiView(struct Driver *driver)
 	SetTransMatrix(&matrix);
 }
 
-static int VehPickupItem_MissileCandidateVisible(struct PushBuffer *pb, struct Driver *candidate)
+static b32 VehPickupItem_MissileCandidateVisible(struct PushBuffer *pb, struct Driver *candidate)
 {
 	struct Instance *inst = candidate->instSelf;
 	u32 sxy;
@@ -206,27 +398,27 @@ static int VehPickupItem_MissileCandidateVisible(struct PushBuffer *pb, struct D
 
 	sxy = MFC2(14);
 	gteFlag = CFC2(31);
-	if ((gteFlag & 0x40000) != 0)
+	if ((gteFlag & MISSILE_TARGET_GTE_RTPS_OVERFLOW) != 0)
 	{
 		return 0;
 	}
 
 	screenX = (s16)sxy;
-	if (screenX < 0x1f)
+	if (screenX < MISSILE_TARGET_SCREEN_LEFT)
 	{
 		return 0;
 	}
-	if (screenX >= pb->rect.w - 0x1e)
+	if (screenX >= pb->rect.w - MISSILE_TARGET_SCREEN_RIGHT_MARGIN)
 	{
 		return 0;
 	}
 
 	screenY = (s16)(sxy >> 16);
-	if (screenY < 0x15)
+	if (screenY < MISSILE_TARGET_SCREEN_TOP)
 	{
 		return 0;
 	}
-	if (screenY >= pb->rect.h - 0x14)
+	if (screenY >= pb->rect.h - MISSILE_TARGET_SCREEN_BOTTOM_MARGIN)
 	{
 		return 0;
 	}
@@ -239,7 +431,7 @@ struct Driver *VehPickupItem_MissileGetTargetDriver(struct Driver *driver)
 {
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *target = NULL;
-	s32 closestDistance = 0x7fffffff;
+	s32 closestDistance = MISSILE_TARGET_DISTANCE_SENTINEL;
 	struct PushBuffer *pb = VehPickupItem_GetDriverPushBuffer(gGT, driver->driverID);
 
 	if (driver->instSelf->thread->modelIndex == DYNAMIC_PLAYER)
@@ -251,7 +443,7 @@ struct Driver *VehPickupItem_MissileGetTargetDriver(struct Driver *driver)
 		VehPickupItem_MissileLoadAiView(driver);
 	}
 
-	for (int i = 0; i < 8; i++)
+	for (s32 i = 0; i < MISSILE_TARGET_DRIVER_COUNT; i++)
 	{
 		struct Driver *candidate = gGT->drivers[i];
 
@@ -283,8 +475,8 @@ struct Driver *VehPickupItem_MissileGetTargetDriver(struct Driver *driver)
 			continue;
 		}
 
-		s32 dx = CTR_MipsSra(CTR_MipsSubLo(candidate->posCurr.x, driver->posCurr.x), 8);
-		s32 dz = CTR_MipsSra(CTR_MipsSubLo(candidate->posCurr.z, driver->posCurr.z), 8);
+		s32 dx = CTR_MipsSra(CTR_MipsSubLo(candidate->posCurr.x, driver->posCurr.x), MISSILE_TARGET_POS_SHIFT);
+		s32 dz = CTR_MipsSra(CTR_MipsSubLo(candidate->posCurr.z, driver->posCurr.z), MISSILE_TARGET_POS_SHIFT);
 		s32 distance = CTR_MipsAddLo(CTR_MipsMulLo(dx, dx), CTR_MipsMulLo(dz, dz));
 		if (distance < closestDistance)
 		{
@@ -297,41 +489,41 @@ struct Driver *VehPickupItem_MissileGetTargetDriver(struct Driver *driver)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800652c8-0x8006540c.
-u32 VehPickupItem_PotionThrow(struct MineWeapon *mine, struct Instance *inst, u32 flags)
+b32 VehPickupItem_PotionThrow(struct MineWeapon *mine, struct Instance *inst, u32 flags)
 {
 	s32 throwVelocity;
 
-	if ((flags & 4) == 0)
+	if ((flags & POTION_THROW_FORWARD) == 0)
 	{
-		if ((flags & 2) == 0)
+		if ((flags & POTION_THROW_BACKWARD) == 0)
 		{
-			if ((flags & 1) == 0)
+			if ((flags & POTION_THROW_RANDOM) == 0)
 			{
 				return 0;
 			}
 
-			throwVelocity = (MixRNG_Scramble() & 0x1f) - 0x10;
+			throwVelocity = (MixRNG_Scramble() & POTION_THROW_RANDOM_MASK) - POTION_THROW_RANDOM_BIAS;
 		}
 		else
 		{
-			throwVelocity = -0x78;
+			throwVelocity = -POTION_THROW_SPEED;
 		}
 	}
 	else
 	{
-		throwVelocity = 0x78;
+		throwVelocity = POTION_THROW_SPEED;
 	}
 
-	mine->velocity.x = (inst->matrix.m[0][2] * throwVelocity) >> 12;
-	mine->velocity.y = 0x30;
-	mine->velocity.z = (inst->matrix.m[2][2] * throwVelocity) >> 12;
+	mine->velocity.x = (inst->matrix.m[0][2] * throwVelocity) >> POTION_THROW_MATRIX_SHIFT;
+	mine->velocity.y = POTION_THROW_Y_VELOCITY;
+	mine->velocity.z = (inst->matrix.m[2][2] * throwVelocity) >> POTION_THROW_MATRIX_SHIFT;
 	mine->crateInst = NULL;
-	mine->extraFlags |= 2;
+	mine->flags |= MINE_WEAPON_FLAG_THROWN;
 
 	return 1;
 }
 
-void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
+void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006540c-0x800666e4.
 	struct Instance *dInst;
@@ -347,21 +539,21 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 	switch (weaponID)
 	{
 	// Turbo
-	case 0:
+	case WEAPON_ID_TURBO:
 	{
-		int boost = 0x80;
-		if (d->numWumpas >= 10)
+		int boost = TURBO_ITEM_BOOST_NORMAL;
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			boost = 0x100;
+			boost = TURBO_ITEM_BOOST_JUICED;
 		}
 
-		VehFire_Increment(d, 0x960, 9, boost);
+		VehFire_Increment(d, TURBO_ITEM_RESERVES, TURBO_ITEM_FIRE_FLAGS, boost);
 	}
 	break;
 
 	// Shared code for Bomb and Missile
-	case 2:
-		if (gGT->numMissiles >= 12)
+	case WEAPON_ID_BOMB_MISSILE:
+		if (gGT->numMissiles >= ACTIVE_MISSILE_LIMIT)
 		{
 			return;
 		}
@@ -369,8 +561,8 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		gGT->numMissiles++;
 		d->numTimesMissileLaunched++;
 
-		GAMEPAD_ShockFreq(d, 8, 0);
-		GAMEPAD_ShockForce1(d, 8, 0x7f);
+		GAMEPAD_ShockFreq(d, WEAPON_GAMEPAD_RUMBLE_FRAMES, 0);
+		GAMEPAD_ShockForce1(d, WEAPON_GAMEPAD_RUMBLE_FRAMES, WEAPON_GAMEPAD_RUMBLE_FORCE);
 
 		struct Driver *victim = VehPickupItem_MissileGetTargetDriver(d);
 
@@ -378,9 +570,9 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		if (victim == 0)
 		{
 			// if not battle mode
-			if ((gGT->gameMode1 & 0x20) == 0)
+			if ((gGT->gameMode1 & BATTLE_MODE) == 0)
 			{
-				if (gGT->elapsedEventTime & 1)
+				if ((gGT->elapsedEventTime & MISSILE_RACE_FALLBACK_EVENT_MASK) != 0)
 				{
 					// if not DYNAMIC_PLAYER
 					if (d->instSelf->thread->modelIndex != DYNAMIC_PLAYER)
@@ -396,9 +588,9 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 
 			else
 			{
-				int closest = 0x7fffffff;
+				int closest = MISSILE_TARGET_DISTANCE_SENTINEL;
 
-				for (int i = 0; i < 8; i++)
+				for (int i = 0; i < MISSILE_TARGET_DRIVER_COUNT; i++)
 				{
 					struct Driver *tempD = gGT->drivers[i];
 
@@ -423,8 +615,8 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 						continue;
 					}
 
-					int distX = CTR_MipsSra(CTR_MipsSubLo(tempD->posCurr.x, d->posCurr.x), 8);
-					int distZ = CTR_MipsSra(CTR_MipsSubLo(tempD->posCurr.z, d->posCurr.z), 8);
+					int distX = CTR_MipsSra(CTR_MipsSubLo(tempD->posCurr.x, d->posCurr.x), MISSILE_TARGET_POS_SHIFT);
+					int distZ = CTR_MipsSra(CTR_MipsSubLo(tempD->posCurr.z, d->posCurr.z), MISSILE_TARGET_POS_SHIFT);
 
 					int dist = CTR_MipsAddLo(CTR_MipsMulLo(distX, distX), CTR_MipsMulLo(distZ, distZ));
 					if (dist < closest)
@@ -445,7 +637,7 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		char *weaponName = rdata.s_bombtracker1;
 
 		// bomb
-		if ((d->heldItemID == 1) || (d->heldItemID == 10))
+		if ((d->heldItemID == HELD_ITEM_BOMB_1X) || (d->heldItemID == HELD_ITEM_BOMB_3X))
 		{
 			modelID = DYNAMIC_BOMB;
 			bucket = OTHER;
@@ -467,12 +659,12 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyTracker;
-		weaponTh->funcThCollide = RB_Hazard_ThCollide_Missile;
+		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Missile;
 
 		tw = weaponTh->object;
 		tw->flags = 0;
-		tw->framesSeekMine = 0;
-		tw->audioPtr = 0;
+		tw->framesSeekTargetTnt = 0;
+		tw->soundIDCount = 0;
 		tw->timeAlive = 0;
 		tw->driverParent = d;
 		tw->driverTarget = victim;
@@ -483,7 +675,7 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		// bomb
 		if (modelID == DYNAMIC_BOMB)
 		{
-			talk = 10;
+			talk = VOICELINE_BOMB_LAUNCH;
 			d->instBombThrow = weaponInst;
 
 			SVECTOR rot;
@@ -494,13 +686,13 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 			tw->dir.y = rot.vx;
 			tw->dir.z = rot.vz;
 
-			PlaySound3D(0x47, weaponInst);
+			PlaySound3D(SOUND_BOMB_LAUNCH, weaponInst);
 		}
 
 		// missile
 		else
 		{
-			talk = 11;
+			talk = VOICELINE_MISSILE_LAUNCH;
 
 			if (victim != 0)
 			{
@@ -510,13 +702,13 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 				}
 			}
 
-			PlaySound3D(0x4a, weaponInst);
+			PlaySound3D(SOUND_MISSILE_LAUNCH, weaponInst);
 		}
 
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(talk, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(talk, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
 
 		tw->rotY = d->rotCurr.y;
@@ -524,12 +716,12 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		// do NOT patch for 60fps,
 		// velocity uses elapsedTime
 		tw->vel.y = 0;
-		tw->vel.x = (weaponInst->matrix.m[0][2] * 3) >> 7;
-		tw->vel.z = (weaponInst->matrix.m[2][2] * 3) >> 7;
+		tw->vel.x = (weaponInst->matrix.m[0][2] * TRACKER_LAUNCH_VELOCITY_NUMERATOR) >> TRACKER_LAUNCH_VELOCITY_SHIFT;
+		tw->vel.z = (weaponInst->matrix.m[2][2] * TRACKER_LAUNCH_VELOCITY_NUMERATOR) >> TRACKER_LAUNCH_VELOCITY_SHIFT;
 
-		if (d->numWumpas >= 10)
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			tw->flags |= 1;
+			tw->flags |= TRACKER_FLAG_POWERED_UP;
 		}
 
 		// bomb
@@ -542,9 +734,9 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 			    ((gb->buttonsHeldCurrFrame & BTN_DOWN) != 0) ||
 
 			    // pinstripe
-			    ((flags & 2) != 0))
+			    ((flags & SHOOT_NOW_BACKWARD) != 0))
 			{
-				tw->flags |= 0x20;
+				tw->flags |= TRACKER_FLAG_BOMB_BACKWARD;
 
 				tw->vel.x = -(((tw->vel.x >> 1) * 3) / 5);
 				tw->vel.z = -(((tw->vel.z >> 1) * 3) / 5);
@@ -554,26 +746,26 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		// missile
 		else
 		{
-			if (d->numWumpas < 10)
+			if (d->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
 			{
 				// do NOT patch for 60fps,
 				// velocity uses elapsedTime
-				tw->vel.x = (weaponInst->matrix.m[0][2] * 5) >> 8;
-				tw->vel.z = (weaponInst->matrix.m[2][2] * 5) >> 8;
+				tw->vel.x = (weaponInst->matrix.m[0][2] * MISSILE_TRACKER_VELOCITY_NUMERATOR) >> MISSILE_TRACKER_VELOCITY_SHIFT;
+				tw->vel.z = (weaponInst->matrix.m[2][2] * MISSILE_TRACKER_VELOCITY_NUMERATOR) >> MISSILE_TRACKER_VELOCITY_SHIFT;
 			}
 		}
 
-		tw->frameCount_DontHurtParent = 60;
-		tw->frameCount_Blind = 0;
+		tw->parentSafetyFrames = TRACKER_PARENT_SAFETY_FRAMES;
+		tw->blindFrames = 0;
 		break;
 
 	// TNT/Nitro
-	case 3:
+	case WEAPON_ID_MINE:
 
 		// tnt or nitro
 		modelID = STATIC_CRATE_TNT;
 		char *mineName = sdata->s_tnt1;
-		if (d->numWumpas >= 10)
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
 			modelID = PU_EXPLOSIVE_CRATE;
 			mineName = sdata->s_nitro1;
@@ -591,14 +783,14 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
-		weaponTh->funcThCollide = RB_Hazard_ThCollide_Generic;
+		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
-		PlaySound3D(0x52, weaponInst);
+		PlaySound3D(SOUND_MINE_DROP, weaponInst);
 
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(0xf, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(VOICELINE_MINE_DROP, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
 
 		mw = weaponTh->object;
@@ -607,9 +799,9 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		mw->crateInst = 0;
 		VehPickupItem_ClearMineMotion(mw);
 		mw->boolDestroyed = 0;
-		mw->frameCount_DontHurtParent = 10;
+		mw->parentSafetyFrames = MINE_PARENT_SAFETY_FRAMES;
 		mw->tntSpinY = 0;
-		mw->extraFlags = 0;
+		mw->flags = 0;
 
 		RB_MinePool_Add(mw);
 		VehPickupItem_PotionThrow(mw, weaponInst, flags);
@@ -622,27 +814,27 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		SVec3 probeBottom;
 
 		probeTop.x = (s16)(u16)weaponInst->matrix.t[0];
-		probeTop.y = (s16)CTR_MipsAddLo((u16)weaponInst->matrix.t[1], -400);
+		probeTop.y = (s16)CTR_MipsAddLo((u16)weaponInst->matrix.t[1], MINE_COLL_PROBE_TOP_Y_OFFSET);
 		probeTop.z = (s16)(u16)weaponInst->matrix.t[2];
 
 		probeBottom.x = (s16)(u16)weaponInst->matrix.t[0];
-		probeBottom.y = (s16)CTR_MipsAddLo((u16)weaponInst->matrix.t[1], 64);
+		probeBottom.y = (s16)CTR_MipsAddLo((u16)weaponInst->matrix.t[1], MINE_COLL_PROBE_BOTTOM_Y_OFFSET);
 		probeBottom.z = (s16)(u16)weaponInst->matrix.t[2];
 
-		struct ScratchpadStruct *sps = CTR_SCRATCHPAD_PTR(struct ScratchpadStruct, 0x108);
+		struct ScratchpadStruct *sps = CTR_SCRATCHPAD_PTR(struct ScratchpadStruct, MINE_COLL_SCRATCH_OFFSET);
 
 		sps->Union.QuadBlockColl.quadFlagsWanted = QUADBLOCK_FLAG_GROUND;
 		sps->Union.QuadBlockColl.quadFlagsIgnored = 0;
 
 		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES;
-		if (gGT->numPlyrCurrGame < 3)
+		if (gGT->numPlyrCurrGame < MINE_COLL_SEARCH_PLAYER_THRESHOLD)
 		{
 			sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES | COLL_SEARCH_HIGH_LOD;
 		}
 
 		sps->ptr_mesh_info = gGT->level1->ptr_mesh_info;
 
-		COLL_SearchBSP_CallbackQUADBLK(&probeTop, &probeBottom, sps, 0x40);
+		COLL_SearchBSP_CallbackQUADBLK(&probeTop, &probeBottom, sps, MINE_COLL_CALLBACK_FLAGS);
 
 		if (sps->boolDidTouchHitbox != 0)
 		{
@@ -653,7 +845,7 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 			struct InstDef *instDef = sps->bspHitbox->data.hitbox.instDef;
 
 			s16 modelTouched = instDef->modelID;
-			if ((modelTouched == PU_FRUIT_CRATE) || (modelTouched == PU_RANDOM_CRATE))
+			if ((modelTouched == MINE_HITBOX_FRUIT_MODEL) || (modelTouched == MINE_HITBOX_RANDOM_MODEL))
 			{
 				mw->crateInst = instDef->ptrInstance;
 			}
@@ -688,7 +880,10 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 
 		VehPhysForce_RotAxisAngle(&weaponInst->matrix, rotationNormal, d->angle);
 
-		d->instTntSend = weaponInst;
+		if (weaponID == WEAPON_ID_MINE)
+		{
+			d->instTntSend = weaponInst;
+		}
 
 		// dropped a mine
 		d->actionsFlagSet |= ACTION_DROPPING_MINE;
@@ -700,9 +895,9 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		break;
 
 	// Beaker
-	case 4:
+	case WEAPON_ID_BEAKER:
 
-		if (d->numWumpas < 10)
+		if (d->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
 		{
 			modelID = STATIC_BEAKER_GREEN;
 
@@ -724,18 +919,18 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		VehPickupItem_CopyMatrix(&weaponInst->matrix, &dInst->matrix);
 
 		// potion always faces camera
-		weaponInst->model->headers[0].flags |= 2;
+		weaponInst->model->headers[0].flags |= BEAKER_MODEL_HEADER_CAMERA_FLAG;
 
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
-		weaponTh->funcThCollide = RB_Hazard_ThCollide_Generic;
+		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
-		PlaySound3D(0x52, weaponInst);
+		PlaySound3D(SOUND_MINE_DROP, weaponInst);
 
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(0xf, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(VOICELINE_MINE_DROP, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
 
 		mw = weaponTh->object;
@@ -743,11 +938,11 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		mw->instParent = dInst;
 		mw->crateInst = 0;
 		mw->boolDestroyed = 0;
-		mw->frameCount_DontHurtParent = 10;
-		mw->extraFlags = 0;
+		mw->parentSafetyFrames = MINE_PARENT_SAFETY_FRAMES;
+		mw->flags = 0;
 		if (modelID == STATIC_BEAKER_RED)
 		{
-			mw->extraFlags = 1;
+			mw->flags = MINE_WEAPON_FLAG_RED_BEAKER;
 		}
 
 		struct GamepadBuffer *gb = &sdata->gGamepads->gamepad[d->driverID];
@@ -755,13 +950,13 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		// throw potion forward
 		if ((gb->buttonsHeldCurrFrame & BTN_UP) != 0)
 		{
-			flags |= 4;
+			flags |= POTION_THROW_FORWARD;
 		}
 
 		RB_MinePool_Add(mw);
-		int ret = VehPickupItem_PotionThrow(mw, weaponInst, flags);
+		b32 didThrowPotion = VehPickupItem_PotionThrow(mw, weaponInst, flags);
 
-		if (ret == 0)
+		if (didThrowPotion == 0)
 		{
 			weaponInst->scale.x = 0;
 			weaponInst->scale.y = 0;
@@ -776,37 +971,38 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		break;
 
 	// Shield Bubble
-	case 6:;
+	case WEAPON_ID_SHIELD:;
 
 		char *shieldDarkName = rdata.s_shielddark;
 		char *highlightName = rdata.s_highlight;
 
-		weaponInst = INSTANCE_BirthWithThread(0x5a, shieldDarkName, MEDIUM, OTHER, RB_ShieldDark_ThTick_Grow, sizeof(struct Shield), d->instSelf->thread);
+		weaponInst =
+		    INSTANCE_BirthWithThread(SHIELD_DARK_MODEL, shieldDarkName, MEDIUM, OTHER, RB_ShieldDark_ThTick_Grow, sizeof(struct Shield), d->instSelf->thread);
 
 		weaponTh = weaponInst->thread;
-		weaponInst->scale.x = 0x700;
-		weaponInst->scale.y = 0x700;
-		weaponInst->scale.z = 0x700;
+		weaponInst->scale.x = SHIELD_SCALE;
+		weaponInst->scale.y = SHIELD_SCALE;
+		weaponInst->scale.z = SHIELD_SCALE;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
-		OtherFX_Play(0x57, 1);
+		OtherFX_Play(SOUND_SHIELD, 1);
 
 		modelID = DYNAMIC_SHIELD_GREEN;
-		if (d->numWumpas >= 10)
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
 			modelID = DYNAMIC_SHIELD;
 		}
 
-		struct Instance *instColor = INSTANCE_Birth3D(gGT->modelPtr[modelID], sdata->s_shield, 0);
+		struct Instance *instColor = INSTANCE_Birth3D(gGT->modelPtr[modelID], sdata->s_shield, weaponTh);
 
 		struct Instance *instHighlight = INSTANCE_Birth3D(gGT->modelPtr[DYNAMIC_HIGHLIGHT], highlightName, weaponTh);
 
-		instColor->scale.x = 0x700;
-		instColor->scale.y = 0x700;
-		instColor->scale.z = 0x700;
+		instColor->scale.x = SHIELD_SCALE;
+		instColor->scale.y = SHIELD_SCALE;
+		instColor->scale.z = SHIELD_SCALE;
 
-		instHighlight->scale.x = 0x700;
-		instHighlight->scale.y = 0x700;
-		instHighlight->scale.z = 0x700;
+		instHighlight->scale.x = SHIELD_SCALE;
+		instHighlight->scale.y = SHIELD_SCALE;
+		instHighlight->scale.z = SHIELD_SCALE;
 
 		struct Shield *shieldObj = weaponTh->object;
 		shieldObj->animFrame = 0;
@@ -814,49 +1010,49 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		shieldObj->instColor = instColor;
 		shieldObj->instHighlight = instHighlight;
 		shieldObj->highlightRot.x = 0;
-		shieldObj->highlightRot.y = 0xc00;
+		shieldObj->highlightRot.y = SHIELD_HIGHLIGHT_ROT_Y;
 		shieldObj->highlightRot.z = 0;
 		shieldObj->highlightTimer = 0;
 
-		if (d->numWumpas < 10)
+		if (d->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
 		{
-			shieldObj->duration = 0x2d00;
+			shieldObj->duration = SHIELD_DURATION_NORMAL;
 		}
 		else
 		{
-			shieldObj->flags = 4;
+			shieldObj->flags = SHIELD_FLAG_BLUE;
 		}
 
-		weaponInst->alphaScale = 0x400;
+		weaponInst->alphaScale = SHIELD_ALPHA_SCALE;
 		d->instBubbleHold = weaponInst;
 		break;
 
 	// Mask
-	case 7:
-		VehPickupItem_MaskUseWeapon(d, 1);
+	case WEAPON_ID_MASK:
+		VehPickupItem_MaskUseWeapon(d, true);
 		break;
 
 	// Clock
-	case 8:
+	case WEAPON_ID_CLOCK:
 
 		d->numTimesClockWeaponUsed++;
 
-		OtherFX_Play(0x44, 1);
+		OtherFX_Play(SOUND_CLOCK, 1);
 
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(0xe, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(VOICELINE_CLOCK, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
 
-		int hurtVal = 0x1e00;
-		if (d->numWumpas >= 10)
+		int hurtVal = CLOCK_HURT_DURATION_NORMAL;
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			hurtVal = 0x2d00;
+			hurtVal = CLOCK_HURT_DURATION_JUICED;
 		}
 
 		struct Driver **dptr;
 
-		for (dptr = &gGT->drivers[0]; dptr < &gGT->drivers[8]; dptr++)
+		for (dptr = &gGT->drivers[0]; dptr < &gGT->drivers[CLOCK_DRIVER_COUNT]; dptr++)
 		{
 			struct Driver *victim = *dptr;
 
@@ -865,16 +1061,16 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 				continue;
 			}
 
-			victim->clockFlash = 4;
+			victim->clockFlash = CLOCK_FLASH_FRAMES;
 
 			if (victim == d)
 			{
-				d->clockSend = 0x1e;
+				d->clockSend = CLOCK_SELF_SEND_FRAMES;
 				continue;
 			}
 
 			// if spin out driver
-			if (RB_Hazard_HurtDriver(victim, 1, 0, 0) != 0)
+			if (RB_Hazard_HurtDriver(victim, CLOCK_HURT_REASON, 0, 0) != 0)
 			{
 				victim->clockReceive = hurtVal;
 			}
@@ -882,40 +1078,40 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		break;
 
 	// Warpball
-	case 9:
+	case WEAPON_ID_WARPBALL:
 
 		dInst = d->instSelf;
-		GAMEPAD_ShockFreq(d, 8, 0);
-		GAMEPAD_ShockForce1(d, 8, 0x7f);
+		GAMEPAD_ShockFreq(d, WEAPON_GAMEPAD_RUMBLE_FRAMES, 0);
+		GAMEPAD_ShockForce1(d, WEAPON_GAMEPAD_RUMBLE_FRAMES, WEAPON_GAMEPAD_RUMBLE_FORCE);
 
 		// MEDIUM
 		char *warpballName = rdata.s_warpball;
 
-		weaponInst = INSTANCE_BirthWithThread(0x36, warpballName, MEDIUM, TRACKING, RB_Warpball_ThTick, sizeof(struct TrackerWeapon), 0);
+		weaponInst = INSTANCE_BirthWithThread(WARPBALL_MODEL, warpballName, MEDIUM, TRACKING, RB_Warpball_ThTick, sizeof(struct TrackerWeapon), 0);
 
-		weaponInst->matrix.m[0][0] = 0x1000;
+		weaponInst->matrix.m[0][0] = WARPBALL_MATRIX_IDENTITY_SCALE;
 		weaponInst->matrix.m[0][1] = 0;
 		weaponInst->matrix.m[0][2] = 0;
 		weaponInst->matrix.m[1][0] = 0;
-		weaponInst->matrix.m[1][1] = 0x1000;
+		weaponInst->matrix.m[1][1] = WARPBALL_MATRIX_IDENTITY_SCALE;
 		weaponInst->matrix.m[1][2] = 0;
 		weaponInst->matrix.m[2][0] = 0;
 		weaponInst->matrix.m[2][1] = 0;
-		weaponInst->matrix.m[2][2] = 0x1000;
+		weaponInst->matrix.m[2][2] = WARPBALL_MATRIX_IDENTITY_SCALE;
 
-		weaponInst->matrix.t[0] = CTR_MipsSra(d->posCurr.x, 8);
-		weaponInst->matrix.t[1] = CTR_MipsSra(d->posCurr.y, 8);
-		weaponInst->matrix.t[2] = CTR_MipsSra(d->posCurr.z, 8);
+		weaponInst->matrix.t[0] = CTR_MipsSra(d->posCurr.x, WARPBALL_POS_SHIFT);
+		weaponInst->matrix.t[1] = CTR_MipsSra(d->posCurr.y, WARPBALL_POS_SHIFT);
+		weaponInst->matrix.t[2] = CTR_MipsSra(d->posCurr.z, WARPBALL_POS_SHIFT);
 
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 
-		PlaySound3D(0x4d, weaponInst);
+		PlaySound3D(SOUND_WARPBALL, weaponInst);
 
 		// if human and not AI (AIs can not use Warpball)
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(0xc, data.characterIDs[d->driverID], 0x10);
+			Voiceline_RequestPlay(VOICELINE_WARPBALL, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
 
 		// used by RB_Warpball_SeekDriver
@@ -927,18 +1123,18 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 		}
 
 		tw = weaponTh->object;
-		tw->flags = 8;
-		tw->audioPtr = 0;
+		tw->flags = TRACKER_FLAG_WARPBALL_FALLBACK_PATH;
+		tw->soundIDCount = 0;
 		tw->ptrNodeNext = 0;
-		tw->respawnPointIndex = 0;
-		tw->turnAround = 0;
+		tw->pathProgress = 0;
+		tw->turnAroundFrames = 0;
 		tw->driverParent = d;
 		tw->driverTarget = victim;
 		tw->instParent = dInst;
 
-		if (d->numWumpas >= 10)
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			tw->flags |= 1;
+			tw->flags |= TRACKER_FLAG_POWERED_UP;
 		}
 
 		// sets nodeCurrIndex
@@ -963,53 +1159,53 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 			RB_Warpball_SetTargetDriver(tw);
 		}
 
-		if ((tw->flags & 4) == 0)
+		if ((tw->flags & TRACKER_FLAG_WARPBALL_TARGET_PATH) == 0)
 		{
 			RB_Warpball_Start(tw);
 		}
 		else
 		{
-			tw->flags &= 0xfff7;
+			tw->flags &= ~TRACKER_FLAG_WARPBALL_FALLBACK_PATH;
 		}
 
 		tw->ptrNodeNext = RB_Warpball_NewPathNode(tw->ptrNodeCurr, victim);
 
 		tw->vel.y = 0;
 		tw->rotY = d->angle;
-		tw->frameCount_DontHurtParent = 10;
+		tw->parentSafetyFrames = WARPBALL_PARENT_SAFETY_FRAMES;
 
 		// do NOT patch for 60fps,
 		// velocity uses elapsedTime
-		tw->vel.x = (dInst->matrix.m[0][2] * 7) >> 8;
-		tw->vel.z = (dInst->matrix.m[2][2] * 7) >> 8;
+		tw->vel.x = (dInst->matrix.m[0][2] * WARPBALL_VELOCITY_NUMERATOR) >> WARPBALL_VELOCITY_SHIFT;
+		tw->vel.z = (dInst->matrix.m[2][2] * WARPBALL_VELOCITY_NUMERATOR) >> WARPBALL_VELOCITY_SHIFT;
 
-		struct Particle *p = Particle_Init(0, gGT->iconGroup[0], &data.emSet_Warpball[0]);
+		struct Particle *p = Particle_Init(0, gGT->iconGroup[WARPBALL_PARTICLE_ICON_GROUP], &data.emSet_Warpball[0]);
 
 		tw->ptrParticle = p;
 
 		if (p != 0)
 		{
-			p->otIndexOffset = 250;
+			p->otIndexOffset = (s8)WARPBALL_PARTICLE_OT_OFFSET;
 		}
 
 		break;
 
 	// invisibility
-	case 0xc:
+	case WEAPON_ID_INVISIBILITY:
 
 		if (d->invisibleTimer == 0)
 		{
 			d->instFlagsBackup = d->instSelf->flags;
 
-			d->instSelf->flags = (d->instSelf->flags & 0xfff8ffff) | GHOST_DRAW_TRANSPARENT;
+			d->instSelf->flags = (d->instSelf->flags & INVISIBILITY_CLEAR_DRAW_FLAGS) | GHOST_DRAW_TRANSPARENT;
 
-			OtherFX_Play(0x61, 1);
+			OtherFX_Play(SOUND_INVISIBILITY, 1);
 		}
 
-		int time = 0x1e00;
-		if (d->numWumpas >= 10)
+		int time = INVISIBILITY_DURATION_NORMAL;
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			time = 0x2d00;
+			time = INVISIBILITY_DURATION_JUICED;
 		}
 
 		d->invisibleTimer = time;
@@ -1017,12 +1213,12 @@ void VehPickupItem_ShootNow(struct Driver *d, int weaponID, int flags)
 
 
 	// Super Engine
-	case 0xd:
+	case WEAPON_ID_SUPER_ENGINE:
 	{
-		int engine = 0x1e00;
-		if (d->numWumpas >= 10)
+		int engine = SUPER_ENGINE_DURATION_NORMAL;
+		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 		{
-			engine = 0x2d00;
+			engine = SUPER_ENGINE_DURATION_JUICED;
 		}
 
 		d->superEngineTimer = engine;
@@ -1054,10 +1250,10 @@ void VehPickupItem_ShootOnCirclePress(struct Driver *d)
 
 	// Missiles and Bombs share code,
 	// Change Bomb1x, Bomb3x, Missile3x, to Missile1x
-	if ((weapon == 1) || (weapon == 10) || (weapon == 11))
+	if ((weapon == HELD_ITEM_BOMB_1X) || (weapon == HELD_ITEM_BOMB_3X) || (weapon == HELD_ITEM_MISSILE_3X))
 	{
-		weapon = 2;
+		weapon = HELD_ITEM_BOMB_MISSILE_SHARED;
 	}
 
-	VehPickupItem_ShootNow(d, (int)weapon, 0);
+	VehPickupItem_ShootNow(d, (s32)weapon, SHOOT_NOW_NO_FLAGS);
 }

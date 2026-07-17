@@ -1,7 +1,7 @@
 #include <common.h>
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003aee8-0x8003af84.
-void MainGameStart_Initialize(struct GameTracker *gGT, char boolStopAudio)
+void MainGameStart_Initialize(struct GameTracker *gGT, b32 boolStopAudio)
 {
 	u32 gameModeFlag;
 

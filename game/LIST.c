@@ -11,8 +11,6 @@ void LIST_Clear(struct LinkedList *L)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031744-0x80031788.
 void LIST_AddFront(struct LinkedList *L, struct Item *I)
 {
-	struct Item *oldFirst;
-
 	if (I == 0)
 	{
 		return;
@@ -20,7 +18,7 @@ void LIST_AddFront(struct LinkedList *L, struct Item *I)
 
 	I->prev = 0;
 
-	oldFirst = L->first;
+	struct Item *oldFirst = L->first;
 	I->next = oldFirst;
 
 	if (oldFirst != 0)
@@ -39,8 +37,6 @@ void LIST_AddFront(struct LinkedList *L, struct Item *I)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031788-0x800317cc.
 void LIST_AddBack(struct LinkedList *L, struct Item *I)
 {
-	struct Item *oldLast;
-
 	if (I == 0)
 	{
 		return;
@@ -48,7 +44,7 @@ void LIST_AddBack(struct LinkedList *L, struct Item *I)
 
 	I->next = 0;
 
-	oldLast = L->last;
+	struct Item *oldLast = L->last;
 	I->prev = oldLast;
 
 	if (oldLast != 0)
@@ -195,6 +191,6 @@ void LIST_Init(struct LinkedList *L, struct Item *item, int itemSize, int numIte
 		LIST_AddBack(L, item);
 
 		numItems--;
-		item = (struct Item *)((int)item + itemSize);
+		item = (struct Item *)((s32)item + itemSize);
 	}
 }

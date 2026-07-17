@@ -1,10 +1,29 @@
 #include <common.h>
 
+enum AHGarageConstants
+{
+	AH_GARAGE_ACCESS_FLAG = 1,
+	AH_GARAGE_NORMAL_OPEN_SFX = 0x95,
+	AH_GARAGE_OXIDE_OPEN_SFX = 0x96,
+	AH_GARAGE_DOOR_MOVE_STEP = 0x20,
+	AH_GARAGE_DOOR_HEIGHT = 0x300,
+	AH_GARAGE_DOOR_COOLDOWN_MS = 2 * SECOND,
+	AH_GARAGE_TOP_ROT_STEP = 0x40,
+	AH_GARAGE_CHALLENGE_NEAR_DIST_MAX_SQ = 0x143fff,
+	AH_GARAGE_BOSS_COLLIDE_RADIUS = 0x300,
+	AH_GARAGE_BOSS_COLLIDE_RADIUS_SQ = 0x90000,
+	AH_GARAGE_INTERIOR_FORWARD_OFFSET = -0x280,
+	AH_GARAGE_INTERIOR_DIST_SQ = 0x40000,
+	AH_GARAGE_FADE_STEP = -0x2aa,
+	AH_GARAGE_OXIDE_FINAL_BOSS_ID = 5,
+	AH_GARAGE_TOP_FORWARD_OFFSET = 0x4c,
+	AH_GARAGE_TOP_DEPTH_BIAS = 0xfe,
+};
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ae8a0-0x800ae8e0.
 void AH_Garage_ThDestroy(struct Thread *t)
 {
-	struct BossGarageDoor *garage;
-	garage = t->object;
+	struct BossGarageDoor *garage = t->object;
 
 	if (garage->garageTopInst != NULL)
 	{
@@ -19,87 +38,74 @@ void AH_Garage_ThDestroy(struct Thread *t)
 void AH_Garage_Open(struct ScratchpadStruct *sps, void *hitObject)
 {
 	struct Thread *otherTh = hitObject;
-	s16 sound;
-	struct Instance *garageInst;
-	struct BossGarageDoor *garage;
-	struct Thread *garageThread;
 
 	if (otherTh->modelIndex != DYNAMIC_PLAYER)
 	{
 		return;
 	}
 
-	garageThread = sps->Union.ThBuckColl.thread;
-
-	garage = garageThread->object;
-	garageInst = garageThread->inst;
+	struct Thread *garageThread = sps->Union.ThBuckColl.thread;
+	struct BossGarageDoor *garage = garageThread->object;
+	struct Instance *garageInst = garageThread->inst;
 
 	if (
 	    // if door is not opening
-	    (garage->direction != 1) &&
+	    (garage->direction != BOSS_GARAGE_DOOR_OPENING) &&
 
 	    // if door is closed,
 	    // if posY is the same as instDef posY
 	    (garageInst->matrix.t[1] == garageInst->instDef->pos.y))
 	{
+		u32 soundID = AH_GARAGE_NORMAL_OPEN_SFX;
+
 		// if you are not in gemstone valley
 		// play sound of normal boss door opening
-		sound = 0x95;
 
 		// Level ID
 		// if you are in Gemstone Valley
 		if (sdata->gGT->levelID == GEM_STONE_VALLEY)
 		{
 			// play sound of oxide door opening
-			sound = 0x96;
+			soundID = AH_GARAGE_OXIDE_OPEN_SFX;
 		}
 
 		// Play sound
-		OtherFX_Play(sound, 1);
+		OtherFX_Play(soundID, 1);
 	}
 
 	// door is now opening
-	garage->direction = 1;
+	garage->direction = BOSS_GARAGE_DOOR_OPENING;
 
 	// enable access through a door (disable collision)
-	sdata->doorAccessFlags |= 1;
+	sdata->doorAccessFlags |= AH_GARAGE_ACCESS_FLAG;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ae988-0x800af070.
 void AH_Garage_ThTick(struct Thread *t)
 {
-	char bossIsOpen, i;
-	int levelID;
-	int hubID;
-	int top;
-	int move;
-	int ratio;
-	int bottom;
-	s16 *check;
+	b32 bossIsOpen = true;
+	s32 i;
+	s32 top;
+	s32 move;
+	s32 ratio;
+	s32 bottom;
+	const s16 *check;
 	u32 bitIndex;
-	u32 uVar5;
-	u32 uVar8;
-	int dist[3];
-	int pos[3];
-	struct BossGarageDoor *garage;
-	struct Instance *inst;
-	struct Instance *drv_inst;
-	struct GameTracker *gGT;
-	struct AdvProgress *adv;
+	u32 soundID;
+	u32 hintMask;
+	Vec3 dist;
+	Vec3 pos;
+	struct GameTracker *gGT = sdata->gGT;
+	struct AdvProgress *adv = &sdata->advProgress;
+	struct BossGarageDoor *garage = t->object;
+	struct Instance *inst = t->inst;
+	struct Instance *drv_inst = gGT->drivers[0]->instSelf;
+	s32 levelID = gGT->levelID;
+	s32 hubID = levelID - GEM_STONE_VALLEY;
 	struct ScratchpadStruct *sps = CTR_SCRATCHPAD_PTR(struct ScratchpadStruct, 0x108);
 
-	bossIsOpen = true;
-
-	gGT = sdata->gGT;
-	adv = &sdata->advProgress;
-	garage = t->object;
-	inst = t->inst;
-	drv_inst = gGT->drivers[0]->instSelf;
-	levelID = gGT->levelID;
-	hubID = levelID - GEM_STONE_VALLEY;
-
 	// if door is not opening or closing
-	if (garage->direction == 0)
+	if (garage->direction == BOSS_GARAGE_DOOR_STOPPED)
 	{
 		// if door is fully closed
 		if (garage->cooldown == 0)
@@ -121,16 +127,16 @@ void AH_Garage_ThTick(struct Thread *t)
 			}
 
 			// play sound of normal boss door opening, except for Oxide
-			uVar8 = (levelID == GEM_STONE_VALLEY) ? 0x96 : 0x95;
+			soundID = (levelID == GEM_STONE_VALLEY) ? AH_GARAGE_OXIDE_OPEN_SFX : AH_GARAGE_NORMAL_OPEN_SFX;
 
 			// Play sound
-			OtherFX_Play(uVar8, 1);
+			OtherFX_Play(soundID, 1);
 
 			// erase cooldown
 			garage->cooldown = 0;
 
 			// door is closing
-			garage->direction = -1;
+			garage->direction = BOSS_GARAGE_DOOR_CLOSING;
 
 			inst->flags &= ~HIDE_MODEL;
 		}
@@ -139,10 +145,10 @@ void AH_Garage_ThTick(struct Thread *t)
 	else
 	{
 		// Increment animation by 0x20 in either direction
-		move = inst->matrix.t[1] + garage->direction * 0x20;
+		move = inst->matrix.t[1] + garage->direction * AH_GARAGE_DOOR_MOVE_STEP;
 		inst->matrix.t[1] = move;
 
-		top = inst->instDef->pos.y + 0x300;
+		top = inst->instDef->pos.y + AH_GARAGE_DOOR_HEIGHT;
 		bottom = inst->instDef->pos.y;
 
 		// If the door has gone past the top (height=0x300)
@@ -152,10 +158,10 @@ void AH_Garage_ThTick(struct Thread *t)
 			inst->matrix.t[1] = top;
 
 			// Door is now open (not moving)
-			garage->direction = 0;
+			garage->direction = BOSS_GARAGE_DOOR_STOPPED;
 
 			// Cooldown for 2 seconds
-			garage->cooldown = 0x780;
+			garage->cooldown = AH_GARAGE_DOOR_COOLDOWN_MS;
 
 			// Make invisible
 			inst->flags |= HIDE_MODEL;
@@ -166,18 +172,18 @@ void AH_Garage_ThTick(struct Thread *t)
 			// Set position to the bottom
 			inst->matrix.t[1] = bottom;
 
-			garage->direction = 0;
+			garage->direction = BOSS_GARAGE_DOOR_STOPPED;
 
 			garage->cooldown = 0;
 
 			// Enable door collision
-			sdata->doorAccessFlags &= 0xfffffffe;
+			sdata->doorAccessFlags &= ~AH_GARAGE_ACCESS_FLAG;
 		}
 		// If the door is between the top and bottom positions
 		else if (garage->garageTopInst != 0)
 		{
 			// Update rotation of garagetop
-			garage->rot.x += (s16)garage->direction * 0x40;
+			garage->rot.x += (s16)garage->direction * AH_GARAGE_TOP_ROT_STEP;
 
 			// converted to TEST in rebuildPS1
 			ConvertRotToMatrix(&garage->garageTopInst->matrix, &garage->rot);
@@ -195,10 +201,10 @@ LAB_800aeb6c:
 		// ripper roo boss key
 		bitIndex = ADV_REWARD_FIRST_BOSS_KEY;
 
-		// check four boss keys
-		for (i = 0; i < 4; i++)
+		// check all boss keys
+		for (i = 0; i < AH_BOSS_KEY_COUNT; i++)
 		{
-			if (CHECK_ADV_BIT(adv->rewards, bitIndex) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, bitIndex))
 			{
 				goto LAB_800aebd0;
 			}
@@ -208,12 +214,12 @@ LAB_800aeb6c:
 	// If you're not in Gemstone Valley
 	else
 	{
-		check = &data.advHubTrackIDs[(levelID - N_SANITY_BEACH) * 4];
-		// check all four tracks on hub
-		for (i = 0; i < 4; i++)
+		check = &data.advHubTrackIDs[(levelID - N_SANITY_BEACH) * AH_HUB_TRACK_COUNT];
+		// check all tracks on hub
+		for (i = 0; i < AH_HUB_TRACK_COUNT; i++)
 		{
 			// if any trophy on this hub is not unlocked
-			if (CHECK_ADV_BIT(adv->rewards, check[i] + ADV_REWARD_FIRST_TROPHY) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, check[i] + ADV_REWARD_FIRST_TROPHY))
 			{
 				// boss is not open
 				goto LAB_800aebd0;
@@ -226,9 +232,9 @@ LAB_800aebd0:
 	bossIsOpen = false;
 
 LAB_800aec34:
-	dist[0] = drv_inst->matrix.t[0] - inst->instDef->pos.x;
-	dist[1] = drv_inst->matrix.t[1] - inst->instDef->pos.y;
-	dist[2] = drv_inst->matrix.t[2] - inst->instDef->pos.z;
+	dist.x = drv_inst->matrix.t[0] - inst->instDef->pos.x;
+	dist.y = drv_inst->matrix.t[1] - inst->instDef->pos.y;
+	dist.z = drv_inst->matrix.t[2] - inst->instDef->pos.z;
 
 	// if in a state where you're seeing the boss key open an adv door,
 	// or some other kind of cutscene where you can't move
@@ -238,7 +244,7 @@ LAB_800aec34:
 	}
 
 	// check distance
-	if (0x143fff < dist[0] * dist[0] + dist[1] * dist[1] + dist[2] * dist[2])
+	if (AH_GARAGE_CHALLENGE_NEAR_DIST_MAX_SQ < dist.x * dist.x + dist.y * dist.y + dist.z * dist.z)
 	{
 		goto LAB_800aede0;
 	}
@@ -251,9 +257,9 @@ LAB_800aec34:
 		// draw string, lng_challenge
 		DecalFont_DrawLine(
 
-		    sdata->lngStrings[data.lng_challenge[R232.bossIDs[hubID]]],
+		    sdata->lngStrings[data.lng_challenge[R232.bossCharacterIDs[hubID]]],
 
-		    ((view.x + view.w) >> 1), ((view.y + view.h) - 0x1e), 1, 0xffff8000);
+		    view.x + (view.w >> 1), ((view.y + view.h) - 0x1e), 1, 0xffff8000);
 	}
 
 	if (bossIsOpen)
@@ -261,32 +267,32 @@ LAB_800aec34:
 		goto LAB_800aede8;
 	}
 
-	uVar8 = 0;
+	hintMask = 0;
 
 	// if this is gemstone valley
 	if (levelID == GEM_STONE_VALLEY)
 	{
 		// if hint is not unlocked "need 4 keys for oxide"
-		if (CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_HINT_NEED_FOUR_KEYS_FOR_OXIDE) == 0)
+		if (!CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_HINT_NEED_FOUR_KEYS_FOR_OXIDE))
 		{
 			// HintID: need four keys to race oxide
-			uVar8 = ADV_MASK_HINT_ID_NEED_FOUR_KEYS_FOR_OXIDE;
+			hintMask = ADV_MASK_HINT_ID_NEED_FOUR_KEYS_FOR_OXIDE;
 		}
 	}
 	// not gemstone valley
 	else
 	{
 		//  if hint is not unlocked "to access this boss garage..."
-		if (CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_HINT_NEED_FOUR_TROPHIES_FOR_BOSS) == 0)
+		if (!CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_HINT_NEED_FOUR_TROPHIES_FOR_BOSS))
 		{
 			// HintID: need four trophies to enter boss
-			uVar8 = ADV_MASK_HINT_ID_NEED_FOUR_TROPHIES_FOR_BOSS;
+			hintMask = ADV_MASK_HINT_ID_NEED_FOUR_TROPHIES_FOR_BOSS;
 		}
 	}
 
-	if (uVar8 != 0)
+	if (hintMask != 0)
 	{
-		MainFrame_RequestMaskHint(uVar8, 0);
+		MainFrame_RequestMaskHint(hintMask, 0);
 	}
 
 LAB_800aede0:
@@ -299,8 +305,8 @@ LAB_800aede0:
 LAB_800aede8:
 
 	sps->Input1.pos = inst->instDef->pos;
-	sps->Input1.hitRadius = 0x300;
-	sps->Input1.hitRadiusSquared = 0x90000;
+	sps->Input1.hitRadius = AH_GARAGE_BOSS_COLLIDE_RADIUS;
+	sps->Input1.hitRadiusSquared = AH_GARAGE_BOSS_COLLIDE_RADIUS_SQ;
 	sps->Input1.modelID = STATIC_PINGARAGE;
 
 	sps->Union.ThBuckColl.thread = t;
@@ -311,24 +317,24 @@ LAB_800aede8:
 
 	ratio = MATH_Sin((int)inst->instDef->rot.y);
 
-	pos[0] = (int)inst->instDef->pos.x + (ratio * -0x280 >> 0xc);
-	pos[1] = (int)inst->instDef->pos.y;
+	pos.x = (int)inst->instDef->pos.x + (ratio * AH_GARAGE_INTERIOR_FORWARD_OFFSET >> 0xc);
+	pos.y = (int)inst->instDef->pos.y;
 
 	ratio = MATH_Cos((int)inst->instDef->rot.y);
 
-	pos[2] = (int)inst->instDef->pos.z + (ratio * -0x280 >> 0xc);
+	pos.z = (int)inst->instDef->pos.z + (ratio * AH_GARAGE_INTERIOR_FORWARD_OFFSET >> 0xc);
 
 	// DriverPos - DoorPos
-	dist[0] = drv_inst->matrix.t[0] - pos[0];
-	dist[1] = drv_inst->matrix.t[1] - pos[1];
-	dist[2] = drv_inst->matrix.t[2] - pos[2];
+	dist.x = drv_inst->matrix.t[0] - pos.x;
+	dist.y = drv_inst->matrix.t[1] - pos.y;
+	dist.z = drv_inst->matrix.t[2] - pos.z;
 
 	// If small distance (inside garage)
-	if (dist[0] * dist[0] + dist[1] * dist[1] + dist[2] * dist[2] < 0x40000)
+	if (dist.x * dist.x + dist.y * dist.y + dist.z * dist.z < AH_GARAGE_INTERIOR_DIST_SQ)
 	{
 		// Fade To Black
 		gGT->pushBuffer_UI.fadeFromBlack_desiredResult = 0;
-		gGT->pushBuffer_UI.fade_step = -0x2AA;
+		gGT->pushBuffer_UI.fade_step = AH_GARAGE_FADE_STEP;
 	}
 
 	// If fade complete, start loading level
@@ -337,19 +343,19 @@ LAB_800aede8:
 		sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_ARENA;
 		sdata->Loading.OnBegin.AddBitsConfig0 |= ADVENTURE_BOSS;
 
-		if ((levelID == GEM_STONE_VALLEY) && (gGT->currAdvProfile.numRelics == 18))
+		if ((levelID == GEM_STONE_VALLEY) && (gGT->currAdvProfile.numRelics == ADV_OXIDE_FINAL_RELIC_COUNT))
 		{
 			// set string index (0-5) to "N Oxide's Final Challenge"
-			gGT->bossID = 5;
+			gGT->bossID = AH_GARAGE_OXIDE_FINAL_BOSS_ID;
 		}
 
 		else
 		{
-			gGT->bossID = R232.bossIDs[hubID];
+			gGT->bossID = R232.bossCharacterIDs[hubID];
 		}
 
 		// new levelID
-		levelID = R232.bossTracks[hubID];
+		levelID = R232.bossRaceLevelIDs[hubID];
 
 		// Set the boss character (P2)
 		data.characterIDs[1] = data.metaDataLEV[levelID].characterID_Boss;
@@ -363,21 +369,17 @@ LAB_800aede8:
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800af070-0x800af3a4.
 void AH_Garage_LInB(struct Instance *inst)
 {
-	char bossIsOpen, i;
-	s16 *check;
+	b32 bossIsOpen = true;
+	s32 i;
+	const s16 *check;
 	u32 bitIndex;
-	int levelID;
-	int ratio;
-	struct AdvProgress *adv;
+	s32 ratio;
 	struct Thread *t;
 	struct Instance *garageTop;
 	struct BossGarageDoor *garage;
-	struct GameTracker *gGT;
-
-	gGT = sdata->gGT;
-	adv = &sdata->advProgress;
-	bossIsOpen = true;
-	levelID = gGT->levelID;
+	struct GameTracker *gGT = sdata->gGT;
+	struct AdvProgress *adv = &sdata->advProgress;
+	s32 levelID = gGT->levelID;
 
 	if (inst->thread != NULL)
 	{
@@ -401,7 +403,7 @@ void AH_Garage_LInB(struct Instance *inst)
 	t->funcThDestroy = AH_Garage_ThDestroy;
 
 	garage = t->object;
-	garage->direction = 0;
+	garage->direction = BOSS_GARAGE_DOOR_STOPPED;
 	garage->cooldown = 0;
 
 	// if it is Oxide's Door
@@ -418,11 +420,7 @@ void AH_Garage_LInB(struct Instance *inst)
 		garageTop = INSTANCE_Birth3D(gGT->modelPtr[STATIC_GARAGETOP], R232.s_garagetop, t);
 
 		// copy matrix from one instance to the other
-		*(int *)&garageTop->matrix.m[0][0] = *(int *)&inst->matrix.m[0][0];
-		*(int *)&garageTop->matrix.m[0][2] = *(int *)&inst->matrix.m[0][2];
-		*(int *)&garageTop->matrix.m[1][1] = *(int *)&inst->matrix.m[1][1];
-		*(int *)&garageTop->matrix.m[2][0] = *(int *)&inst->matrix.m[2][0];
-		garageTop->matrix.m[2][2] = inst->matrix.m[2][2];
+		CTR_MatrixCopyRot(&garageTop->matrix, &inst->matrix);
 		garageTop->matrix.t[0] = inst->matrix.t[0];
 		garageTop->matrix.t[1] = inst->matrix.t[1];
 		garageTop->matrix.t[2] = inst->matrix.t[2];
@@ -430,15 +428,15 @@ void AH_Garage_LInB(struct Instance *inst)
 		ratio = MATH_Sin((int)inst->instDef->rot.y);
 
 		// continue setting GarageTop position
-		garageTop->matrix.t[0] = inst->matrix.t[0] + (ratio * 0x4c >> 0xc);
-		garageTop->matrix.t[1] = inst->matrix.t[1] + 0x300;
+		garageTop->matrix.t[0] = inst->matrix.t[0] + (ratio * AH_GARAGE_TOP_FORWARD_OFFSET >> 0xc);
+		garageTop->matrix.t[1] = inst->matrix.t[1] + AH_GARAGE_DOOR_HEIGHT;
 
 		ratio = MATH_Cos((int)inst->instDef->rot.y);
 
 		// continue setting GarageTop position
-		garageTop->matrix.t[2] = inst->matrix.t[2] + (ratio * 0x4c >> 0xc);
+		garageTop->matrix.t[2] = inst->matrix.t[2] + (ratio * AH_GARAGE_TOP_FORWARD_OFFSET >> 0xc);
 
-		garageTop->depthBiasNormal = 0xfe;
+		garageTop->depthBiasNormal = AH_GARAGE_TOP_DEPTH_BIAS;
 
 		garage->garageTopInst = garageTop;
 	}
@@ -447,10 +445,10 @@ void AH_Garage_LInB(struct Instance *inst)
 	{
 		// ripper roo boss key
 		bitIndex = ADV_REWARD_FIRST_BOSS_KEY;
-		// check four boss keys
-		for (i = 0; i < 4; i++)
+		// check all boss keys
+		for (i = 0; i < AH_BOSS_KEY_COUNT; i++)
 		{
-			if (CHECK_ADV_BIT(adv->rewards, bitIndex) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, bitIndex))
 			{
 				goto GarageLocked;
 			}
@@ -462,12 +460,12 @@ void AH_Garage_LInB(struct Instance *inst)
 	// if not gemstone valley
 	else
 	{
-		check = &data.advHubTrackIDs[(levelID - N_SANITY_BEACH) * 4];
-		// check all four tracks on hub
-		for (i = 0; i < 4; i++)
+		check = &data.advHubTrackIDs[(levelID - N_SANITY_BEACH) * AH_HUB_TRACK_COUNT];
+		// check all tracks on hub
+		for (i = 0; i < AH_HUB_TRACK_COUNT; i++)
 		{
 			// if any trophy on this hub is not unlocked
-			if (CHECK_ADV_BIT(adv->rewards, check[i] + ADV_REWARD_FIRST_TROPHY) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, check[i] + ADV_REWARD_FIRST_TROPHY))
 			{
 				// boss is not open
 				goto GarageLocked;
@@ -480,7 +478,7 @@ void AH_Garage_LInB(struct Instance *inst)
 	{
 		// check if boss was NOT beaten on this hub (levelID - 0x19)
 		bitIndex = data.BeatBossPrize[levelID - GEM_STONE_VALLEY];
-		t->modelIndex = (CHECK_ADV_BIT(adv->rewards, bitIndex) != 0) ? 2 : 1;
+		t->modelIndex = CHECK_ADV_BIT(adv->rewards, bitIndex) ? 2 : 1;
 	}
 
 	// if boss is not open
@@ -497,6 +495,6 @@ void AH_Garage_LInB(struct Instance *inst)
 
 	inst->depthBiasNormal = 1;
 	inst->depthBiasSecondary = inst->depthBiasNormal;
-	inst->unk53 = 0;
-	inst->vertSplit = inst->instDef->pos.y + 0x300;
+	inst->specLightX = 0;
+	inst->vertSplit = inst->instDef->pos.y + AH_GARAGE_DOOR_HEIGHT;
 }

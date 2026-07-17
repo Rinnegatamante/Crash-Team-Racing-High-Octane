@@ -16,7 +16,6 @@ void RB_Armadillo_ThTick_TurnAround(struct Thread *t)
 {
 	struct Instance *armInst;
 	struct Armadillo *armObj;
-	int i;
 
 	armInst = t->inst;
 	armObj = (struct Armadillo *)t->object;
@@ -69,7 +68,6 @@ void RB_Armadillo_ThTick_Rolling(struct Thread *t)
 	struct Instance *armInst;
 	struct Armadillo *armObj;
 	SVECTOR rot;
-	int i;
 
 	armInst = t->inst;
 	armObj = (struct Armadillo *)t->object;
@@ -163,7 +161,7 @@ void RB_Armadillo_LInB(struct Instance *inst)
 	}
 	inst->thread = t;
 	t->inst = inst;
-	t->funcThCollide = (void (*)(struct Thread *))RB_Armadillo_ThCollide;
+	t->funcThCollide = (void *)RB_Armadillo_ThCollide;
 
 	// rolling animation
 	inst->animIndex = 1;

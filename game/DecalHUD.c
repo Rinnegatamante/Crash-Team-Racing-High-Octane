@@ -1,5 +1,22 @@
 #include <common.h>
 
+enum
+{
+	DECAL_HUD_COLOR_MASK = 0xffffff,
+	DECAL_HUD_UV_BYTE_MASK = 0xff,
+	DECAL_HUD_ARROW_SCALE_SHIFT = 13,
+	DECAL_HUD_ARROW_ROTATE_SHIFT = 12,
+};
+
+enum
+{
+	DECAL_HUD_GPU_CODE_SEMI_TRANS = 0x02000000u,
+	DECAL_HUD_GPU_CODE_POLY_GT4 = 0x3c000000u,
+	DECAL_HUD_GPU_TAG_LENGTH_POLY_GT4 = 0x0c000000u,
+	DECAL_HUD_TPAGE_TRANSPARENCY_MASK = 0xff9fffffu,
+	DECAL_HUD_TPAGE_TRANSPARENCY_STEP = 0x00200000u,
+};
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80022db0-0x80022ec4.
 void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, char transparency, s16 scale)
@@ -151,50 +168,55 @@ void DecalHUD_Arrow2D(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pri
 	{
 		return;
 	}
+	scale = (s16)scale;
 
-	topRightCornerAndPageXY = *(u32 *)&icon->texLayout.u1;
-	topLeftCornerAndPaletteXY = *(u32 *)&icon->texLayout.u0;
+	topRightCornerAndPageXY = CTR_ReadU32LE(&icon->texLayout.u1);
+	topLeftCornerAndPaletteXY = CTR_ReadU32LE(&icon->texLayout.u0);
 	y2 = icon->texLayout.v2;
-	bottomMargin = *(u32 *)&icon->texLayout.u2;
+	bottomMargin = CTR_ReadU32LE(&icon->texLayout.u2);
 
 	p = (POLY_GT4 *)primMem->cursor;
 
 	if (transparency == 0)
 	{
-		code = 0x3c000000;
-		*(int *)&p->u1 = topRightCornerAndPageXY;
+		code = DECAL_HUD_GPU_CODE_POLY_GT4;
+		CtrGpu_WritePackedUVWord(&p->u1, topRightCornerAndPageXY);
 	}
 
 	else
 	{
-		code = 0x3e000000;
+		code = DECAL_HUD_GPU_CODE_POLY_GT4 | DECAL_HUD_GPU_CODE_SEMI_TRANS;
 
 		// set top right corner UVs and texpage of primitive, and alter the blending mode bits of the texpage from 11 (Mode 3, which is no blending) to 00 (Mode
 		// 0, equivalent to regular 50% opacity)
-		*(int *)&p->u1 = (topRightCornerAndPageXY & 0xff9fffff) | (((u32)transparency - 1) * 0x200000);
+		CtrGpu_WritePackedUVWord(&p->u1,
+		                         (topRightCornerAndPageXY & DECAL_HUD_TPAGE_TRANSPARENCY_MASK) | (((u32)transparency - 1) * DECAL_HUD_TPAGE_TRANSPARENCY_STEP));
 	}
 
 	// set top left vertex color, and code in 7th byte of prim
-	*(int *)&p->r0 = (color1 & 0xffffff) | code;
+	CtrGpu_WriteColorCode(&p->r0, (color1 & DECAL_HUD_COLOR_MASK) | code);
 
 	posX = posX & 0xffff;
-	*(int *)&p->u0 = topLeftCornerAndPaletteXY;
-	*(s16 *)&p->u2 = (s16)bottomMargin;
+	CtrGpu_WritePackedUVWord(&p->u0, topLeftCornerAndPaletteXY);
+	CtrGpu_WritePackedUV(&p->u2, (u16)bottomMargin);
 
-	bitshiftPosY = (int)(((u32)y2 - ((int)topLeftCornerAndPaletteXY >> 8 & 0xffU)) * (int)scale) >> 0xd;
+	bitshiftPosY = (int)(((u32)y2 - ((int)topLeftCornerAndPaletteXY >> 8 & DECAL_HUD_UV_BYTE_MASK)) * (int)scale) >> DECAL_HUD_ARROW_SCALE_SHIFT;
 
-	*(u16 *)&p->u3 = *(u16 *)&icon->texLayout.u3;
+	CtrGpu_WritePackedUV(&p->u3, CTR_ReadU16LE(&icon->texLayout.u3));
 
-	bitshiftTopRightCorner = (int)(((topRightCornerAndPageXY & 0xff) - (topLeftCornerAndPaletteXY & 0xff)) * (int)scale) >> 0xd;
+	bitshiftTopRightCorner = (int)(((topRightCornerAndPageXY & DECAL_HUD_UV_BYTE_MASK) - (topLeftCornerAndPaletteXY & DECAL_HUD_UV_BYTE_MASK)) * (int)scale) >>
+	                         DECAL_HUD_ARROW_SCALE_SHIFT;
 
 	// stuff for rotation of primitive
-	iVar13 = *(int *)(&data.trigApprox[((u32)rot & 0x3ff) * 4]) >> 0x10;
-	sVar8 = (s16) * (int *)(&data.trigApprox[((u32)rot & 0x3ff) * 4]);
+	u32 angle = (u32)rot;
+	u32 trigApprox = CTR_ReadU32LE(&data.trigApprox[ANG_MODULO_HALF_PI(angle)]);
+	iVar13 = (s32)trigApprox >> 0x10;
+	sVar8 = (s16)trigApprox;
 
-	if ((rot & 0x400) == 0)
+	if (IS_ANG_FIRST_OR_THIRD_QUADRANT(angle))
 	{
 		iVar10 = (int)sVar8;
-		if ((rot & 0x800) == 0)
+		if (!IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			goto LAB_800232d8;
 		}
@@ -204,7 +226,7 @@ void DecalHUD_Arrow2D(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pri
 	{
 		iVar12 = (int)sVar8;
 		iVar10 = iVar13;
-		if ((rot & 0x800) == 0)
+		if (!IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			iVar13 = -iVar12;
 			goto LAB_800232d8;
@@ -216,27 +238,29 @@ void DecalHUD_Arrow2D(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pri
 LAB_800232d8:
 	iVar12 = -bitshiftPosY;
 	bitshiftPosY = bitshiftPosY + 1;
-	iVar6 = iVar12 * iVar10 >> 0xc;
-	iVar12 = posY + (iVar12 * iVar13 >> 0xc);
+	iVar6 = iVar12 * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT;
+	iVar12 = posY + (iVar12 * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT);
 
-	*(int *)&p->x0 = ((posX + (-bitshiftTopRightCorner * iVar13 >> 0xc) + iVar6) & 0xffff) | ((iVar12 - (-bitshiftTopRightCorner * iVar10 >> 0xc)) * 0x10000);
+	CtrGpu_WritePackedXY(&p->x0, ((posX + (-bitshiftTopRightCorner * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar6) & 0xffff) |
+	                                 ((u32)(iVar12 - (-bitshiftTopRightCorner * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 
-	iVar7 = bitshiftPosY * iVar10 >> 0xc;
+	iVar7 = bitshiftPosY * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT;
 
-	*(int *)&p->x1 =
-	    ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> 0xc) + iVar6) & 0xffff) | ((iVar12 - ((bitshiftTopRightCorner + 1) * iVar10 >> 0xc)) * 0x10000);
+	CtrGpu_WritePackedXY(&p->x1, ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar6) & 0xffff) |
+	                                 ((u32)(iVar12 - ((bitshiftTopRightCorner + 1) * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 
-	posY = posY + (bitshiftPosY * iVar13 >> 0xc);
+	posY = posY + (bitshiftPosY * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT);
 
-	*(int *)&p->x2 = ((posX + (-bitshiftTopRightCorner * iVar13 >> 0xc) + iVar7) & 0xffff) | ((posY - (-bitshiftTopRightCorner * iVar10 >> 0xc)) * 0x10000);
-	*(int *)&p->x3 =
-	    ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> 0xc) + iVar7) & 0xffff) | ((posY - ((bitshiftTopRightCorner + 1) * iVar10 >> 0xc)) * 0x10000);
+	CtrGpu_WritePackedXY(&p->x2, ((posX + (-bitshiftTopRightCorner * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar7) & 0xffff) |
+	                                 ((u32)(posY - (-bitshiftTopRightCorner * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
+	CtrGpu_WritePackedXY(&p->x3, ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar7) & 0xffff) |
+	                                 ((u32)(posY - ((bitshiftTopRightCorner + 1) * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 
-	*(int *)&p->r1 = color2;
-	*(int *)&p->r2 = color3;
-	*(int *)&p->r3 = color4;
+	CtrGpu_WriteColorCode(&p->r1, color2);
+	CtrGpu_WriteColorCode(&p->r2, color3);
+	CtrGpu_WriteColorCode(&p->r3, color4);
 
-	*(int *)p = CtrGpu_PackOTTag(*otMemPtr, 0xc000000);
+	p->tag = CtrGpu_PackOTTag(*otMemPtr, DECAL_HUD_GPU_TAG_LENGTH_POLY_GT4);
 	*otMemPtr = CtrGpu_PrimToOTLink24(p);
 
 	// POLY_GT4 is 0x34 bytes large

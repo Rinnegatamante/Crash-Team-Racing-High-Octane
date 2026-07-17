@@ -1,3 +1,11 @@
+#ifndef CTR_NATIVE_NAMESPACE_DRAWLEVEL_H
+#define CTR_NATIVE_NAMESPACE_DRAWLEVEL_H
+
+enum DrawLevelOvr1PRenderListConstant
+{
+	DRAW_LEVEL_OVR1P_RENDER_LIST_SLOT_COUNT = 5,
+};
+
 struct DrawLevelOvr1PRenderListSlot
 {
 	struct QuadBlock **ptrQuadBlocksRendered;
@@ -6,10 +14,32 @@ struct DrawLevelOvr1PRenderListSlot
 
 struct DrawLevelOvr1PRenderList
 {
-	struct DrawLevelOvr1PRenderListSlot list[5];
+	struct DrawLevelOvr1PRenderListSlot list[DRAW_LEVEL_OVR1P_RENDER_LIST_SLOT_COUNT];
 	struct VisMemBspListNode *bspListStart_FullDynamic;
 	struct QuadBlock **ptrQuadBlocksRendered_FullDynamic;
 };
+
+#define DRAW_LEVEL_OVR1P_LIST_OFFSET(INDEX, MEMBER)                                                                                 \
+	(offsetof(struct DrawLevelOvr1PRenderList, list) + (INDEX) * sizeof(struct DrawLevelOvr1PRenderListSlot) +                       \
+	 offsetof(struct DrawLevelOvr1PRenderListSlot, MEMBER))
+
+enum DrawLevelOvr1PRenderListOffset
+{
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X4_RENDERED = DRAW_LEVEL_OVR1P_LIST_OFFSET(0, ptrQuadBlocksRendered),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X4_LIST = DRAW_LEVEL_OVR1P_LIST_OFFSET(0, bspListStart),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_DYNAMIC_RENDERED = DRAW_LEVEL_OVR1P_LIST_OFFSET(1, ptrQuadBlocksRendered),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_DYNAMIC_LIST = DRAW_LEVEL_OVR1P_LIST_OFFSET(1, bspListStart),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X2_RENDERED = DRAW_LEVEL_OVR1P_LIST_OFFSET(2, ptrQuadBlocksRendered),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X2_LIST = DRAW_LEVEL_OVR1P_LIST_OFFSET(2, bspListStart),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X1_RENDERED = DRAW_LEVEL_OVR1P_LIST_OFFSET(3, ptrQuadBlocksRendered),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_4X1_LIST = DRAW_LEVEL_OVR1P_LIST_OFFSET(3, bspListStart),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_WATER_RENDERED = DRAW_LEVEL_OVR1P_LIST_OFFSET(4, ptrQuadBlocksRendered),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_WATER_LIST = DRAW_LEVEL_OVR1P_LIST_OFFSET(4, bspListStart),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_FULL_DYNAMIC_LIST = offsetof(struct DrawLevelOvr1PRenderList, bspListStart_FullDynamic),
+	DRAW_LEVEL_OVR1P_RENDER_LIST_OFFSET_FULL_DYNAMIC_RENDERED = offsetof(struct DrawLevelOvr1PRenderList, ptrQuadBlocksRendered_FullDynamic),
+};
+
+#undef DRAW_LEVEL_OVR1P_LIST_OFFSET
 
 enum DrawLevelOvr1PBucketKind
 {
@@ -40,12 +70,67 @@ struct DrawLevelOvr1PBucket
 	u8 lodMode;
 };
 
+CTR_STATIC_ASSERT(sizeof(struct DrawLevelOvr1PRenderListSlot) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PRenderListSlot, ptrQuadBlocksRendered) == 0x0);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PRenderListSlot, bspListStart) == 0x4);
+CTR_STATIC_ASSERT(sizeof(struct DrawLevelOvr1PRenderList) == 0x30);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PRenderList, list) == 0x0);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PRenderList, bspListStart_FullDynamic) == 0x28);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PRenderList, ptrQuadBlocksRendered_FullDynamic) == 0x2c);
+
 enum DrawLevelOvr1PUvScratchSlot
 {
 	DRAW_LEVEL_OVR1P_UV_SCRATCH_SLOT_0,
 	DRAW_LEVEL_OVR1P_UV_SCRATCH_SLOT_1,
 	DRAW_LEVEL_OVR1P_UV_SCRATCH_SLOT_2,
 };
+
+enum DrawLevelOvr1PSharedConstant
+{
+	DRAW_LEVEL_OVR1P_SPLIT_GROUND_MOSAIC_RELOAD_SPAN = 0xc0,
+};
+
+enum DrawLevelOvrCopiedSetupConstant
+{
+	DRAW_LEVEL_OVR_COPIED_SETUP0_WORD_COUNT = 15,
+	DRAW_LEVEL_OVR_COPIED_SETUP1_WORD_COUNT = 3,
+	DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX = DRAW_LEVEL_OVR_COPIED_SETUP0_WORD_COUNT - 1,
+	DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX = DRAW_LEVEL_OVR_COPIED_SETUP1_WORD_COUNT - 1,
+	DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET = 0x14c,
+	DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET = 0x188,
+};
+
+struct DrawLevelOvrBucketSetupCopy
+{
+	u32 lastWordIndex;
+	u32 sourceAddress;
+	u32 scratchOffset;
+};
+
+struct DrawLevelOvrBucketSetupRecord
+{
+	struct DrawLevelOvrBucketSetupCopy copies[2];
+	u32 padding;
+	u32 copy0[DRAW_LEVEL_OVR_COPIED_SETUP0_WORD_COUNT];
+	u32 copy1[DRAW_LEVEL_OVR_COPIED_SETUP1_WORD_COUNT];
+};
+
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP0_WORD_COUNT == 15);
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP1_WORD_COUNT == 3);
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX == 0xe);
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX == 0x2);
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET == 0x14c);
+CTR_STATIC_ASSERT(DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET == 0x188);
+CTR_STATIC_ASSERT(sizeof(struct DrawLevelOvrBucketSetupCopy) == 0xc);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupCopy, lastWordIndex) == 0x0);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupCopy, sourceAddress) == 0x4);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupCopy, scratchOffset) == 0x8);
+CTR_STATIC_ASSERT(sizeof(struct DrawLevelOvrBucketSetupRecord) == 0x64);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupRecord, copies) == 0x0);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupRecord, padding) == 0x18);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupRecord, copy0) == 0x1c);
+CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvrBucketSetupRecord, copy1) == 0x58);
+
 
 enum DrawLevelOvr1PScratchOffset
 {
@@ -241,3 +326,5 @@ CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PStableScratch, pushBufferPtr32) 
 CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PStableScratch, selected4x1TableWord) == 0x194);
 CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PStableScratch, projectedCenter) == 0x198);
 CTR_STATIC_ASSERT(offsetof(struct DrawLevelOvr1PStableScratch, uv) == 0x1a0);
+
+#endif

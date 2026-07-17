@@ -55,7 +55,8 @@ struct ParticleEmitter emSet_OrcaSplash[7] = {
             .initOffset = 5,
             .InitTypes.AxisInit =
                 {
-                    .baseValue = {.startVal = 0x3E8, .velocity = 0x28, .accel = 0x64},
+                    .baseValue = {.startVal = 0x3E8, .velocity = 0x28, .accel = 0},
+                    .rngSeed = {.startVal = 0x64},
                 },
         },
 
@@ -91,7 +92,7 @@ static void RB_Orca_SpawnSplash(struct Instance *orcaInst)
 
 		particle->axis[0].startVal += (orcaInst->matrix.t[0] << 8) + (particle->axis[0].velocity << 4);
 		particle->axis[1].startVal += (orcaInst->matrix.t[1] << 8) + (particle->axis[1].velocity << 1);
-		particle->unk1A = 0x1000;
+		particle->renderDepthLimit = 0x1000;
 		particle->axis[2].startVal += (orcaInst->matrix.t[2] << 8) + (particle->axis[2].velocity << 4);
 	}
 }
@@ -151,9 +152,9 @@ void RB_Orca_ThTick(struct Thread *t)
 		pathFrame = 0;
 	}
 
-	orcaInst->matrix.t[0] = orcaObj->startPos.x - ((pathFrame * orcaObj->midpoint[0]) / denominator);
-	orcaInst->matrix.t[1] = orcaObj->startPos.y - ((pathFrame * orcaObj->midpoint[1]) / denominator);
-	orcaInst->matrix.t[2] = orcaObj->startPos.z - ((pathFrame * orcaObj->midpoint[2]) / denominator);
+	orcaInst->matrix.t[0] = orcaObj->startPos.x - ((pathFrame * orcaObj->pathDelta.x) / denominator);
+	orcaInst->matrix.t[1] = orcaObj->startPos.y - ((pathFrame * orcaObj->pathDelta.y) / denominator);
+	orcaInst->matrix.t[2] = orcaObj->startPos.z - ((pathFrame * orcaObj->pathDelta.z) / denominator);
 
 	nextFrame = orcaInst->animFrame + 1;
 
@@ -226,7 +227,7 @@ void RB_Orca_LInB(struct Instance *inst)
 	}
 
 	inst->thread = t;
-	t->funcThCollide = (void (*)(struct Thread *))RB_Orca_ThCollide;
+	t->funcThCollide = (void *)RB_Orca_ThCollide;
 	t->inst = inst;
 
 	inst->scale.x = 0xC00;
@@ -252,9 +253,9 @@ void RB_Orca_LInB(struct Instance *inst)
 		orcaObj->endPos = spawnType2->positions[1];
 	}
 
-	orcaObj->midpoint[0] = orcaObj->startPos.x - orcaObj->endPos.x;
-	orcaObj->midpoint[1] = orcaObj->startPos.y - orcaObj->endPos.y;
-	orcaObj->midpoint[2] = orcaObj->startPos.z - orcaObj->endPos.z;
+	orcaObj->pathDelta.x = orcaObj->startPos.x - orcaObj->endPos.x;
+	orcaObj->pathDelta.y = orcaObj->startPos.y - orcaObj->endPos.y;
+	orcaObj->pathDelta.z = orcaObj->startPos.z - orcaObj->endPos.z;
 
 	orcaObj->numFrames = INSTANCE_GetNumAnimFrames(inst, 0);
 

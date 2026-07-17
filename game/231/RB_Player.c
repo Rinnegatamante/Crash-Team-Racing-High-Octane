@@ -140,7 +140,7 @@ void RB_Player_KillPlayer(struct Driver *attacker, struct Driver *victim)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800abefc-0x800abfec.
 void RB_Player_ModifyWumpa(struct Driver *driver, int wumpaDelta)
 {
-	char numWumpaOriginal = driver->numWumpas;
+	s8 numWumpaOriginal = driver->numWumpas;
 
 	// if using unlimited wumpa, quit
 	if ((sdata->gGT->gameMode2 & CHEAT_WUMPA) != 0)
@@ -179,23 +179,23 @@ void RB_Player_ModifyWumpa(struct Driver *driver, int wumpaDelta)
 		driver->numWumpas = 0;
 	}
 
-	// cap at 10
-	if (driver->numWumpas > 10)
+	// cap at max wumpa count
+	if (driver->numWumpas > DRIVER_WUMPA_MAX_COUNT)
 	{
-		driver->numWumpas = 10;
+		driver->numWumpas = DRIVER_WUMPA_MAX_COUNT;
 	}
 
 	if (
-	    // if did not have 10 before
-	    (numWumpaOriginal < 10) &&
+	    // if did not have juiced wumpa before
+	    (numWumpaOriginal < DRIVER_WUMPA_JUICED_COUNT) &&
 
-	    // if have 10 now
-	    (driver->numWumpas == 10))
+	    // if have juiced wumpa now
+	    (driver->numWumpas == DRIVER_WUMPA_JUICED_COUNT))
 	{
 		// Play "juiced up" sound
 		OtherFX_Play(0x41, 1);
 
-		driver->BattleHUD.juicedUpCooldown = 10;
+		driver->BattleHUD.juicedUpCooldown = DRIVER_WUMPA_JUICED_HUD_COOLDOWN_FRAMES;
 	}
 }
 
@@ -205,7 +205,6 @@ void RB_Player_ToggleInvisible(void)
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *d;
 	struct Thread *t;
-	char i;
 
 	// loop through player threads
 	for (t = gGT->threadBuckets[PLAYER].thread; t != NULL; t = t->siblingThread)
@@ -217,7 +216,7 @@ void RB_Player_ToggleInvisible(void)
 		if (d->invisibleTimer != 0)
 		{
 			// loop through InstanceDrawPerPlayer
-			for (i = 0; i < gGT->numPlyrCurrGame; i++)
+			for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 			{
 				// if this is not the screen of the invisible driver
 				if (i != d->driverID)
@@ -239,7 +238,6 @@ void RB_Player_ToggleFlicker(void)
 	struct GameTracker *gGT = sdata->gGT;
 	struct Thread *t;
 	struct Driver *d;
-	char i;
 
 	for (t = gGT->threadBuckets[PLAYER].thread; t != NULL; t = t->siblingThread)
 	{
@@ -256,7 +254,7 @@ void RB_Player_ToggleFlicker(void)
 			struct InstDrawPerPlayer *idpp = INST_GETIDPP(d->instSelf);
 
 			// on all screens
-			for (i = 0; i < gGT->numPlyrCurrGame; i++)
+			for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 			{
 				// make driver invisible
 				idpp[i].instFlags &= 0xffffffbf;

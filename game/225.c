@@ -47,7 +47,6 @@ enum VersusBattleEndMenuConstants
 
 	VB_ICON_TRANSPARENCY = 1,
 	VB_ICON_SCALE = 0x1000,
-	VB_SPLIT_SCREEN_LINES = 0x8000,
 
 	VB_WINNER_TARGET_X = 0x14,
 	VB_WINNER_TARGET_Y = 0xc,
@@ -64,9 +63,6 @@ enum VersusBattleEndMenuConstants
 	VB_LOSER_RECT_STEP_H = 6,
 
 	VB_MENU_READY_SHOW_MENU = 1,
-	VB_RECTMENU_UNKNOWN_0x800 = 0x800,
-	VB_RECTMENU_STATE = VB_RECTMENU_UNKNOWN_0x800 | EXECUTE_FUNCPTR | USE_SMALL_FONT | CENTER_ON_COORDS,
-	VB_MENU_STRING_NONE = -1,
 };
 
 // 2P, 3P, 4P
@@ -117,7 +113,7 @@ void VB_EndEvent_DrawMenu(void)
 	}
 
 	// Disable drawing lines between multiplayer screens
-	gGT->renderFlags &= ~VB_SPLIT_SCREEN_LINES;
+	gGT->renderFlags &= ~RENDER_FLAG_SPLIT_SCREEN_LINES;
 
 	RaceFlag_SetFullyOnScreen();
 
@@ -343,7 +339,7 @@ global_variable struct MenuRow rowsVS[5] = {
     },
     // NULL, end of menu
     {
-        .stringIndex = VB_MENU_STRING_NONE,
+        .stringIndex = RECTMENU_STRING_NONE,
         .rowOnPressUp = 0,
         .rowOnPressDown = 0,
         .rowOnPressLeft = 0,
@@ -351,11 +347,11 @@ global_variable struct MenuRow rowsVS[5] = {
     }};
 
 global_variable struct RectMenu menuVS = {
-    .stringIndexTitle = VB_MENU_STRING_NONE,
+    .stringIndexTitle = RECTMENU_STRING_NONE,
     .posX_curr = 143,
     .posY_curr = 162,
     .unk1 = 0,
-    .state = VB_RECTMENU_STATE,
+    .state = RECTMENU_STATE_SMALL_EXEC_CENTERED,
     .rows = rowsVS,
     .funcPtr = UI_RaceEnd_MenuProc,
     .drawStyle = 4,
@@ -405,7 +401,7 @@ global_variable struct MenuRow rowsBattle[6] = {
     },
     // NULL, end of menu
     {
-        .stringIndex = VB_MENU_STRING_NONE,
+        .stringIndex = RECTMENU_STRING_NONE,
         .rowOnPressUp = 0,
         .rowOnPressDown = 0,
         .rowOnPressLeft = 0,
@@ -413,11 +409,11 @@ global_variable struct MenuRow rowsBattle[6] = {
     }};
 
 global_variable struct RectMenu menuBattle = {
-    .stringIndexTitle = VB_MENU_STRING_NONE,
+    .stringIndexTitle = RECTMENU_STRING_NONE,
     .posX_curr = 143,
     .posY_curr = 166,
     .unk1 = 0,
-    .state = VB_RECTMENU_STATE,
+    .state = RECTMENU_STATE_SMALL_EXEC_CENTERED,
     .rows = rowsBattle,
     .funcPtr = UI_RaceEnd_MenuProc,
     .drawStyle = 4,

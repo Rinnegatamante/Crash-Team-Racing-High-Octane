@@ -29,6 +29,14 @@
 #undef LoadImage
 #endif
 
+#ifdef far
+#undef far
+#endif
+
+#ifdef near
+#undef near
+#endif
+
 #endif
 
 #endif

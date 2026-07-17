@@ -13,7 +13,7 @@ void GhostTape_Start(void)
 	// v4 - Aug5, Aug14, Sep3, Retail
 
 	gh = sdata->GhostRecording.ptrGhost;
-	gh->version = -4;
+	gh->version = GHOST_TAPE_VERSION_RETAIL;
 	gh->levelID = gGT->levelID;
 	gh->characterID = data.characterIDs[d->driverID];
 
@@ -73,16 +73,6 @@ void GhostTape_End(void)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80027f20-0x8002838c.
 void GhostTape_WriteMoves(s16 raceFinished)
 {
-	char *pbVar1;
-	int iVar3;
-	int iVar4;
-	int iVar6;
-	struct Instance *iVar7;
-	struct Driver *iVar8;
-	int iVar9;
-	char local_10;
-	char local_e;
-	char local_c;
 	struct GameTracker *gGT = sdata->gGT;
 	u32 gameMode = gGT->gameMode1;
 
@@ -95,7 +85,7 @@ void GhostTape_WriteMoves(s16 raceFinished)
 		}
 
 		// if paused or [race ended while not yet in end-of-race menu]???
-		if ((gameMode & 0x1f) != 0)
+		if ((gameMode & GAME_MODE_GHOST_RECORD_BLOCK_MASK) != 0)
 		{
 			return;
 		}
@@ -124,55 +114,55 @@ void GhostTape_WriteMoves(s16 raceFinished)
 	    (raceFinished != 0) ||
 
 	    // This is true every 8 frames
-	    ((sdata->GhostRecording.countEightFrames & 7) == 0))
+	    ((sdata->GhostRecording.countEightFrames & GHOST_RECORD_INTERVAL_MASK_8) == 0))
 	{
-		iVar8 = gGT->threadBuckets[0].thread->object;
+		struct Driver *driver = gGT->threadBuckets[0].thread->object;
 
 		// player instance
-		iVar7 = iVar8->instSelf;
+		struct Instance *inst = driver->instSelf;
 
 		// compress position (x, y, z) with bitshifting
-		iVar4 = iVar7->matrix.t[0] >> 3;
-		iVar3 = iVar7->matrix.t[1] >> 3;
-		iVar6 = iVar7->matrix.t[2] >> 3;
+		int posX = inst->matrix.t[0] >> GHOST_RECORD_POSITION_SHIFT;
+		int posY = inst->matrix.t[1] >> GHOST_RECORD_POSITION_SHIFT;
+		int posZ = inst->matrix.t[2] >> GHOST_RECORD_POSITION_SHIFT;
 
 		// get change in position (x, y, z)
-		sdata->GhostRecording.VelX = (s16)iVar4 - sdata->GhostRecording.VelX;
-		sdata->GhostRecording.VelY = (s16)iVar3 - sdata->GhostRecording.VelY;
-		sdata->GhostRecording.VelZ = (s16)iVar6 - sdata->GhostRecording.VelZ;
+		sdata->GhostRecording.VelX = (s16)posX - sdata->GhostRecording.VelX;
+		sdata->GhostRecording.VelY = (s16)posY - sdata->GhostRecording.VelY;
+		sdata->GhostRecording.VelZ = (s16)posZ - sdata->GhostRecording.VelZ;
 
 		// Time elapsed since last 0x80 buffer
-		iVar9 = sdata->GhostRecording.timeElapsedInRace - sdata->GhostRecording.timeOfLast80buffer;
+		int timeSincePositionPacket = sdata->GhostRecording.timeElapsedInRace - sdata->GhostRecording.timeOfLast80buffer;
 
 		// get pointer to current recording char in buffer
-		pbVar1 = sdata->GhostRecording.ptrCurrOffset;
+		char *writeCursor = sdata->GhostRecording.ptrCurrOffset;
 
 		if (
 		    // if animation frame changed
-		    (sdata->GhostRecording.animFrame != iVar7->animFrame) ||
+		    (sdata->GhostRecording.animFrame != inst->animFrame) ||
 
 		    // if animation changed
-		    (sdata->GhostRecording.animIndex != iVar7->animIndex))
+		    (sdata->GhostRecording.animIndex != inst->animIndex))
 		{
-			sdata->GhostRecording.animFrame = iVar7->animFrame;
-			sdata->GhostRecording.animIndex = iVar7->animIndex;
+			sdata->GhostRecording.animFrame = inst->animFrame;
+			sdata->GhostRecording.animIndex = inst->animIndex;
 
-			pbVar1[0] = 0x81;
-			pbVar1[1] = iVar7->animIndex;
-			pbVar1[2] = iVar7->animFrame;
-			pbVar1 += 3;
+			writeCursor[0] = GHOST_OP_ANIMATION;
+			writeCursor[1] = inst->animIndex;
+			writeCursor[2] = inst->animFrame;
+			writeCursor += GHOST_SIZE_ANIMATION;
 		}
 
 		// If there is a change in instance flags,
 		// determine if driver is split by water or mud
-		if ((iVar7->flags & 0x2000) != (sdata->GhostRecording.instanceFlags & 0x2000))
+		if ((inst->flags & GHOST_RECORD_INSTANCE_SPLIT_FLAG) != (sdata->GhostRecording.instanceFlags & GHOST_RECORD_INSTANCE_SPLIT_FLAG))
 		{
 			// Record the instance flags
 			// determine if driver is split by water or mud
 
-			pbVar1[0] = 0x83;
-			pbVar1[1] = (char)(iVar7->flags >> 0xd) & 1;
-			pbVar1 += 2;
+			writeCursor[0] = GHOST_OP_INSTANCE;
+			writeCursor[1] = (char)(inst->flags >> GHOST_RECORD_INSTANCE_SPLIT_SHIFT) & 1;
+			writeCursor += GHOST_SIZE_INSTANCE;
 		}
 
 		// If velocity is small enough for a compressed 5-char message
@@ -180,28 +170,28 @@ void GhostTape_WriteMoves(s16 raceFinished)
 		    // If the race is not over
 		    (raceFinished == 0) &&
 
-		    // false once every 16 frames
-		    ((sdata->GhostRecording.countSixteenFrames & 0x1f) != 0) &&
+		    // false once every 32 counts, despite the retail field name
+		    ((sdata->GhostRecording.countSixteenFrames & GHOST_RECORD_INTERVAL_MASK_32) != 0) &&
 
 		    // If velX is small enough for one char
-		    (sdata->GhostRecording.VelX < 0x80) && (-0x7c < sdata->GhostRecording.VelX) &&
+		    (sdata->GhostRecording.VelX < GHOST_RECORD_VELOCITY_MAX) && (GHOST_RECORD_VELOCITY_MIN_EXCLUSIVE < sdata->GhostRecording.VelX) &&
 
 		    // If velY is small enough for one char
-		    (sdata->GhostRecording.VelY < 0x80) && (-0x7c < sdata->GhostRecording.VelY) &&
+		    (sdata->GhostRecording.VelY < GHOST_RECORD_VELOCITY_MAX) && (GHOST_RECORD_VELOCITY_MIN_EXCLUSIVE < sdata->GhostRecording.VelY) &&
 
 		    // If velZ is small enough for one char
-		    (sdata->GhostRecording.VelZ < 0x80) && (-0x7c < sdata->GhostRecording.VelZ) &&
+		    (sdata->GhostRecording.VelZ < GHOST_RECORD_VELOCITY_MAX) && (GHOST_RECORD_VELOCITY_MIN_EXCLUSIVE < sdata->GhostRecording.VelZ) &&
 
 		    // if not a lot of time has passed
 		    // since the last 0x80 buffer
-		    (iVar9 < 0xff01))
+		    (timeSincePositionPacket < GHOST_RECORD_TIME_DELTA_MAX_EXCLUSIVE))
 		{
 			// If there is no change in position
 			if (((sdata->GhostRecording.VelX == 0) && (sdata->GhostRecording.VelY == 0)) && (sdata->GhostRecording.VelZ == 0))
 			{
 				// Record that you are doing nothing
-				pbVar1[0] = 0x84;
-				pbVar1 += 1;
+				writeCursor[0] = GHOST_OP_IDLE;
+				writeCursor += GHOST_SIZE_IDLE;
 			}
 
 			// If you are moving
@@ -211,63 +201,63 @@ void GhostTape_WriteMoves(s16 raceFinished)
 				// "no opcode" means "assume velocity"
 
 				// Write velX to buffer
-				pbVar1[0] = (char)sdata->GhostRecording.VelX;
-				pbVar1[1] = (char)sdata->GhostRecording.VelY;
-				pbVar1[2] = (char)sdata->GhostRecording.VelZ;
-				pbVar1[3] = (char)(iVar8->rotCurr.y >> 4);
-				pbVar1[4] = (char)(iVar8->rotCurr.z >> 4);
-				pbVar1 += 5;
+				writeCursor[0] = (char)sdata->GhostRecording.VelX;
+				writeCursor[1] = (char)sdata->GhostRecording.VelY;
+				writeCursor[2] = (char)sdata->GhostRecording.VelZ;
+				writeCursor[3] = (char)(driver->rotCurr.y >> GHOST_RECORD_ROTATION_SHIFT);
+				writeCursor[4] = (char)(driver->rotCurr.z >> GHOST_RECORD_ROTATION_SHIFT);
+				writeCursor += GHOST_SIZE_VELOCITY;
 			}
 		}
 
 		// If velocity is too large,
 		// If the race just ended
-		// If you're in a 16-frame interval
+		// If you're in a forced full-position interval
 		// write a longer message
 		else
 		{
 			// 0x80-style chunks are 11 chars long (including 0x80)
 
 			// Write to ghost recording buffer
-			pbVar1[0] = 0x80;
+			writeCursor[0] = GHOST_OP_POSITION;
 
 			// flipping endians
 
 			// Write 2-char X position
-			pbVar1[1] = (char)(iVar4 >> 8);
-			pbVar1[2] = (char)iVar4;
+			writeCursor[1] = (char)(posX >> 8);
+			writeCursor[2] = (char)posX;
 
 			// Write 2-char Y position
-			pbVar1[3] = (char)(iVar3 >> 8);
-			pbVar1[4] = (char)iVar3;
+			writeCursor[3] = (char)(posY >> 8);
+			writeCursor[4] = (char)posY;
 
 			// Write 2-char Z position
-			pbVar1[5] = (char)(iVar6 >> 8);
-			pbVar1[6] = (char)iVar6;
+			writeCursor[5] = (char)(posZ >> 8);
+			writeCursor[6] = (char)posZ;
 
 			// Write 2-char ???
 			// related to time
-			pbVar1[7] = (char)(iVar9 >> 8);
-			pbVar1[8] = (char)iVar9;
+			writeCursor[7] = (char)(timeSincePositionPacket >> 8);
+			writeCursor[8] = (char)timeSincePositionPacket;
 
 			// Write 2-char rotation
-			pbVar1[9] = (char)(iVar8->rotCurr.y >> 4);
-			pbVar1[10] = (char)(iVar8->rotCurr.z >> 4);
+			writeCursor[9] = (char)(driver->rotCurr.y >> GHOST_RECORD_ROTATION_SHIFT);
+			writeCursor[10] = (char)(driver->rotCurr.z >> GHOST_RECORD_ROTATION_SHIFT);
 
-			pbVar1 += 11;
+			writeCursor += GHOST_SIZE_POSITION;
 
 			// Time of last 0x80 buffer
 			sdata->GhostRecording.timeOfLast80buffer = sdata->GhostRecording.timeElapsedInRace;
 		}
 
 		// Make a copy of instance flags
-		sdata->GhostRecording.instanceFlags = iVar7->flags;
+		sdata->GhostRecording.instanceFlags = inst->flags;
 
 		if (
 		    // if offset of ghost-recording buffer exceeds
 		    // the maximum size of a ghost that can be recorded
 		    // (if you're one frame away from max capacity)
-		    ((u32)sdata->GhostRecording.ptrEndOffset < (u32)pbVar1 + 0x40) &&
+		    ((u32)sdata->GhostRecording.ptrEndOffset < (u32)writeCursor + GHOST_RECORD_BUFFER_END_GUARD) &&
 
 		    (sdata->boolCanSaveGhost = 0,
 
@@ -279,7 +269,7 @@ void GhostTape_WriteMoves(s16 raceFinished)
 
 			// set ghostOverflowTextTimer
 			// to 180 frames (6 seconds 30fps)
-			sdata->ghostOverflowTextTimer = 0xb4;
+			sdata->ghostOverflowTextTimer = GHOST_RECORD_OVERFLOW_TEXT_FRAMES;
 		}
 
 		// Increment frame counter
@@ -288,12 +278,12 @@ void GhostTape_WriteMoves(s16 raceFinished)
 		// Save this frame's X, Y, Z positions,
 		// so that they can be used next frame to
 		// calculate velocity
-		sdata->GhostRecording.VelX = (s16)iVar4;
-		sdata->GhostRecording.VelY = (s16)iVar3;
-		sdata->GhostRecording.VelZ = (s16)iVar6;
+		sdata->GhostRecording.VelX = (s16)posX;
+		sdata->GhostRecording.VelY = (s16)posY;
+		sdata->GhostRecording.VelZ = (s16)posZ;
 
 		// save incremeneted pointer
-		sdata->GhostRecording.ptrCurrOffset = pbVar1;
+		sdata->GhostRecording.ptrCurrOffset = writeCursor;
 	}
 
 	// Increment frame counter
@@ -308,7 +298,7 @@ void GhostTape_WriteMoves(s16 raceFinished)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002838c-0x80028410.
 void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap)
 {
-	char *puVar1;
+	char *writeCursor;
 
 	// quit, if ghost cant be saved
 	if (sdata->boolCanSaveGhost == 0)
@@ -316,7 +306,7 @@ void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap)
 		return;
 	}
 
-	puVar1 = sdata->GhostRecording.ptrCurrOffset;
+	writeCursor = sdata->GhostRecording.ptrCurrOffset;
 
 	if ((type & TURBO_PAD) != 0)
 	{
@@ -324,26 +314,26 @@ void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap)
 		{
 			return;
 		}
-		sdata->GhostRecording.boostCooldown1E = 0x1e;
+		sdata->GhostRecording.boostCooldown1E = GHOST_RECORD_BOOST_COOLDOWN_FRAMES;
 	}
 
 	// 0x82-style chunks are 6 bytes long (including 0x82)
 
 	// Write to recording buffer
-	puVar1[0] = 0x82;
+	writeCursor[0] = GHOST_OP_BOOST;
 
 	// big endian reserve
-	puVar1[1] = (char)((u32)addReserve >> 8);
-	puVar1[2] = (char)addReserve;
+	writeCursor[1] = (char)((u32)addReserve >> 8);
+	writeCursor[2] = (char)addReserve;
 
 	// char, add type (increment or set)
-	puVar1[3] = type;
+	writeCursor[3] = type;
 
 	// big endian speedCcap
-	puVar1[4] = (char)((u32)speedCap >> 8);
-	puVar1[5] = (char)speedCap;
+	writeCursor[4] = (char)((u32)speedCap >> 8);
+	writeCursor[5] = (char)speedCap;
 
-	sdata->GhostRecording.ptrCurrOffset += 6;
+	sdata->GhostRecording.ptrCurrOffset += GHOST_SIZE_BOOST;
 }
 
 

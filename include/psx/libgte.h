@@ -15,6 +15,24 @@ typedef struct
 	s32 t[3];    /* transfer vector */
 } MATRIX;
 
+force_inline void CTR_MatrixCopyRot(MATRIX *dst, const MATRIX *src)
+{
+	CTR_WriteU32LE(&dst->m[0][0], CTR_ReadU32LE(&src->m[0][0]));
+	CTR_WriteU32LE(&dst->m[0][2], CTR_ReadU32LE(&src->m[0][2]));
+	CTR_WriteU32LE(&dst->m[1][1], CTR_ReadU32LE(&src->m[1][1]));
+	CTR_WriteU32LE(&dst->m[2][0], CTR_ReadU32LE(&src->m[2][0]));
+	dst->m[2][2] = src->m[2][2];
+}
+
+force_inline void CTR_MatrixSetRotIdentity(MATRIX *m)
+{
+	CTR_WriteU32LE(&m->m[0][0], 0x1000);
+	CTR_WriteU32LE(&m->m[0][2], 0);
+	CTR_WriteU32LE(&m->m[1][1], 0x1000);
+	CTR_WriteU32LE(&m->m[2][0], 0);
+	m->m[2][2] = 0x1000;
+}
+
 typedef struct
 { /* int  word type 3D vector */
 	s32 vx, vy;
@@ -38,8 +56,8 @@ typedef struct
 } DVECTOR;
 
 CTR_STATIC_ASSERT(sizeof(MATRIX) == 0x20);
-CTR_STATIC_ASSERT(offsetof(MATRIX, m[0][0]) == 0x0);
-CTR_STATIC_ASSERT(offsetof(MATRIX, t[0]) == 0x14);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_2D_ARRAY(MATRIX, m, 0, 0) == 0x0);
+CTR_STATIC_ASSERT(CTR_OFFSET_OF_ARRAY(MATRIX, t, 0) == 0x14);
 CTR_STATIC_ASSERT(sizeof(VECTOR) == 0x10);
 CTR_STATIC_ASSERT(sizeof(SVECTOR) == 0x8);
 CTR_STATIC_ASSERT(sizeof(CVECTOR) == 0x4);

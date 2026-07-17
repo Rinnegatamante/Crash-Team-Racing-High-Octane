@@ -27,7 +27,7 @@ void RB_Snowball_ThTick(struct Thread *t)
 		{
 			// snowball roll
 			soundID = 0x73;
-			PlaySound3D_Flags(&snowObj->audioPtr, soundID, snowInst);
+			PlaySound3D_Flags(&snowObj->soundIDCount, soundID, snowInst);
 		}
 
 		// sewer speedway barrel
@@ -35,7 +35,7 @@ void RB_Snowball_ThTick(struct Thread *t)
 		{
 			// barrel roll
 			soundID = 0x74;
-			PlaySound3D_Flags(&snowObj->audioPtr, soundID, snowInst);
+			PlaySound3D_Flags(&snowObj->soundIDCount, soundID, snowInst);
 		}
 
 		pointIndex = snowObj->pointIndex;
@@ -97,5 +97,5 @@ void RB_Snowball_LInB(struct Instance *inst)
 
 	snowObj->rot_unused.y = inst->matrix.m[0][2] >> 2;
 	snowObj->rot_unused.z = inst->matrix.m[2][2] >> 2;
-	snowObj->audioPtr = 0;
+	snowObj->soundIDCount = 0;
 }

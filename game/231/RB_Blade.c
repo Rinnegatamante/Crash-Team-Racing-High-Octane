@@ -35,6 +35,10 @@ void RB_Blade_LInB(struct Instance *inst)
 	// One "blade" is a group of three fins,
 
 	struct Blade *bladeObj;
+	if (inst->thread != NULL)
+	{
+		return;
+	}
 
 	struct Thread *t = PROC_BirthWithObject(
 	    // creation flags

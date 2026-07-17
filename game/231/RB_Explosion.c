@@ -57,11 +57,7 @@ void RB_Explosion_InitPotion(struct Instance *inst)
 	shatterInst->thread->funcThDestroy = PROC_DestroyInstance;
 
 	// copy position and rotation from one instance to the other
-	*(int *)&shatterInst->matrix.m[0][0] = *(int *)&inst->matrix.m[0][0];
-	*(int *)&shatterInst->matrix.m[0][2] = *(int *)&inst->matrix.m[0][2];
-	*(int *)&shatterInst->matrix.m[1][1] = *(int *)&inst->matrix.m[1][1];
-	*(int *)&shatterInst->matrix.m[2][0] = *(int *)&inst->matrix.m[2][0];
-	shatterInst->matrix.m[2][2] = inst->matrix.m[2][2];
+	CTR_MatrixCopyRot(&shatterInst->matrix, &inst->matrix);
 
 	for (int i = 0; i < 3; i++)
 	{
@@ -116,14 +112,10 @@ void RB_Explosion_InitGeneric(struct Instance *inst)
 	u32 color;
 
 	// create thread for explosion
-	explosion = INSTANCE_BirthWithThread(0x26, s_explosion1, SMALL, OTHER, RB_Explosion_ThTick, 0, 0);
+	explosion = INSTANCE_BirthWithThread(STATIC_CRATE_EXPLOSION, s_explosion1, SMALL, OTHER, RB_Explosion_ThTick, 0, 0);
 
 	// copy position and rotation from one instance to the other
-	*(int *)&explosion->matrix.m[0][0] = *(int *)&inst->matrix.m[0][0];
-	*(int *)&explosion->matrix.m[0][2] = *(int *)&inst->matrix.m[0][2];
-	*(int *)&explosion->matrix.m[1][1] = *(int *)&inst->matrix.m[1][1];
-	*(int *)&explosion->matrix.m[2][0] = *(int *)&inst->matrix.m[2][0];
-	explosion->matrix.m[2][2] = inst->matrix.m[2][2];
+	CTR_MatrixCopyRot(&explosion->matrix, &inst->matrix);
 
 	explosion->matrix.t[0] = inst->matrix.t[0];
 	explosion->matrix.t[1] = inst->matrix.t[1];

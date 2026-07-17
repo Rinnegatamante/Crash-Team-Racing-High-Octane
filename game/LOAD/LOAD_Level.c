@@ -17,14 +17,14 @@ void LOAD_TalkingMask(int packID, int maskID)
 	MEMPACK_SwapPacks(packID);
 	MEMPACK_ClearLowMem();
 
-	sdata->PatchMem_Size = 1;
+	sdata->load_inProgress = 1;
 
 	int offset = maskID * 4 + (packID - 1) * 2;
 
 	// NOTE(aalhendi): Retail queues legacy VRAM type 3 with no final callback.
-	LOAD_AppendQueue(0, LT_VRAM, BI_UKAHEAD + offset, NULL, NULL);
+	LOAD_AppendQueue(sdata->ptrBigfileCdPos_2, LT_VRAM, BI_UKAHEAD + offset, NULL, NULL);
 
-	LOAD_AppendQueue(0, LT_GETADDR, BI_UKAHEAD + offset + 1, NULL, LOAD_Callback_MaskHints3D);
+	LOAD_AppendQueue(sdata->ptrBigfileCdPos_2, LT_GETADDR, BI_UKAHEAD + offset + 1, NULL, LOAD_Callback_MaskHints3D);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034874-0x800348e8.
@@ -35,15 +35,15 @@ void LOAD_LevelFile(int levelID)
 	// why here?
 	sdata->modelMaskHints3D = 0;
 
-	gGT->hudFlags &= 0xfe;
+	gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 
 	gGT->prevLEV = gGT->levelID;
 	gGT->levelID = levelID;
 
 	// disable all rendering except checkeredFlag
-	gGT->renderFlags &= 0x1000;
+	gGT->renderFlags &= RENDER_FLAG_CHECKERED_FLAG;
 
-	if (RaceFlag_IsFullyOffScreen() == 1)
+	if (RaceFlag_IsFullyOffScreen())
 	{
 		RaceFlag_BeginTransition(1);
 	}

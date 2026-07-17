@@ -1,0 +1,191 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "common",
+      "hidden": true,
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-x86",
+      "displayName": "Windows MSVC x86",
+      "description": "Native 32-bit Windows build using Visual Studio 2022",
+      "inherits": "common",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build-msvc-x86",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "Visual Studio"
+        }
+      }
+    },
+    {
+      "name": "windows-mingw-i686-debug",
+      "displayName": "Windows MinGW i686 Debug",
+      "inherits": "common",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build-mingw-i686-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "MinGW"
+        }
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "i686-w64-mingw32-gcc",
+        "CMAKE_MAKE_PROGRAM": "mingw32-make"
+      }
+    },
+    {
+      "name": "windows-mingw-i686-release",
+      "displayName": "Windows MinGW i686 Release",
+      "inherits": "common",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build-mingw-i686-release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "MinGW"
+        }
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "i686-w64-mingw32-gcc",
+        "CMAKE_MAKE_PROGRAM": "mingw32-make"
+      }
+    },
+    {
+      "name": "linux-gcc-i686-debug",
+      "displayName": "Linux GCC i686 Debug",
+      "inherits": "common",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-linux-gcc-i686-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_C_FLAGS": "-m32",
+        "CMAKE_EXE_LINKER_FLAGS": "-m32"
+      }
+    },
+    {
+      "name": "linux-gcc-i686-release",
+      "displayName": "Linux GCC i686 Release",
+      "inherits": "common",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-linux-gcc-i686-release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_C_FLAGS": "-m32",
+        "CMAKE_EXE_LINKER_FLAGS": "-m32"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-msvc-x86-debug",
+      "configurePreset": "windows-msvc-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-msvc-x86-release",
+      "configurePreset": "windows-msvc-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-mingw-i686-debug",
+      "configurePreset": "windows-mingw-i686-debug"
+    },
+    {
+      "name": "windows-mingw-i686-release",
+      "configurePreset": "windows-mingw-i686-release"
+    },
+    {
+      "name": "linux-gcc-i686-debug",
+      "configurePreset": "linux-gcc-i686-debug"
+    },
+    {
+      "name": "linux-gcc-i686-release",
+      "configurePreset": "linux-gcc-i686-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-msvc-x86-debug",
+      "configurePreset": "windows-msvc-x86",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-msvc-x86-release",
+      "configurePreset": "windows-msvc-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-mingw-i686-debug",
+      "configurePreset": "windows-mingw-i686-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-mingw-i686-release",
+      "configurePreset": "windows-mingw-i686-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-gcc-i686-debug",
+      "configurePreset": "linux-gcc-i686-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-gcc-i686-release",
+      "configurePreset": "linux-gcc-i686-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

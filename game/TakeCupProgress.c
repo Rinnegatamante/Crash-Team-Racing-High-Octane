@@ -16,7 +16,7 @@ void TakeCupProgress_Activate(s16 stringIndex)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004b258-0x8004b31c.
 void TakeCupProgress_MenuProc(struct RectMenu *menu)
 {
-	if (menu->unk1e == 1)
+	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
 	{
 		s16 stringIndex = sdata->stringIndexSaveCupProgress;
 		if (stringIndex != 0)
@@ -35,7 +35,7 @@ void TakeCupProgress_MenuProc(struct RectMenu *menu)
 	if (menu->rowSelected == 0)
 	{
 		sdata->boolSaveCupProgress = 1;
-		SelectProfile_ToggleMode(0x41);
+		SelectProfile_ToggleMode(SELECT_PROFILE_MODE_SLOT_SAVE);
 		sdata->ptrDesiredMenu = &data.menuWarning2;
 	}
 }

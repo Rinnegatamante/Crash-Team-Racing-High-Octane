@@ -42,6 +42,13 @@ typedef union Texpage
 	u32 self;
 } Texpage;
 
+enum TexpageColorMode
+{
+	TEXPAGE_COLOR_4BIT = 0,
+	TEXPAGE_COLOR_8BIT = 1,
+	TEXPAGE_COLOR_15BIT = 2,
+};
+
 typedef struct
 {
 	Tag tag;
@@ -286,6 +293,11 @@ typedef struct PolyFT4
 void GetPrimitiveMem(void **ppPrim, size_t primSize);
 void AddPrimitive(void *pPrim, void *pOt);
 
-#define GetPrimMem(p) GetPrimitiveMem((void **)&p, sizeof(*p))
+#define GetPrimMem(p)                            \
+	{                                            \
+		void *primMem;                           \
+		GetPrimitiveMem(&primMem, sizeof(*(p))); \
+		(p) = primMem;                           \
+	}
 
 #endif

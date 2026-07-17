@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_MAIN_H
+#define CTR_NATIVE_NAMESPACE_MAIN_H
+
 enum GameMode1
 {
 	PAUSE_1 = 0x1,
@@ -32,8 +35,9 @@ enum GameMode1
 	ADVENTURE_CUP = 0x10000000,
 	GAME_CUTSCENE = 0x20000000,
 	LOADING = 0x40000000,
-	ADVENTURE_BOSS = 0x80000000
 };
+
+#define ADVENTURE_BOSS 0x80000000u
 
 enum GameMode1Masks
 {
@@ -42,6 +46,7 @@ enum GameMode1Masks
 	GAME_MODE_MENU_OR_CUTSCENE_MASK = MAIN_MENU | GAME_CUTSCENE,
 	GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK = TIME_TRIAL | GAME_MODE_MENU_OR_CUTSCENE_MASK,
 	GAME_MODE_SAVE_LAP_TIME_MASK = ARCADE_MODE | ADVENTURE_MODE | TIME_TRIAL,
+	GAME_MODE_GHOST_RECORD_BLOCK_MASK = PAUSE_ALL | DEBUG_MENU,
 };
 
 CTR_STATIC_ASSERT(GAME_MODE_VIBRATION_MASK == 0xf00);
@@ -49,6 +54,14 @@ CTR_STATIC_ASSERT(GAME_MODE_END_RETAINED_MODE_MASK == 0x3e0020);
 CTR_STATIC_ASSERT(GAME_MODE_MENU_OR_CUTSCENE_MASK == 0x20002000);
 CTR_STATIC_ASSERT(GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK == 0x20022000);
 CTR_STATIC_ASSERT(GAME_MODE_SAVE_LAP_TIME_MASK == 0x4a0000);
+CTR_STATIC_ASSERT(GAME_MODE_GHOST_RECORD_BLOCK_MASK == 0x1f);
+
+enum BattleSetupConstants
+{
+	BATTLE_DEFAULT_WEAPON_FLAGS = 0x34de,
+};
+
+CTR_STATIC_ASSERT(BATTLE_DEFAULT_WEAPON_FLAGS == 0x34de);
 
 // NOTE(aalhendi): ADVENTURE_BOSS = 0x80000000 sets the sign bit. Retail tests this via
 // signed comparison (bltz). Keep the same semantics, not a bitmask test.
@@ -73,6 +86,80 @@ CTR_STATIC_ASSERT(LOAD_REQUESTED == -4);
 CTR_STATIC_ASSERT(LOAD_FINISHED == -2);
 CTR_STATIC_ASSERT(LOAD_IDLE == -1);
 CTR_STATIC_ASSERT(LOAD_TEN_STAGES_0 == 0);
+
+enum OverlayIndex
+{
+	OVERLAY_INDEX_NONE = 0xff,
+	OVERLAY_INDEX_MAIN_MENU = 0,
+	OVERLAY_INDEX_RACING_OR_BATTLE = 1,
+	OVERLAY_INDEX_ADV_HUB = 2,
+	OVERLAY_INDEX_PODIUMS = 3,
+};
+
+CTR_STATIC_ASSERT(OVERLAY_INDEX_NONE == 0xff);
+CTR_STATIC_ASSERT(OVERLAY_INDEX_MAIN_MENU == 0);
+CTR_STATIC_ASSERT(OVERLAY_INDEX_RACING_OR_BATTLE == 1);
+CTR_STATIC_ASSERT(OVERLAY_INDEX_ADV_HUB == 2);
+CTR_STATIC_ASSERT(OVERLAY_INDEX_PODIUMS == 3);
+
+enum GameRenderFlag
+{
+	RENDER_FLAG_DRAW_LEVEL = 0x1,
+	RENDER_FLAG_RAIN = 0x2,
+	RENDER_FLAG_CONFETTI = 0x4,
+	RENDER_FLAG_STARS = 0x8,
+	RENDER_FLAG_BEAKER_RAIN = 0x10,
+	RENDER_FLAG_RENDER_BUCKET = 0x20,
+	RENDER_FLAG_EFFECT_BUCKETS = 0x40,
+	RENDER_FLAG_TIRES = 0x80,
+	RENDER_FLAG_MULTIPLAYER_DECALS = 0x100,
+	RENDER_FLAG_PARTICLES = 0x200,
+	RENDER_FLAG_SHADOWS = 0x400,
+	RENDER_FLAG_HEAT_EFFECT = 0x800,
+	RENDER_FLAG_CHECKERED_FLAG = 0x1000,
+	RENDER_FLAG_CLEAR_BACK_BUFFER = 0x2000,
+	RENDER_FLAG_UNKNOWN_0x4000 = 0x4000,
+	RENDER_FLAG_SPLIT_SCREEN_LINES = 0x8000,
+};
+
+enum GameRenderFlagMasks
+{
+	RENDER_FLAG_VISMEM_REFRESH_MASK = RENDER_FLAG_DRAW_LEVEL | RENDER_FLAG_RENDER_BUCKET,
+	RENDER_FLAG_LOADING_SCREEN_MASK = RENDER_FLAG_CHECKERED_FLAG | RENDER_FLAG_RENDER_BUCKET,
+	RENDER_FLAG_ALL_EXCEPT_CHECKERED_FLAG_MASK = 0xffffefff,
+};
+
+CTR_STATIC_ASSERT(RENDER_FLAG_VISMEM_REFRESH_MASK == 0x21);
+CTR_STATIC_ASSERT(RENDER_FLAG_LOADING_SCREEN_MASK == 0x1020);
+CTR_STATIC_ASSERT(RENDER_FLAG_ALL_EXCEPT_CHECKERED_FLAG_MASK == 0xffffefff);
+CTR_STATIC_ASSERT(RENDER_FLAG_SPLIT_SCREEN_LINES == 0x8000);
+
+enum GameHudFlag
+{
+	HUD_FLAG_RACE_HUD = 0x1,
+	HUD_FLAG_INIT_UI_INSTANCES = 0x2,
+	HUD_FLAG_CUP_STANDINGS = 0x4,
+	HUD_FLAG_INTRO_RACE_TITLE_BARS = 0x8,
+	HUD_FLAG_HIDE_ADVENTURE_MAP = 0x10,
+	HUD_FLAG_RENDER_LESS = 0x20,
+};
+
+enum GameHudFlagMasks
+{
+	HUD_FLAG_LOAD_RESET_MASK = 0xf6,
+	HUD_FLAG_PAUSE_SCREENSHOT_MASK = 0xf6,
+	HUD_FLAG_CLEAR_RACE_HUD_MASK = 0xfe,
+	HUD_FLAG_CLEAR_CUP_STANDINGS_MASK = 0xfb,
+	HUD_FLAG_CLEAR_INTRO_RACE_TITLE_BARS_MASK = 0xf7,
+	HUD_FLAG_CLEAR_RENDER_LESS_MASK = 0xdf,
+};
+
+CTR_STATIC_ASSERT(HUD_FLAG_LOAD_RESET_MASK == 0xf6);
+CTR_STATIC_ASSERT(HUD_FLAG_PAUSE_SCREENSHOT_MASK == 0xf6);
+CTR_STATIC_ASSERT(HUD_FLAG_CLEAR_RACE_HUD_MASK == 0xfe);
+CTR_STATIC_ASSERT(HUD_FLAG_CLEAR_CUP_STANDINGS_MASK == 0xfb);
+CTR_STATIC_ASSERT(HUD_FLAG_CLEAR_INTRO_RACE_TITLE_BARS_MASK == 0xf7);
+CTR_STATIC_ASSERT(HUD_FLAG_CLEAR_RENDER_LESS_MASK == 0xdf);
 
 enum
 {
@@ -214,6 +301,42 @@ CTR_STATIC_ASSERT(offsetof(struct MainRenderLevelGeometryScratch, fullDynamicFad
 CTR_STATIC_ASSERT(sizeof(struct MainRenderLevelGeometryScratch) == 0x30);
 
 // real ND name
+struct RngDeadCoedState
+{
+	u32 state0;
+	u32 state1;
+};
+
+CTR_STATIC_ASSERT(sizeof(struct RngDeadCoedState) == 0x8);
+
+struct GameTrackerConfetti
+{
+	union
+	{
+		// Retail updates the current particle halfword through a 32-bit lw/sw.
+		u32 numParticles_currWord;
+		struct
+		{
+			// 0x00
+			s16 numParticles_curr;
+			s16 numParticlesPad;
+		};
+	};
+
+	// 0x04
+	s16 numParticles_max;
+	s16 vanishRate;
+
+	// 0x08
+	s32 velY; // negative
+};
+
+CTR_STATIC_ASSERT(sizeof(struct GameTrackerConfetti) == 0xc);
+CTR_STATIC_ASSERT(OFFSETOF(struct GameTrackerConfetti, numParticles_currWord) == 0x0);
+CTR_STATIC_ASSERT(OFFSETOF(struct GameTrackerConfetti, numParticles_max) == 0x4);
+CTR_STATIC_ASSERT(OFFSETOF(struct GameTrackerConfetti, vanishRate) == 0x6);
+CTR_STATIC_ASSERT(OFFSETOF(struct GameTrackerConfetti, velY) == 0x8);
+
 struct GameTracker
 {
 	// 0x0
@@ -370,22 +493,7 @@ struct GameTracker
 	struct RainBuffer rainBuffer[4];
 
 	// 0x1b00 -- UsaRetail
-	struct
-	{
-		// 0x1b00
-		s16 numParticles_curr;
-
-		// previous frame?
-		s16 unk1;
-
-		// 0x1b04
-		s16 numParticles_max;
-
-		s16 unk2;
-
-		// 0x1b08
-		int velY; // negative
-	} confetti;
+	struct GameTrackerConfetti confetti;
 
 	// 0x1b0c
 	struct Stars stars;
@@ -421,11 +529,11 @@ struct GameTracker
 
 	// 1c9c
 	// exhaust, fire, etc
-	void *particleList_ordinary;
+	struct Particle *particleList_ordinary;
 
 	// 1ca0
 	// distorts screen above fire
-	void *particleList_heatWarp;
+	struct Particle *particleList_heatWarp;
 
 	// 1ca4
 	int numParticles;
@@ -435,12 +543,12 @@ struct GameTracker
 	// 1cb0 -- EurRetail, JpnRetail
 
 	// 1ca8, 1ca9
-	char numPlyrCurrGame;
-	char numPlyrNextGame;
+	u8 numPlyrCurrGame;
+	u8 numPlyrNextGame;
 
 	// 1caa, 1cab
-	char numBotsCurrGame;
-	char numBotsNextGame;
+	u8 numBotsCurrGame;
+	u8 numBotsNextGame;
 
 	// 1cac
 	int unk1cac[5];
@@ -518,7 +626,7 @@ struct GameTracker
 	char boolDemoMode;
 
 	// 1d33
-	char numLaps;
+	s8 numLaps;
 
 	// 1d34
 	// Variable is never given a value
@@ -1275,14 +1383,7 @@ struct GameTracker
 
 	// 252c
 	// this stuct is passed to FUN_8006c684 and updates every frame (this is func with 0xdeadc0ed)
-	struct
-	{
-		// 252c
-		int unk1;
-
-		// 2530
-		int unk2;
-	} deadcoed_struct;
+	struct RngDeadCoedState deadcoed_struct;
 
 	// 0x2534
 	char final_filler_mostly_null[0x0B];
@@ -1294,10 +1395,10 @@ struct GameTracker
 	char Debug_ToggleNormalSpawn;
 
 	// 2540
-	char overlayIndex_LOD;
-	char overlayIndex_Threads;
-	char overlayIndex_null_notUsed;
-	char overlayIndex_EndOfRace;
+	u8 overlayIndex_LOD;
+	u8 overlayIndex_Threads;
+	u8 overlayIndex_null_notUsed;
+	u8 overlayIndex_EndOfRace;
 
 	// 2544
 	int unk_filler_between_OvrIndex_levIDs;
@@ -1328,28 +1429,6 @@ struct GameTracker
 	// 256c
 	// uint bitwise rendering flags, controls rendering flow. checked a lot in FUN_80035e70, which is game drawing func
 
-	// 00000001 - draw lev
-	// 00000002 - draw rain
-	// 00000004 - draw confetti
-	// 00000008 - draw stars
-	// 00000010 - "rain pool" -- red beaker
-	// 00000020 - execute RenderBucket (draw instances)
-
-	// 00000040 - battle mode, player flicker on damage, etc
-	//  what? no it's not, happens in Cortex Castle Arcade
-
-	// 00000080 - wheels on karts
-	// 00000100 - draw model to texture low res lod in 2p-4p
-	// 00000200 - draw particles (fire, smoke)
-	// 00000400 - draw shadow
-	// 00000800 - draw heat effect
-	// 00001000 - draw checkered flag
-	// 00002000 - clear back buffer between frames
-	// 00004000 - ?
-	// 00008000 - Draw 2D lines between multiplayer
-	//				screens, plus screen outline (battle)
-
-	// rest unknown or no visible effects
 	u32 renderFlags;
 
 	// 2570
@@ -1431,4 +1510,6 @@ CTR_STATIC_ASSERT(sizeof(struct GameTracker) == 0x258C);
 #elif BUILD >= EurRetail
 CTR_STATIC_ASSERT(sizeof(struct GameTracker) == 0x2594);
 #endif
+#endif
+
 #endif

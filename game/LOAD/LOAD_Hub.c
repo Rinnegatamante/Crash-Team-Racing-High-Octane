@@ -19,13 +19,13 @@ void LOAD_Hub_ReadFile(struct BigHeader *bigfile, int levID, int packID)
 	MEMPACK_SwapPacks(packID);
 	MEMPACK_ClearLowMem();
 
-	sdata->PatchMem_Size = 1;
+	sdata->load_inProgress = 1;
 	gGT->level2 = 0;
 	gGT->levID_in_each_mempack[packID] = levID;
 
-	LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(levID, 1, LVI_VRAM), NULL, NULL);
-	LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(levID, 1, LVI_LEV), NULL, LOAD_Callback_LEV);
-	LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(levID, 1, LVI_PTR), sdata->PatchMem_Ptr, LOAD_HubCallback);
+	LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(levID, LOAD_LEVEL_LOD_1P, LVI_VRAM), NULL, NULL);
+	LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(levID, LOAD_LEVEL_LOD_1P, LVI_LEV), NULL, LOAD_Callback_LEV);
+	LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(levID, LOAD_LEVEL_LOD_1P, LVI_PTR), sdata->PatchMem_Ptr, LOAD_HubCallback);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80033108-0x80033318.
@@ -55,7 +55,7 @@ void LOAD_Hub_SwapNow()
 	LOAD_HubSwapPtrs(gGT);
 
 	// 0,1,2
-	gGT->activeMempackIndex = 3 - gGT->activeMempackIndex;
+	gGT->activeMempackIndex = LOAD_HUB_MEMPACK_PAIR_INDEX_SUM - gGT->activeMempackIndex;
 
 	gGT->prevLEV = gGT->levelID;
 	gGT->levelID = gGT->levID_in_each_mempack[gGT->activeMempackIndex];
@@ -127,7 +127,7 @@ void LOAD_Hub_SwapNow()
 // NOTE(aalhendi): Native mirrors retail rdata 0x80011180 because CTR_NATIVE
 // does not expose the retail rdata object.
 #if defined(CTR_NATIVE)
-static const int s_advHubConnectedLevID[5][3] = {
+static const int s_advHubConnectedLevID[LOAD_ADV_HUB_COUNT][LOAD_ADV_HUB_CONNECTION_COUNT] = {
     {N_SANITY_BEACH, THE_LOST_RUINS, -1},
     {GEM_STONE_VALLEY, GLACIER_PARK, -1},
     {GEM_STONE_VALLEY, GLACIER_PARK, -1},
@@ -159,7 +159,7 @@ void LOAD_Hub_Main(struct BigHeader *bigfilePtr)
 		int needSwapNow = (stepFlagSet & COLL_STEP_TRIGGER_HUB_SWAP_NOW_MASK) >> COLL_STEP_TRIGGER_HUB_SWAP_NOW_SHIFT;
 
 		// if new level does not need to load
-		if (nextLevelID == 0)
+		if (nextLevelID == LOAD_HUB_TRIGGER_NONE)
 		{
 			if ((needSwapNow != 0) || (gGT->bool_AdvHub_NeedToSwapLEV != 0))
 			{
@@ -176,12 +176,11 @@ void LOAD_Hub_Main(struct BigHeader *bigfilePtr)
 			u32 currLevelID = gGT->levelID - GEM_STONE_VALLEY;
 
 			// ctr hubs are 0-4
-			if (currLevelID >= 5)
+			if (currLevelID < LOAD_ADV_HUB_COUNT)
 			{
-				return;
+				LOAD_Hub_ReadFile(bigfilePtr, LOAD_HUB_CONNECTED_LEV(currLevelID, nextLevelID - LOAD_HUB_TRIGGER_ID_BIAS),
+				                  LOAD_HUB_MEMPACK_PAIR_INDEX_SUM - gGT->activeMempackIndex);
 			}
-
-			LOAD_Hub_ReadFile(bigfilePtr, LOAD_HUB_CONNECTED_LEV(currLevelID, nextLevelID - 1), 3 - gGT->activeMempackIndex);
 		}
 	}
 }

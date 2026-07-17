@@ -3,11 +3,11 @@
 struct HitboxDesc fjBoxDesc = {.inst = (struct Instance *)0,
                                .thread = (struct Thread *)0,
                                .bucket = (struct Thread *)0,
-                               .bbox = {.min = {0xFFC0, 0xFFC0, 0}, .max = {0x40, 0x80, 0x140}},
+                               .bbox = {.min = {{0xFFC0, 0xFFC0, 0}}, .max = {{0x40, 0x80, 0x140}}},
                                .threadHit = (struct Thread *)0,
                                .funcThCollide = (void *)0};
 
-SVec3 fjLightDir = {0x8B8, 0xD6A, 0};
+SVec3 fjLightDir = {{0x8B8, 0xD6A, 0}};
 
 struct ParticleEmitter emSet_fjHeat[0xb] = {[0] =
                                                 {
@@ -126,7 +126,7 @@ struct ParticleEmitter emSet_fjHeat[0xb] = {[0] =
                                                 },
 
                                             // null terminator
-                                            {}};
+                                            {0}};
 
 struct ParticleEmitter emSet_fjFire[0x8] = {[0] =
                                                 {
@@ -222,7 +222,7 @@ struct ParticleEmitter emSet_fjFire[0x8] = {[0] =
                                                 },
 
                                             // null terminator
-                                            {}};
+                                            {0}};
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b64c0-0x800b6728.
 void RB_FlameJet_Particles(struct Instance *inst, struct FlameJet *fjObj)
@@ -245,11 +245,11 @@ void RB_FlameJet_Particles(struct Instance *inst, struct FlameJet *fjObj)
 		particle1->axis[1].velocity = 0;
 		particle1->axis[2].velocity = (s16)fjObj->dirZ;
 
-		result = RngDeadCoed((u32 *)&gGT->deadcoed_struct);
+		result = RngDeadCoed(&gGT->deadcoed_struct);
 		result = MATH_Sin((gGT->timer * 0x100 + (result >> 0x18)) & 0xfff);
 		particle1->axis[1].accel = result >> 4;
 
-		particle1->unk1A = 0x1e00;
+		particle1->renderDepthLimit = 0x1e00;
 		particle1->otIndexOffset = inst->depthBiasNormal - 1;
 
 		if ((gGT->timer & 1) != 0)
@@ -298,7 +298,7 @@ void RB_FlameJet_Particles(struct Instance *inst, struct FlameJet *fjObj)
 
 		particle2->axis[1].accel = particle1->axis[1].accel;
 
-		particle2->unk1A = 0x1e00;
+		particle2->renderDepthLimit = 0x1e00;
 		particle2->otIndexOffset = inst->depthBiasNormal;
 	}
 }
@@ -326,10 +326,10 @@ void RB_FlameJet_ThTick(struct Thread *t)
 	// in first 45 frames (1.5s)
 	if (fjObj->cycleTimer < 0x2d)
 	{
-		PlaySound3D_Flags((u32 *)&fjObj->audioPtr, 0x68, fjInst);
+		PlaySound3D_Flags(&fjObj->soundIDCount, 0x68, fjInst);
 
-		// [unused variable?]
-		fjObj->unk += 0x100;
+		// Retail increments this object slot, but no known reader uses it.
+		fjObj->unusedPhase += 0x100;
 
 		RB_FlameJet_Particles(fjInst, fjObj);
 
@@ -381,9 +381,9 @@ void RB_FlameJet_ThTick(struct Thread *t)
 	// on 45th frame (1.5s)
 	else if (fjObj->cycleTimer == 0x2d)
 	{
-		if (fjObj->audioPtr != 0)
+		if (fjObj->soundIDCount != 0)
 		{
-			OtherFX_RecycleMute(&fjObj->audioPtr);
+			OtherFX_RecycleMute(&fjObj->soundIDCount);
 		}
 	}
 
@@ -439,7 +439,7 @@ void RB_FlameJet_LInB(struct Instance *inst)
 	fjObj->cooldown = 0;
 	fjObj->dirX = inst->matrix.m[0][2] * -0x4b >> 5;
 	fjObj->dirZ = inst->matrix.m[2][2] * 0x4b >> 5;
-	fjObj->audioPtr = 0;
+	fjObj->soundIDCount = 0;
 
 	fjBoxDesc.bbox.min.x = -0x40;
 	fjBoxDesc.bbox.min.y = -0x40;

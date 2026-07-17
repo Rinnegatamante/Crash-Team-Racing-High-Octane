@@ -11,8 +11,7 @@ void RB_Turtle_ThTick(struct Thread *t)
 	turtleObj = t->object;
 	turtleInst = t->inst;
 
-	// 0 from moment it hits bottom to moment it hits top
-	if (turtleObj->direction == 0)
+	if (turtleObj->direction == TURTLE_DIRECTION_RISING)
 	{
 		// use timer variables for milliseconds
 
@@ -45,7 +44,7 @@ void RB_Turtle_ThTick(struct Thread *t)
 		{
 			// turtle not fully down,
 			// impacts jumping
-			turtleObj->state = 1;
+			turtleObj->state = TURTLE_STATE_NOT_FULLY_DOWN;
 
 			// use timer variables for frame counting
 
@@ -56,7 +55,7 @@ void RB_Turtle_ThTick(struct Thread *t)
 			if (currTimer < 1)
 			{
 				// reset direction
-				turtleObj->direction = 1;
+				turtleObj->direction = TURTLE_DIRECTION_FALLING;
 
 				// reset timer
 				turtleObj->timer = 0;
@@ -71,7 +70,6 @@ void RB_Turtle_ThTick(struct Thread *t)
 		}
 	}
 
-	// 1 from moment it hits top to moment it hits bottom
 	else
 	{
 		// use timer variables for milliseconds
@@ -114,20 +112,21 @@ void RB_Turtle_ThTick(struct Thread *t)
 			else
 			{
 				// reset direction
-				turtleObj->direction = 0;
+				turtleObj->direction = TURTLE_DIRECTION_RISING;
 
 				// reset timer
 				turtleObj->timer = 0;
 
 				// turtle is "fully" down
-				turtleObj->state = 0;
+				turtleObj->state = TURTLE_STATE_FULLY_DOWN;
 			}
 		}
 	}
 }
 
-int RB_Turtle_LInC(struct Instance *inst, struct Thread *driverTh, struct ScratchpadStruct *sps) // unused 3rd param?
+int RB_Turtle_LInC(struct Instance *inst, struct Thread *driverTh, struct ScratchpadStruct *sps)
 {
+	(void)sps;
 	int speed;
 	int jumpType;
 	struct Driver *driver;
@@ -146,9 +145,7 @@ int RB_Turtle_LInC(struct Instance *inst, struct Thread *driverTh, struct Scratc
 		// small jump
 		jumpType = FORCED_JUMP_LOW;
 
-		if (
-		    // turtleObj->state != FULLY_DOWN
-		    ((struct Turtle *)inst->thread->object)->state != 0)
+		if (((struct Turtle *)inst->thread->object)->state != TURTLE_STATE_FULLY_DOWN)
 		{
 			// big jump
 			jumpType = FORCED_JUMP_HIGH;
@@ -201,21 +198,21 @@ void RB_Turtle_LInB(struct Instance *inst)
 	turtleObj = ((struct Turtle *)t->object);
 	turtleObj->turtleID = turtleID;
 	turtleObj->timer = 0;
-	turtleObj->direction = 1;
+	turtleObj->direction = TURTLE_DIRECTION_FALLING;
 	inst->animFrame = 0;
 
 	// put turtles on different cycles, based on turtleID
 	if ((turtleID & 1) == 0)
 	{
 		// fully up
-		turtleObj->direction = 1;
-		turtleObj->state = 1; // "not fully down"
+		turtleObj->direction = TURTLE_DIRECTION_FALLING;
+		turtleObj->state = TURTLE_STATE_NOT_FULLY_DOWN;
 		inst->animFrame = 0;
 		return;
 	}
 
 	// fully down
-	turtleObj->direction = 0;
-	turtleObj->state = 0;
+	turtleObj->direction = TURTLE_DIRECTION_RISING;
+	turtleObj->state = TURTLE_STATE_FULLY_DOWN;
 	inst->animFrame = INSTANCE_GetNumAnimFrames(inst, 0);
 }

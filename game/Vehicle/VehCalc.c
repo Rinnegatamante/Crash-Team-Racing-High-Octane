@@ -1,5 +1,16 @@
 #include <common.h>
 
+enum
+{
+	VEH_CALC_MIPS_SHIFT_MASK = 0x1f,
+	VEH_CALC_FAST_SQRT_ADD_BIT_BIAS = 1,
+	VEH_CALC_FAST_SQRT_ROOT_STEP_SHIFT = 2,
+};
+
+CTR_STATIC_ASSERT(VEH_CALC_MIPS_SHIFT_MASK == 0x1f);
+CTR_STATIC_ASSERT(VEH_CALC_FAST_SQRT_ADD_BIT_BIAS == 1);
+CTR_STATIC_ASSERT(VEH_CALC_FAST_SQRT_ROOT_STEP_SHIFT == 2);
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058f54-0x80058f9c.
 int VehCalc_InterpBySpeed(int val, int speed, int desired)
 {
@@ -64,16 +75,16 @@ int VehCalc_SteerAccel(int steeringFrameCount, int stage2FirstFrame, int stage2F
 
 	else
 	{
-		int stage3Start = CTR_MipsAddLo(stage2FirstFrame, stage2FrameLength);
+		int stage3FirstFrame = CTR_MipsAddLo(stage2FirstFrame, stage2FrameLength);
 
 		// Steering Stage 3
 		// frames 12+
 		// decrease steer acceleration as time passes
-		if (stage3Start < steeringFrameCount)
+		if (stage3FirstFrame < steeringFrameCount)
 		{
 			// map "frame" from [12,64] -> [0xC00,0]
 
-			steerAccel = VehCalc_MapToRange(steeringFrameCount, stage3Start, stage4FirstFrame, stage1MaxSteer, 0);
+			steerAccel = VehCalc_MapToRange(steeringFrameCount, stage3FirstFrame, stage4FirstFrame, stage1MaxSteer, 0);
 		}
 	}
 
@@ -95,23 +106,23 @@ u32 VehCalc_FastSqrt(u32 n, u32 shift)
 	u32 result = 0;
 	u32 rootBitIndex = 1;
 	u32 lastApproximation = 0;
-	u32 testBit = (u32)1 << (shift & 0x1f);
+	u32 testBit = (u32)1 << (shift & VEH_CALC_MIPS_SHIFT_MASK);
 
-	while ((testBit < n) && ((testBit << 2) != 0))
+	while ((testBit < n) && ((testBit << VEH_CALC_FAST_SQRT_ROOT_STEP_SHIFT) != 0))
 	{
 		rootBitIndex++;
-		testBit <<= 2;
+		testBit <<= VEH_CALC_FAST_SQRT_ROOT_STEP_SHIFT;
 	}
 
-	u32 addBit = (u32)1 << ((rootBitIndex + CTR_MipsSubLo(shift, 1)) & 0x1f);
+	u32 addBit = (u32)1 << ((rootBitIndex + CTR_MipsSubLo(shift, VEH_CALC_FAST_SQRT_ADD_BIT_BIAS)) & VEH_CALC_MIPS_SHIFT_MASK);
 
 	while (testBit != 0)
 	{
-		u32 shiftedResult = result << (rootBitIndex & 0x1f);
+		u32 shiftedResult = result << (rootBitIndex & VEH_CALC_MIPS_SHIFT_MASK);
 
 		if ((s32)rootBitIndex < 0)
 		{
-			shiftedResult = result >> (CTR_MipsNegLo(rootBitIndex) & 0x1f);
+			shiftedResult = result >> (CTR_MipsNegLo(rootBitIndex) & VEH_CALC_MIPS_SHIFT_MASK);
 		}
 
 		u32 approximation = shiftedResult + lastApproximation + testBit;
@@ -123,7 +134,7 @@ u32 VehCalc_FastSqrt(u32 n, u32 shift)
 		}
 
 		addBit >>= 1;
-		testBit >>= 2;
+		testBit >>= VEH_CALC_FAST_SQRT_ROOT_STEP_SHIFT;
 		rootBitIndex--;
 	}
 

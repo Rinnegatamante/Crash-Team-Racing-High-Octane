@@ -1,9 +1,11 @@
-#include "../platform.h"
+#include <platform.h>
 #include "ctr_scratchpad.h"
+#include "platform/native_memory.h"
 #if defined(CTR_INTERNAL)
 #include "platform/native_checkpoint.h"
 #endif
 
+#include <common.h>
 #include <macros.h>
 
 #include <stdio.h>
@@ -49,7 +51,7 @@ void Platform_InitScratchpad(void)
 #endif
 }
 
-internal void Platform_ConfigureMempackArena(void)
+void Platform_ConfigureMempackArena(void)
 {
 	s_mempackArena.base = &s_mempackMemory[0];
 	s_mempackArena.start = &s_mempackMemory[CTR_NATIVE_MEMPACK_START_OFFSET];
@@ -74,7 +76,17 @@ const struct PlatformMempackArena *Platform_GetMempackArena(void)
 	return &s_mempackArena;
 }
 
-internal void Platform_RepairResidentPointers(s32 activeMempackIndex)
+void *Platform_GetMempackBacking(void)
+{
+	return &s_mempackMemory[0];
+}
+
+int Platform_GetMempackBackingSize(void)
+{
+	return (int)sizeof(s_mempackMemory);
+}
+
+void Platform_RepairResidentPointers(s32 activeMempackIndex)
 {
 	if ((activeMempackIndex < 0) || (activeMempackIndex >= 4))
 	{

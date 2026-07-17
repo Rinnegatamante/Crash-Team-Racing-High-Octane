@@ -4,7 +4,12 @@
 void MATH_MatrixMul(MATRIX *output, MATRIX *input, MATRIX *transform)
 {
 	MatrixRotate(output, input, transform);
-	ApplyMatrixLV_stub((VECTOR *)transform->t, (VECTOR *)output->t);
+	VECTOR transformT = {transform->t[0], transform->t[1], transform->t[2], 0};
+	VECTOR outputT;
+	ApplyMatrixLV_stub(&transformT, &outputT);
+	output->t[0] = outputT.vx;
+	output->t[1] = outputT.vy;
+	output->t[2] = outputT.vz;
 
 	output->t[0] += input->t[0];
 	output->t[1] += input->t[1];

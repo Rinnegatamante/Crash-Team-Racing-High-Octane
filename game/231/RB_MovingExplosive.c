@@ -1,23 +1,20 @@
 #include <common.h>
 
-typedef int (*MovingExplosiveCollideFunc)(struct Thread *, struct Thread *, void *, struct ScratchpadStruct *);
-
 static void RB_MovingExplosive_CallThCollide(struct Thread *hitTh, struct Thread *sourceTh)
 {
-	void *funcThCollide = (void *)hitTh->funcThCollide;
-	((MovingExplosiveCollideFunc)funcThCollide)(hitTh, sourceTh, funcThCollide, NULL);
+	void *funcThCollide = hitTh->funcThCollide;
+	((ThreadScratchCollideFunc)funcThCollide)(hitTh, sourceTh, funcThCollide, NULL);
 }
 
 // function for moving bomb, shiledbomb, or missile
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800adb50-0x800ae478.
 void RB_MovingExplosive_ThTick(struct Thread *t)
 {
-	s16 sVar1;
-	s16 sVar3;
+	s16 desiredRotY;
 	struct GameTracker *gGT = sdata->gGT;
 	s16 modelID;
-	int iVar6;
-	int iVar8;
+	int deltaX;
+	int deltaZ;
 	u16 sound;
 	struct TrackerWeapon *tw;
 	struct Instance *inst;
@@ -56,7 +53,7 @@ void RB_MovingExplosive_ThTick(struct Thread *t)
 			sound = 0x59;
 		}
 	LAB_800adc00:
-		PlaySound3D_Flags(&tw->audioPtr, sound, inst);
+		PlaySound3D_Flags(&tw->soundIDCount, sound, inst);
 	}
 
 LAB_800adc08:;
@@ -68,23 +65,12 @@ LAB_800adc08:;
 	if ((driverTarget != 0) && (driverTarget->invisibleTimer == 0))
 	{
 		if (
-		    /* ghidra snippet for this if statement's conditions.
-
-		    (*(int *)(*piVar9 + 0x2cc) < 0) &&
-		    // instance -> model -> objectID == missile
-		    (*(s16 *)(*(int *)(iVar10 + 0x18) + 0x10) == 0x29)
-
-		    */
-
-		    // Naughty Dog Bug? That's so unlikely?
-		    // Literally a ONE-frame window
-
 		    // dropped mine previous frame
-		    (*((int *)(&driverTarget->actionsFlagSetPrevFrame)) < 0) && // match ghidra behavior
+		    ((driverTarget->actionsFlagSetPrevFrame & ACTION_DROPPING_MINE) != 0) &&
 
 		    (modelID == DYNAMIC_ROCKET))
 		{
-			tw->framesSeekMine = 10;
+			tw->framesSeekTargetTnt = 10;
 		}
 	}
 
@@ -100,32 +86,32 @@ LAB_800adc08:;
 
 	if (
 	    // if driver is invalid
-	    (driverTarget == 0) || (tw->frameCount_Blind != 0))
+	    (driverTarget == 0) || (tw->blindFrames != 0))
 	{
-		if (tw->frameCount_Blind != 0)
+		if (tw->blindFrames != 0)
 		{
-			tw->frameCount_Blind--;
+			tw->blindFrames--;
 		}
 	}
 	else
 	{
-		if (tw->framesSeekMine == 0)
+		if (tw->framesSeekTargetTnt == 0)
 		{
 			// get distance between tracker and the driver being chased
-			iVar6 = (driverTarget->posCurr.x >> 8) - inst->matrix.t[0];
-			iVar8 = (driverTarget->posCurr.z >> 8) - inst->matrix.t[2];
-			tw->distanceToTarget = iVar6 * iVar6 + iVar8 * iVar8;
+			deltaX = (driverTarget->posCurr.x >> 8) - inst->matrix.t[0];
+			deltaZ = (driverTarget->posCurr.z >> 8) - inst->matrix.t[2];
+			tw->distanceToTarget = deltaX * deltaX + deltaZ * deltaZ;
 
 		LAB_800add14:
 
 			// get direction, given X and Y distance to travel
-			sVar3 = ratan2(iVar6, iVar8);
+			desiredRotY = ratan2(deltaX, deltaZ);
 		}
 
 		// if seeking mine
 		else
 		{
-			tw->framesSeekMine--;
+			tw->framesSeekTargetTnt--;
 
 			// if target shot a TNT
 			struct Instance *instTNT = tw->driverTarget->instTntSend;
@@ -133,25 +119,24 @@ LAB_800adc08:;
 			if (instTNT != 0)
 			{
 				// Get X and Y differences between two instances
-				iVar6 = instTNT->matrix.t[0] - inst->matrix.t[0];
-				iVar8 = instTNT->matrix.t[2] - inst->matrix.t[2];
+				deltaX = instTNT->matrix.t[0] - inst->matrix.t[0];
+				deltaZ = instTNT->matrix.t[2] - inst->matrix.t[2];
 				goto LAB_800add14;
 			}
 
 			// if target never used a TNT
-			sVar3 = tw->rotY;
-			tw->framesSeekMine = 0;
+			desiredRotY = tw->rotY;
+			tw->framesSeekTargetTnt = 0;
 		}
 
 		if ((modelID == DYNAMIC_BOMB) || (modelID == DYNAMIC_SHIELD))
 		{
-			tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)sVar3, 4);
+			tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 4);
 
 			tw->vel.x = (MATH_Sin(tw->rotY) * 3) >> 7;
 			tw->vel.z = (MATH_Cos(tw->rotY) * 3) >> 7;
 
-			// if bomb is rolled backwards
-			if ((tw->flags & 0x20) != 0)
+			if ((tw->flags & TRACKER_FLAG_BOMB_BACKWARD) != 0)
 			{
 				tw->vel.z = -tw->vel.z;
 				tw->vel.x = -tw->vel.x;
@@ -162,9 +147,9 @@ LAB_800adc08:;
 		else
 		{
 			// if 10 wumpa were not used
-			if ((tw->flags & 1) == 0)
+			if ((tw->flags & TRACKER_FLAG_POWERED_UP) == 0)
 			{
-				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)sVar3, 0x40);
+				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 0x40);
 
 				tw->vel.x = (MATH_Sin(tw->rotY) * 5) >> 8;
 				tw->vel.z = (MATH_Cos(tw->rotY) * 5) >> 8;
@@ -173,7 +158,7 @@ LAB_800adc08:;
 			// if 10 wumpa were used
 			else
 			{
-				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)sVar3, 0x80);
+				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 0x80);
 
 				tw->vel.x = (MATH_Sin(tw->rotY) * 3) >> 7;
 				tw->vel.z = (MATH_Cos(tw->rotY) * 3) >> 7;
@@ -188,11 +173,11 @@ LAB_800adc08:;
 		}
 	}
 
-	sVar3 = inst->animFrame;
-	iVar8 = INSTANCE_GetNumAnimFrames(inst, 0);
+	s16 animFrame = inst->animFrame;
+	int animFrameCount = INSTANCE_GetNumAnimFrames(inst, 0);
 
 	// if instance is not at end of animation
-	if ((int)sVar3 + 1 < iVar8)
+	if ((int)animFrame + 1 < animFrameCount)
 	{
 		// increment animation frame
 		inst->animFrame += 1;
@@ -236,7 +221,7 @@ LAB_800adc08:;
 	if (modelID == DYNAMIC_BOMB)
 	{
 		// if bomb is forwards
-		if ((tw->flags & 0x20) == 0)
+		if ((tw->flags & TRACKER_FLAG_BOMB_BACKWARD) == 0)
 		{
 			tw->dir.x += 0x200;
 		}
@@ -314,15 +299,15 @@ LAB_800adc08:;
 			// if quadblock under,
 			// then set fall rate and fall
 
-			int iVar8 = elapsedTime << 2;
+			int gravityStep = elapsedTime << 2;
 
 			// if missile
 			if (modelID == DYNAMIC_ROCKET)
 			{
-				iVar8 = elapsedTime << 3;
+				gravityStep = elapsedTime << 3;
 			}
 
-			tw->vel.y -= (iVar8 >> 5);
+			tw->vel.y -= (gravityStep >> 5);
 
 			if (tw->vel.y < -0x60)
 			{
@@ -373,13 +358,13 @@ LAB_800adc08:;
 
 	struct Instance *hitInst;
 
-	hitInst = RB_Hazard_CollideWithDrivers(inst, tw->frameCount_DontHurtParent, 0x2400, tw->instParent);
+	hitInst = RB_Hazard_CollideWithDrivers(inst, tw->parentSafetyFrames, 0x2400, tw->instParent);
 
 	// if no driver hit
 	if (hitInst == 0)
 	{
 		// check Mine threadbucket
-		hitInst = RB_Hazard_CollideWithBucket(inst, t, gGT->threadBuckets[MINE].thread, tw->frameCount_DontHurtParent, 0x2400, tw->instParent);
+		hitInst = RB_Hazard_CollideWithBucket(inst, t, gGT->threadBuckets[MINE].thread, tw->parentSafetyFrames, 0x2400, tw->instParent);
 
 		// if mine was not hit
 		if (hitInst == 0)
@@ -388,9 +373,9 @@ LAB_800adc08:;
 			if (modelID != DYNAMIC_BOMB)
 			{
 			LAB_800ae440:
-				if (tw->frameCount_DontHurtParent != 0)
+				if (tw->parentSafetyFrames != 0)
 				{
-					tw->frameCount_DontHurtParent--;
+					tw->parentSafetyFrames--;
 				}
 
 				return;
@@ -399,7 +384,7 @@ LAB_800adc08:;
 			// === Assume Bomb ===
 
 			// check Tracking threadbucket
-			hitInst = RB_Hazard_CollideWithBucket(inst, t, gGT->threadBuckets[TRACKING].thread, tw->frameCount_DontHurtParent, 0x2400, tw->instParent);
+			hitInst = RB_Hazard_CollideWithBucket(inst, t, gGT->threadBuckets[TRACKING].thread, tw->parentSafetyFrames, 0x2400, tw->instParent);
 
 			// if no collision
 			if (hitInst == 0)
@@ -488,7 +473,7 @@ void RB_MovingExplosive_Explode(struct Thread *t, struct Instance *inst, struct 
 	PlaySound3D(soundId, inst);
 
 	// stop audio of rolling
-	OtherFX_RecycleMute(&tw->audioPtr);
+	OtherFX_RecycleMute(&tw->soundIDCount);
 
 	RB_Burst_Init(inst);
 

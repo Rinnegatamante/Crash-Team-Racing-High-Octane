@@ -12,7 +12,7 @@ void Seal_CheckColl(struct Instance *sealInst, struct Thread *sealTh, int damage
 	struct Instance *hitInst;
 	struct Driver *hitDriver;
 	b32 boolHurt;
-	char kartStatePrev;
+	u8 kartStatePrev;
 
 	gGT = sdata->gGT;
 
@@ -79,7 +79,7 @@ void Seal_CheckColl(struct Instance *sealInst, struct Thread *sealTh, int damage
 	{
 		// all mine ThCollide functions only take one parameter,
 		// all other ThCollide functions are erased due to redundancy
-		hitInst->thread->funcThCollide(hitInst->thread);
+		((ThreadSimpleCollideFunc)hitInst->thread->funcThCollide)(hitInst->thread);
 
 		// dont check other bucket
 		return;
@@ -121,7 +121,7 @@ void RB_Seal_ThTick_TurnAround(struct Thread *t)
 	}
 
 	// if rotation is finished
-	if (sealObj->rotCurr.y == sealObj->rotDesiredAlt.y)
+	if (sealObj->rotCurr.y == sealObj->turnAroundRot.y)
 	{
 		sealObj->numFramesSpinning = 0;
 
@@ -139,7 +139,7 @@ void RB_Seal_ThTick_TurnAround(struct Thread *t)
 	else
 	{
 		// spin rotCurrY 180 degrees (turn around)
-		sealObj->rotCurr.y = RB_Hazard_InterpolateValue(sealObj->rotCurr.y, sealObj->rotDesiredAlt.y, 0x80);
+		sealObj->rotCurr.y = RB_Hazard_InterpolateValue(sealObj->rotCurr.y, sealObj->turnAroundRot.y, 0x80);
 
 		// negate rotCurrX (slant)
 		sealObj->rotCurr.x = RB_Hazard_InterpolateValue(sealObj->rotCurr.x, -sealObj->rotDesired.x, 0x14);
@@ -228,7 +228,7 @@ void RB_Seal_ThTick_Move(struct Thread *t)
 	// === end of Move state ===
 
 	// flip Y 180 degrees (turn around)
-	sealObj->rotDesiredAlt.y = (sealObj->rotCurr.y + 0x800) & 0xfff;
+	sealObj->turnAroundRot.y = (sealObj->rotCurr.y + 0x800) & 0xfff;
 
 	// turn around
 	ThTick_SetAndExec(t, RB_Seal_ThTick_TurnAround);
@@ -262,7 +262,7 @@ void RB_Seal_LInB(struct Instance *inst)
 	}
 	inst->thread = t;
 	t->inst = inst;
-	t->funcThCollide = (void (*)(struct Thread *))RB_Seal_ThCollide;
+	t->funcThCollide = (void *)RB_Seal_ThCollide;
 
 	inst->scale.x = 0x2000;
 	inst->scale.y = 0x2000;

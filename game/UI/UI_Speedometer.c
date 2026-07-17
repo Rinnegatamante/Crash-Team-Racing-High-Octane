@@ -4,7 +4,7 @@
 void UI_DrawSpeedNeedle(s16 posX, s16 posY, struct Driver *driver)
 {
 	int minScale = 0;
-	int maxScale = FP8_INT(driver->const_AccelSpeed_ClassStat) + FP8_INT(driver->const_SacredFireSpeed);
+	int maxScale = CTR_MipsSra(CTR_MipsAddLo(driver->const_AccelSpeed_ClassStat, driver->const_SacredFireSpeed), 8);
 	int speed = driver->speedometerNeedleValue;
 	int minAngle, maxAngle;
 	int accelSpeedInt = FP8_INT(driver->const_AccelSpeed_ClassStat);
@@ -116,27 +116,11 @@ void UI_DrawSpeedNeedle(s16 posX, s16 posY, struct Driver *driver)
 	AddPrimitive(p, sdata->gGT->pushBuffer_UI.ptrOT);
 }
 
-#ifdef _MSC_VER
-
-#define SPEEDO_GREEN  0xb500
-#define SPEEDO_YELLOW 0xffd1
-#define SPEEDO_RED    0xdb
-
 const Color DrawSpeedBG_Colors[7] = {
-    [0].self = SPEEDO_GREEN,  [1].self = SPEEDO_GREEN, [2].self = SPEEDO_GREEN, [3].self = SPEEDO_GREEN,
-    [4].self = SPEEDO_YELLOW, [5].self = SPEEDO_RED,   [6].self = SPEEDO_RED,
+    [0] = {.r = 0x00, .g = 0xb5, .b = 0x00}, [1] = {.r = 0x00, .g = 0xb5, .b = 0x00}, [2] = {.r = 0x00, .g = 0xb5, .b = 0x00},
+    [3] = {.r = 0xff, .g = 0xd1, .b = 0x00}, [4] = {.r = 0xdb, .g = 0x00, .b = 0x00}, [5] = {.r = 0xdb, .g = 0x00, .b = 0x00},
+    [6] = {.r = 0xdb, .g = 0x00, .b = 0x00},
 };
-
-#else
-
-#define SPEEDO_GREEN  MakeColor(0, 0xb5, 0)
-#define SPEEDO_YELLOW MakeColor(0xff, 0xd1, 0)
-#define SPEEDO_RED    MakeColor(0xdb, 0, 0)
-
-const Color DrawSpeedBG_Colors[7] = {
-    SPEEDO_GREEN, SPEEDO_GREEN, SPEEDO_GREEN, SPEEDO_GREEN, SPEEDO_YELLOW, SPEEDO_RED, SPEEDO_RED,
-};
-#endif
 
 // NOTE(aalhendi): PSX path ASM-verified NTSC-U 926 0x800516ac-0x80051c64.
 void UI_DrawSpeedBG(void)
@@ -213,7 +197,7 @@ void UI_DrawSpeedBG(void)
 			return;
 		}
 
-		p->t.texpage = (Texpage){.code = 0xE1, .dither = 1};
+		p->t.texpage = (Texpage){.code = 0xE1, .dither = 1, .y_VRAM_EXP = 1};
 		p->p.tag.self = 0;
 
 		Color color = MakeColor(0, 0, 0);

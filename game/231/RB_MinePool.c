@@ -4,16 +4,14 @@
 void RB_MinePool_Init(void)
 {
 	int i;
-	int numMines;
-	int gameMode;
 
 	LIST_Clear(&D231.minePoolTaken);
 	LIST_Clear(&D231.minePoolFree);
 
-	gameMode = sdata->gGT->gameMode1;
+	int gameMode = sdata->gGT->gameMode1;
 
 	// default
-	numMines = 10;
+	int numMines = 10;
 
 	if ((gameMode & CRYSTAL_CHALLENGE) != 0)
 	{
@@ -38,7 +36,7 @@ void RB_MinePool_Init(void)
 	// add all mines
 	for (i = 0; i < numMines; i++)
 	{
-		LIST_AddFront(&D231.minePoolFree, (struct Item *)&D231.minePoolItem[i]);
+		LIST_AddFront(&D231.minePoolFree, &D231.minePoolItem[i].item);
 	}
 }
 
@@ -63,8 +61,6 @@ void RB_MinePool_Remove(struct MineWeapon *mw)
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 231 0x800ac13c-0x800ac1b0.
 void RB_MinePool_Add(struct MineWeapon *mw)
 {
-	struct WeaponSlot231 *ws;
-
 	// if no more items on free list
 	if ((&D231.minePoolFree)->count == 0)
 	{
@@ -73,7 +69,7 @@ void RB_MinePool_Add(struct MineWeapon *mw)
 	}
 
 	// LIST_RemoveBack free list
-	ws = (struct WeaponSlot231 *)LIST_RemoveBack(&D231.minePoolFree);
+	struct WeaponSlot231 *ws = (struct WeaponSlot231 *)LIST_RemoveBack(&D231.minePoolFree);
 
 	// link together
 	ws->mineWeapon = mw;

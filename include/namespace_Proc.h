@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_PROC_H
+#define CTR_NATIVE_NAMESPACE_PROC_H
+
 #define SIZE_RELATIVE_POOL_BUCKET(a, b, c, d) (a << 16) | b | c | d
 
 enum STACK_POOL
@@ -51,6 +54,11 @@ enum
 typedef u32 ThreadFlags;
 
 CTR_STATIC_ASSERT(sizeof(ThreadFlags) == 0x4);
+
+typedef void (*ThreadFunc)(struct Thread *self);
+typedef void (*ThreadSimpleCollideFunc)(struct Thread *self);
+typedef int (*ThreadScratchCollideFunc)(struct Thread *self, struct Thread *other, void *funcThCollide, struct ScratchpadStruct *sps);
+typedef int (*ThreadBurstCollideFunc)(struct Thread *self, struct Thread *other, void *funcThCollide, int modelID);
 
 enum
 {
@@ -108,14 +116,15 @@ struct Thread
 	int timesDestroyed;
 
 	// 0x24
-	void (*funcThDestroy)(struct Thread *self);
+	ThreadFunc funcThDestroy;
 
-	// TheUbMunster: I've noticed various usage around the codebase might indicate that funcThCollide returns int and not void.
 	//  0x28
-	void (*funcThCollide)(struct Thread *self);
+	// NOTE(aalhendi): Retail stores this as a raw code pointer. Collision
+	// users call it with different register contracts.
+	void *funcThCollide;
 
 	// 0x2c
-	void (*funcThTick)(struct Thread *self);
+	ThreadFunc funcThTick;
 
 	// This would be 9900C for players, or a pointer
 	// to a camera, etc
@@ -223,3 +232,5 @@ struct ThreadBucket
 };
 
 CTR_STATIC_ASSERT(sizeof(struct ThreadBucket) == 0x14);
+
+#endif

@@ -13,7 +13,7 @@ CTR_STATIC_ASSERT(offsetof(struct AHSignScratch, probeBottom) == 0x08);
 CTR_STATIC_ASSERT(offsetof(struct AHSignScratch, normal) == 0x10);
 CTR_STATIC_ASSERT(offsetof(struct AHSignScratch, sps) == 0x18);
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 232 0x800b4c80-0x800b4ddc.
+// NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 232 0x800b9290-0x800b93ec.
 void AH_Sign_LInB(struct Instance *inst)
 {
 	struct AHSignScratch *scratch = CTR_SCRATCHPAD_PTR(struct AHSignScratch, 0x108);
@@ -49,5 +49,5 @@ void AH_Sign_LInB(struct Instance *inst)
 		normal->z = -normal->z;
 	}
 
-	inst->bitCompressed_NormalVector_AndDriverIndex = ((u16)normal->x & 0xff) | (((u16)normal->y & 0xff) << 8) | (((u16)normal->z & 0xff) << 0x10);
+	inst->compressedNormalAndDriverIndex = INST_PackCompressedNormalBytes(normal->x, normal->y, normal->z);
 }

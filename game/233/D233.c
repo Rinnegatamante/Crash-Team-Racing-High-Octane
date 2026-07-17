@@ -8,15 +8,17 @@ CTR_STATIC_ASSERT(sizeof(void *) == 4);
 
 struct OverlayDATA_233 D233;
 
+#define OVR233_GARAGE_CLASS_STRING_IDS {LNG_BEGINNER, LNG_INTERMEDIATE, LNG_ADVANCED, 0}
+
 #define OVR233_GARAGE_INITIALIZER                          \
 	{                                                      \
 	    .menuGarage =                                      \
 	        {                                              \
-	            .stringIndexTitle = 0xFFFF,                \
+	            .stringIndexTitle = RECTMENU_STRING_NONE,  \
 	            .posX_curr = 0x100,                        \
 	            .posY_curr = 0x6c,                         \
 	            .unk1 = 0,                                 \
-	            .state = 0x823,                            \
+	            .state = RECTMENU_STATE_CALLBACK_CENTERED, \
 	            .rows = 0,                                 \
 	            .funcPtr = CS_Garage_MenuProc,             \
 	            .drawStyle = 0,                            \
@@ -26,9 +28,9 @@ struct OverlayDATA_233 D233;
 	    .numFramesMax_Zoom = 0x14,                         \
 	    .fovMin = 0x12c,                                   \
 	    .fovMax = 0x190,                                   \
-	    .unusedArr_garageChars = {0, 1, 2, 3, 4, 5, 6, 7}, \
-	    .unusedArr_lngIndex = {0x248, 0x249, 0x24a, 0},    \
-	    .barStat =                                         \
+	    .garageCharacterIDs = {0, 1, 2, 3, 4, 5, 6, 7},    \
+	    .classStringIDs = OVR233_GARAGE_CLASS_STRING_IDS,  \
+	    .statBarTargetLengths =                            \
 	        {                                              \
 	            0x37,                                      \
 	            0x37,                                      \
@@ -44,7 +46,7 @@ struct OverlayDATA_233 D233;
 	            0x50,                                      \
 	        },                                             \
 	    .unusedArr_Colors = {0xff, 0xff00, 0xff00ff},      \
-	    .barColors =                                       \
+	    .statBarSegmentColors =                            \
 	        {                                              \
 	            0xc80000,                                  \
 	            0xA8700,                                   \
@@ -61,10 +63,10 @@ static const struct OVR233_Garage s_gGarageInitialState = OVR233_GARAGE_INITIALI
 struct OVR233_Garage gGarage = OVR233_GARAGE_INITIALIZER;
 
 // NOTE(aalhendi): Retail overlay data at 0x800b9488-0x800b9498.
-#define OVR233_CREDITS_BSS_INITIALIZER          \
-	{                                           \
-	    .creditGhost_Pos = {0x64, 0x3c, 0x12c}, \
-	    .creditText_PosX = 0x14,                \
+#define OVR233_CREDITS_BSS_INITIALIZER           \
+	{                                            \
+	    .creditGhostPos = {{0x64, 0x3c, 0x12c}}, \
+	    .creditTextPosX = 0x14,                  \
 	}
 
 static const struct Ovr233_Credits_BSS s_creditsBSSInitialState = OVR233_CREDITS_BSS_INITIALIZER;
@@ -92,12 +94,12 @@ static void OVR233_ResetD233(void)
 	D233.CutsceneManipulatesAudio = R233.CutsceneManipulatesAudio;
 	D233.cs_initMatrixBool = R233.cs_initMatrixBool;
 	D233.isCutsceneOver = R233.isCutsceneOver;
-	D233.PodiumInitUnk2 = R233.PodiumInitUnk2;
+	D233.podiumCameraFrame = R233.podiumCameraFrame;
 	D233.FXVolumeBackup = R233.FXVolumeBackup;
 	D233.MusicVolumeBackup = R233.MusicVolumeBackup;
 	D233.VoiceVolumeBackup = R233.VoiceVolumeBackup;
-	D233.volumeunknown = R233.volumeunknown;
-	D233.PodiumInitUnk3 = R233.PodiumInitUnk3;
+	D233.audioVolumeBackupPad = R233.audioVolumeBackupPad;
+	D233.podiumPrizeDropReady = R233.podiumPrizeDropReady;
 	D233.cutsceneState = R233.cutsceneState;
 	D233.ptrModelBossHead = R233.ptrModelBossHead;
 	D233.ptrModelBossBody = R233.ptrModelBossBody;
@@ -191,3 +193,4 @@ static void OVR233_ResetCreditsBSS(void)
 
 #undef OVR233_CREDITS_BSS_INITIALIZER
 #undef OVR233_GARAGE_INITIALIZER
+#undef OVR233_GARAGE_CLASS_STRING_IDS

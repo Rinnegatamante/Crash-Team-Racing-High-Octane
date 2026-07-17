@@ -84,7 +84,7 @@ void CTR_Box_DrawClearBox(const RECT *r, const Color *color, int transparency, u
 		return;
 	}
 
-	p->t.texpage = (Texpage){.code = 0xE1, .semiTransparency = transparency, .dither = 1};
+	p->t.texpage = (Texpage){.code = 0xE1, .semiTransparency = transparency, .dither = 1, .y_VRAM_EXP = 1};
 	p->p.tag.self = 0;
 
 	const PrimCode primCode = {.poly = {.renderCode = RenderCode_Polygon, .quad = 1, .semiTransparency = 1}};

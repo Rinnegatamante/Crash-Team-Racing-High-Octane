@@ -7,7 +7,7 @@
 #include <macros.h>
 #include "platform/native_gpu.h"
 
-#include "../platform.h"
+#include <platform.h>
 
 #include <SDL3/SDL.h>
 
@@ -26,8 +26,8 @@ extern int g_cfg_bilinearFiltering;
 extern int g_dbg_emulatorPaused;
 extern int g_dbg_polygonSelected;
 
-#define NATIVE_GPU_LOG(fmt, ...)   Platform_Log("[CTR GPU] " fmt, ##__VA_ARGS__)
-#define NATIVE_GPU_ERROR(fmt, ...) Platform_LogError("[CTR GPU] [%s] - " fmt, __func__, ##__VA_ARGS__)
+#define NATIVE_GPU_LOG(fmt, ...)   Platform_Log("[CTR GPU] " fmt, __VA_ARGS__)
+#define NATIVE_GPU_ERROR(fmt, ...) Platform_LogError("[CTR GPU] [%s] - " fmt, __func__, __VA_ARGS__)
 
 // NOTE(aalhendi): Little-endian tag `CTRG` = CTR native GPU snapshot.
 #define NATIVE_GPU_STATE_MAGIC     0x47525443
@@ -215,16 +215,6 @@ internal void DrawEnvDimensionsInt(int *width, int *height)
 		*width = activeDrawEnv.clip.w;
 		*height = activeDrawEnv.clip.h;
 	}
-}
-
-internal void DrawEnvDimensionsFloat(float *width, float *height)
-{
-	int intWidth;
-	int intHeight;
-
-	DrawEnvDimensionsInt(&intWidth, &intHeight);
-	*width = (float)intWidth;
-	*height = (float)intHeight;
 }
 
 void DrawEnvOffset(float *ofsX, float *ofsY)
@@ -853,7 +843,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 
 	if (s_gpu.splitIndex + 1 >= MAX_DRAW_SPLITS)
 	{
-		NATIVE_GPU_ERROR("MAX_DRAW_SPLITS reached (too many blend modes, texture formats, drawEnv clip rects, dfe switches), expect rendering errors\n");
+		NATIVE_GPU_ERROR("%s\n", "MAX_DRAW_SPLITS reached (too many blend modes, texture formats, drawEnv clip rects, dfe switches), expect rendering errors");
 		return;
 	}
 
@@ -890,7 +880,7 @@ void DrawSplit(const GPUDrawSplit *split)
 		// into an empty retail draw area. Empty clips should consume no pixels,
 		// and must not leak stale native offscreen/scissor state.
 		NativeRenderer_SetupClipMode(&split->drawenv.clip, &split->dispenv, drawOnScreen);
-		NativeRenderer_SetOffscreenState(&split->drawenv.clip, &split->dispenv, 0);
+		NativeRenderer_SetOffscreenState(&split->drawenv.clip, 0);
 		if (split->debugText)
 		{
 			NativeRenderer_PopDebugLabel();
@@ -911,7 +901,8 @@ void DrawSplit(const GPUDrawSplit *split)
 	NativeRenderer_SetPSXTextureOutputSTP(split->psxTextureOutputSTP);
 
 	NativeRenderer_SetupClipMode(&split->drawenv.clip, &split->dispenv, drawOnScreen);
-	NativeRenderer_SetOffscreenState(&split->drawenv.clip, &split->dispenv, !drawOnScreen);
+	NativeRenderer_SetOffscreenState(&split->drawenv.clip, !drawOnScreen);
+	NativeRenderer_SetProjection(&split->drawenv.clip, &split->dispenv, !drawOnScreen);
 
 	if (split->psxTexturedSemiTrans)
 	{
@@ -953,6 +944,9 @@ internal void SetPSXMaskState(u32 code)
 void DrawAllSplits()
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_DRAW_ALL_SPLITS);
+	// CPU-originated LoadImage, MoveImage, and fill commands are GPU-visible
+	// before the next draw batch, matching PS1 command ordering.
+	NativeRenderer_UpdateVRAM();
 #ifdef CTR_INTERNAL
 	if (g_dbg_emulatorPaused)
 	{
@@ -963,13 +957,13 @@ void DrawAllSplits()
 			vert->g = 0;
 			vert->b = 0;
 
-			NATIVE_GPU_LOG("==========================================\n");
+			NATIVE_GPU_LOG("%s\n", "==========================================");
 			NATIVE_GPU_LOG("POLYGON: %d\n", g_dbg_polygonSelected);
 			NATIVE_GPU_LOG("X: %d Y: %d\n", vert->x, vert->y);
 			NATIVE_GPU_LOG("U: %d V: %d\n", vert->u, vert->v);
 			NATIVE_GPU_LOG("TP: %d CLT: %d\n", vert->page, vert->clut);
 
-			NATIVE_GPU_LOG("==========================================\n");
+			NATIVE_GPU_LOG("%s\n", "==========================================");
 		}
 
 		Platform_PollHostEvents();
@@ -1264,7 +1258,6 @@ internal int ProcessFlatLines(P_TAG *polyTag)
 	}
 	case 0xc:
 	{
-		int i;
 		LINE_F4 *poly = (LINE_F4 *)polyTag;
 
 		AddSplit(semiTrans, false, false);
@@ -1794,7 +1787,6 @@ internal void ProcessDrawEnvCommand(u32 code)
 
 internal int ProcessPsyXPrims(P_TAG *polyTag)
 {
-	const int primType = polyTag->code & 0xF0;
 	const int primSubType = polyTag->code & 0x0F;
 
 	switch (primSubType)

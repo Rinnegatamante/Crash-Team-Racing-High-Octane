@@ -28,7 +28,7 @@ void MainStats_RestartRaceCountLoss(void)
 	gameMode1 = gGT->gameMode1;
 
 	// Turn off HUD
-	sdata->gGT->hudFlags &= 0xfe;
+	sdata->gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 
 	// Reset team points
 	for (int i = 0; i < 4; i++)
@@ -70,16 +70,17 @@ void MainStats_RestartRaceCountLoss(void)
 		return;
 	}
 
-	// not in boss
-	index = gGT->levelID;
-	countPtr = &sdata->advProgress.timesLostRacePerLev[0];
-
 	if (IS_BOSS_RACE(gameMode1))
 	{
-		// in boss
-		index = gGT->bossID;
-		countPtr = &sdata->advProgress.timesLostBossRace[0];
+		if (sdata->advProgress.timesLostBossRace[gGT->bossID] < 10)
+		{
+			sdata->advProgress.timesLostBossRace[gGT->bossID]++;
+			return;
+		}
 	}
+
+	index = gGT->levelID;
+	countPtr = &sdata->advProgress.timesLostRacePerLev[0];
 
 	if (countPtr[index] < 10)
 	{

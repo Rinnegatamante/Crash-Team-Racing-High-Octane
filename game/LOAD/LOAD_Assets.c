@@ -22,20 +22,19 @@ void LOAD_RunPtrMap(char *origin, int *patchArr, int numPtrs)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80032700-0x800327dc.
 void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(struct LoadQueueSlot *))
 {
-	int i;
-	char *robotSet;
+	int setIndex;
+	u8 *robotSet;
 	b32 boolFoundRepeat = false;
 
-	// 8 sets, but only check 7 cause
-	// the last is Gem Cups pack (4 bosses)
-	for (i = 0; i < 7; i++)
+	// 8 sets, but only check 7 because the last is the Gem Cups pack (4 bosses).
+	for (setIndex = 0; setIndex < LOAD_2P_AI_SET_COUNT; setIndex++)
 	{
-		robotSet = &data.characterIDs_2P_AIs[4 * i];
+		robotSet = data.characterIDs_2P_AIs[setIndex];
 
 		boolFoundRepeat = false;
-		for (int j = 0; j < 4; j++)
+		for (int racerIndex = 0; racerIndex < LOAD_2P_AI_SET_RACER_COUNT; racerIndex++)
 		{
-			if ((robotSet[j] == p1) || (robotSet[j] == p2))
+			if ((robotSet[racerIndex] == p1) || (robotSet[racerIndex] == p2))
 			{
 				boolFoundRepeat = true;
 				break;
@@ -48,7 +47,7 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 		}
 	}
 
-	if (i > 6)
+	if (setIndex >= LOAD_2P_AI_SET_COUNT)
 	{
 		return;
 	}
@@ -58,7 +57,7 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 	data.characterIDs[4] = robotSet[2];
 	data.characterIDs[5] = robotSet[3];
 
-	LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + i, NULL, callback);
+	LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + setIndex, NULL, callback);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800327dc-0x8003282c.
@@ -68,7 +67,7 @@ void LOAD_Robots1P(int characterID)
 
 	data.characterIDs[0] = characterID;
 
-	for (int i = 1; i < 8; i++, newCharacterID++)
+	for (int i = 1; i < LOAD_CHARACTER_ID_COUNT; i++, newCharacterID++)
 	{
 		if (newCharacterID == characterID)
 		{
@@ -79,7 +78,7 @@ void LOAD_Robots1P(int characterID)
 	}
 }
 
-static void (*const LOAD_DriverMPK_SetPointer)(struct LoadQueueSlot *) = (void (*)(struct LoadQueueSlot *))-2;
+static void (*const LOAD_DriverMPK_SetPointer)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003282c-0x80032b50.
 int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(struct LoadQueueSlot *))
@@ -93,9 +92,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	int lastFileIndexMPK;
 
 	// 3P/4P
-	if (levelLOD - 3U < 2)
+	if ((u32)(levelLOD - LOAD_LEVEL_LOD_3P) < LOAD_LEVEL_LOD_3P4P_COUNT)
 	{
-		for (i = 0; i < 3; i++)
+		for (i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			// low lod CTR model
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
@@ -105,7 +104,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[3];
 	}
 
-	else if (levelLOD == 1)
+	else if (levelLOD == LOAD_LEVEL_LOD_1P)
 	{
 		if ((gameMode1 & (TIME_TRIAL | MAIN_MENU)) == TIME_TRIAL)
 		{
@@ -142,7 +141,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 
 			// pack of four AIs with bosses
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + 7, NULL, callback);
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + LOAD_PURPLE_GEM_CUP_AI_SET_INDEX, NULL, callback);
 
 			data.characterIDs[1] = RIPPER_ROO;
 			data.characterIDs[2] = PAPU_PAPU;
@@ -161,7 +160,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		lastFileIndexMPK = BI_1PARCADEPACK + data.characterIDs[0];
 	}
 
-	else if ((levelLOD == 8) || ((gameMode1 & TIME_TRIAL) != 0))
+	else if ((levelLOD == LOAD_LEVEL_LOD_RELIC) || ((gameMode1 & TIME_TRIAL) != 0))
 	{
 	LoadHighAndPack:
 		// Do NOT switch the order to optimize Relic,
@@ -176,11 +175,11 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
 	}
 
-	// else if (levelLOD == 2)
+	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
 	else
 	{
 		// med models
-		for (i = 0; i < 2; i++)
+		for (i = 0; i < LOAD_MED_LOD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			// med lod CTR model
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
@@ -208,7 +207,7 @@ struct LngFile
 void LOAD_LangFile(int bigfilePtr, int lang)
 {
 	struct LngFile *lngFile;
-	int size;
+	u32 size;
 
 	int i;
 	int numStrings;
@@ -254,27 +253,27 @@ int LOAD_GetBigfileIndex(u32 levelID, int lod, int fileIndexInGroup)
 {
 	if (levelID < NITRO_COURT)
 	{
-		return BI_ARCADETRACKS + levelID * 8 + sdata->levBigLodIndex[lod - 1] + fileIndexInGroup;
+		return BI_ARCADETRACKS + levelID * LOAD_TRACK_FILES_PER_LOD_GROUP + sdata->levBigLodIndex[lod - 1] + fileIndexInGroup;
 	}
 
-	if ((u32)(levelID - NITRO_COURT) < 7)
+	if ((u32)(levelID - NITRO_COURT) < LOAD_BATTLE_TRACK_COUNT)
 	{
-		return BI_BATTLETRACKS + (levelID - NITRO_COURT) * 8 + sdata->levBigLodIndex[lod - 1] + fileIndexInGroup;
+		return BI_BATTLETRACKS + (levelID - NITRO_COURT) * LOAD_TRACK_FILES_PER_LOD_GROUP + sdata->levBigLodIndex[lod - 1] + fileIndexInGroup;
 	}
 
-	if ((u32)(levelID - INTRO_RACE_TODAY) < 9)
+	if ((u32)(levelID - INTRO_RACE_TODAY) < LOAD_INTRO_CUTSCENE_COUNT)
 	{
-		return BI_CUTSCENES_INTRO + (levelID - INTRO_RACE_TODAY) * 3 + fileIndexInGroup;
+		return BI_CUTSCENES_INTRO + (levelID - INTRO_RACE_TODAY) * LOAD_CUTSCENE_FILES_PER_LEVEL + fileIndexInGroup;
 	}
 
-	if ((u32)(levelID - OXIDE_ENDING) < 2)
+	if ((u32)(levelID - OXIDE_ENDING) < LOAD_OUTRO_CUTSCENE_COUNT)
 	{
-		return BI_CUTSCENES_OUTRO + (levelID - OXIDE_ENDING) * 2 + fileIndexInGroup;
+		return BI_CUTSCENES_OUTRO + (levelID - OXIDE_ENDING) * LOAD_OUTRO_FILES_PER_LEVEL + fileIndexInGroup;
 	}
 
 	if (levelID == ADVENTURE_GARAGE)
 	{
-		return BI_MAINMENUFILE + 2 + fileIndexInGroup;
+		return BI_MAINMENUFILE + LOAD_MAIN_MENU_GARAGE_FILE_OFFSET + fileIndexInGroup;
 	}
 
 	if (levelID == NAUGHTY_DOG_CRATE)
@@ -282,9 +281,9 @@ int LOAD_GetBigfileIndex(u32 levelID, int lod, int fileIndexInGroup)
 		return BI_NDBOX + fileIndexInGroup;
 	}
 
-	if ((u32)(levelID - CREDITS_CRASH) < 20)
+	if ((u32)(levelID - CREDITS_CRASH) < LOAD_CREDIT_LEVEL_COUNT)
 	{
-		return BI_CREDITS + (levelID - CREDITS_CRASH) * 3 + fileIndexInGroup;
+		return BI_CREDITS + (levelID - CREDITS_CRASH) * LOAD_CUTSCENE_FILES_PER_LEVEL + fileIndexInGroup;
 	}
 
 	if (levelID == MAIN_MENU_LEVEL)
@@ -297,5 +296,5 @@ int LOAD_GetBigfileIndex(u32 levelID, int lod, int fileIndexInGroup)
 		return BI_SCRAPBOOK + fileIndexInGroup;
 	}
 
-	return BI_ADVENTUREHUB + (levelID - GEM_STONE_VALLEY) * 3 + fileIndexInGroup;
+	return BI_ADVENTUREHUB + (levelID - GEM_STONE_VALLEY) * LOAD_CUTSCENE_FILES_PER_LEVEL + fileIndexInGroup;
 }

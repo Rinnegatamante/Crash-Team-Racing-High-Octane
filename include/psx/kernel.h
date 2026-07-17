@@ -118,8 +118,6 @@ struct EvCB
 	int system[2]; /* reserved by system */
 };
 
-// #if !defined(D3D9)
-#if __GNUC__ ///@FIXME Really not defined D3D9 :/
 struct EXEC
 {
 	unsigned int pc0;
@@ -144,7 +142,6 @@ struct XF_HDR
 	struct EXEC exec;
 	char title[60]; /* "PlayStation(tm) Executable A1" */
 };
-#endif
 
 struct DIRENTRY
 {

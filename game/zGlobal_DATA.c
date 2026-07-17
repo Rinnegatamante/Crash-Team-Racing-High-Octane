@@ -986,9 +986,7 @@ struct Data
                            .speedMax = 0x1400,
                            .percentage1 = 0xF0, // 90%
                            .percentage2 = 0xFF, // 99%
-                           .angle[0] = 0x80,
-                           .angle[1] = 0xE0,
-                           .angle[2] = 0x70,
+                           .angle = {0x80, 0xE0, 0x70},
                            .vertDistance = 0x40},
 
             .NearCam8x3 = {.distMin = 0x133,
@@ -997,9 +995,7 @@ struct Data
                            .speedMax = 0x1400,
                            .percentage1 = 0xF0, // 90%
                            .percentage2 = 0xFF, // 99%
-                           .angle[0] = 0x80,
-                           .angle[1] = 0xE0,
-                           .angle[2] = 0x60,
+                           .angle = {0x80, 0xE0, 0x60},
                            .vertDistance = 0x60},
 
             .FarCam4x3 = {.distMin = 0xE0,
@@ -1008,9 +1004,7 @@ struct Data
                           .speedMax = 0x1400,
                           .percentage1 = 0xF0, // 90%
                           .percentage2 = 0xFF, // 99%
-                          .angle[0] = 0x80,
-                          .angle[1] = 0xE0,
-                          .angle[2] = 0x60,
+                          .angle = {0x80, 0xE0, 0x60},
                           .vertDistance = 0x60},
 
             .FarCam8x3 = {.distMin = 0x180,
@@ -1019,9 +1013,7 @@ struct Data
                           .speedMax = 0x1400,
                           .percentage1 = 0xF0, // 90%
                           .percentage2 = 0xFF, // 99%
-                          .angle[0] = 0x80,
-                          .angle[1] = 0xE0,
-                          .angle[2] = 0x60,
+                          .angle = {0x80, 0xE0, 0x60},
                           .vertDistance = 0xA0},
 
             .EndOfRace_Camera_Size =
@@ -2923,99 +2915,99 @@ struct Data
             .gamepadMapBtn =
                 {
                     {// RAW_BTN_UP = 0x10
-                     .input = {0, 0x10, 0, 0x10},
+                     .rawInput = {0, 0x10, 0, 0x10},
 
-                     .output = BTN_UP},
+                     .buttons = BTN_UP},
 
                     {// RAW_BTN_DOWN = 0x40
-                     .input = {0, 0x40, 0, 0x40},
+                     .rawInput = {0, 0x40, 0, 0x40},
 
-                     .output = BTN_DOWN},
+                     .buttons = BTN_DOWN},
 
                     {// RAW_BTN_LEFT = 0x80
-                     .input = {0, 0x80, 0, 0x80},
+                     .rawInput = {0, 0x80, 0, 0x80},
 
-                     .output = BTN_LEFT},
+                     .buttons = BTN_LEFT},
 
                     {// RAW_BTN_RIGHT = 0x20
-                     .input = {0, 0x20, 0, 0x20},
+                     .rawInput = {0, 0x20, 0, 0x20},
 
-                     .output = BTN_RIGHT},
+                     .buttons = BTN_RIGHT},
 
                     {// RAW_BTN_TRIANGLE = 0x1000
-                     .input = {0x10, 0, 8, 0},
+                     .rawInput = {0x10, 0, 8, 0},
 
-                     .output = BTN_TRIANGLE},
+                     .buttons = BTN_TRIANGLE},
 
                     {// RAW_BTN_CROSS = 0x4000
-                     .input = {0x40, 0, 0x40, 0},
+                     .rawInput = {0x40, 0, 0x40, 0},
 
-                     .output = BTN_CROSS_one},
+                     .buttons = BTN_CROSS_one},
 
                     {// RAW_BTN_SQUARE = 0x8000
-                     .input = {0x80, 0, 0x4, 0},
+                     .rawInput = {0x80, 0, 0x4, 0},
 
-                     .output = BTN_SQUARE_one},
+                     .buttons = BTN_SQUARE_one},
 
                     {// RAW_BTN_CIRCLE = 0x2000
-                     .input = {0x20, 0, 0x20, 0},
+                     .rawInput = {0x20, 0, 0x20, 0},
 
-                     .output = BTN_CIRCLE},
-
-                    {// RAW_BTN_L2 = 0x100
-                     .input = {1, 0, 1, 0},
-
-                     .output = BTN_L2_one},
+                     .buttons = BTN_CIRCLE},
 
                     {// RAW_BTN_L2 = 0x100
-                     .input = {1, 0, 1, 0},
+                     .rawInput = {1, 0, 1, 0},
 
-                     .output = BTN_L2_two},
+                     .buttons = BTN_L2_one},
+
+                    {// RAW_BTN_L2 = 0x100
+                     .rawInput = {1, 0, 1, 0},
+
+                     .buttons = BTN_L2_two},
 
                     {// RAW_BTN_R2 = 0x200
-                     .input = {2, 0, 0x80, 0},
+                     .rawInput = {2, 0, 0x80, 0},
 
-                     .output = BTN_R2},
+                     .buttons = BTN_R2},
 
                     {// RAW_BTN_START = 8
-                     .input = {0, 8, 0, 8},
+                     .rawInput = {0, 8, 0, 8},
 
-                     .output = BTN_START},
+                     .buttons = BTN_START},
 
                     {// RAW_BTN_SELECT = 1
-                     .input = {0, 1, 0, 1},
+                     .rawInput = {0, 1, 0, 1},
 
-                     .output = BTN_SELECT},
+                     .buttons = BTN_SELECT},
 
                     {// RAW_BTN_CROSS = 0x4000
-                     .input = {0x40, 0, 0x40, 0},
+                     .rawInput = {0x40, 0, 0x40, 0},
 
-                     .output = BTN_CROSS_two},
+                     .buttons = BTN_CROSS_two},
 
                     {// RAW_BTN_SQUARE = 0x8000
-                     .input = {0x80, 0, 4, 0},
+                     .rawInput = {0x80, 0, 4, 0},
 
-                     .output = BTN_SQUARE_two},
+                     .buttons = BTN_SQUARE_two},
 
                     {// RAW_BTN_L1 = 0x400
-                     .input = {4, 0, 2, 0},
+                     .rawInput = {4, 0, 2, 0},
 
-                     .output = BTN_L1},
+                     .buttons = BTN_L1},
 
                     {// RAW_BTN_R1 = 0x800
-                     .input = {8, 0, 0x10, 0},
+                     .rawInput = {8, 0, 0x10, 0},
 
-                     .output = BTN_R1},
+                     .buttons = BTN_R1},
 
                     {// RAW_BTN_L3 = 0x2
-                     .input = {0, 2, 0, 2},
+                     .rawInput = {0, 2, 0, 2},
 
-                     .output = BTN_L3},
+                     .buttons = BTN_L3},
 
                     {// RAW_BTN_R3 = 0x4
-                     .input = {0, 4, 0, 4},
+                     .rawInput = {0, 4, 0, 4},
 
-                     .output = BTN_R3},
+                     .buttons = BTN_R3},
 
                     //{} - null
                 },
@@ -3576,46 +3568,25 @@ struct Data
             .characterIDs_2P_AIs =
                 {
                     // polar, ngin, tiny, coco
-                    6,
-                    4,
-                    2,
-                    3,
+                    {6, 4, 2, 3},
 
                     // crash, polar, coco, dingo
-                    0,
-                    6,
-                    3,
-                    5,
+                    {0, 6, 3, 5},
 
                     // crash, polar, cortex, tiny
-                    0,
-                    6,
-                    1,
-                    2,
+                    {0, 6, 1, 2},
 
                     // crash, polar, ngin, pura
-                    0,
-                    6,
-                    4,
-                    7,
+                    {0, 6, 4, 7},
 
                     // cortex, tiny, coco, dingo
-                    1,
-                    2,
-                    3,
-                    5,
+                    {1, 2, 3, 5},
 
                     // ngin, pura, coco, dingo
-                    4,
-                    7,
-                    3,
-                    5,
+                    {4, 7, 3, 5},
 
                     // ngin, pura cortex, coco
-                    4,
-                    7,
-                    1,
-                    2,
+                    {4, 7, 1, 2},
                 },
 
             .overlayCallbackFuncs = {LOAD_Callback_Overlay_230, LOAD_Callback_Overlay_231, LOAD_Callback_Overlay_232, LOAD_Callback_Overlay_233},
@@ -4201,51 +4172,50 @@ struct Data
             .lng_challenge = {0x163, 0x164, 0x165, 0x166, 0x167, 0x168},
 
             .ArcadeCups =
-                {
-                    // Wumpa Cup
-                    {.lngIndex_CupName = 0xC0,
-                     .CupTrack =
-                         {
-                             0x3, 0x51, // Crash Cove
-                             0x4, 0x59, // Tiger Temple
-                             0x2, 0x4F, // Blizzard Bluff
-                             0xE, 0x43  // Coco Park
-                         }},
+                {// Wumpa Cup
+                 {.lngIndex_CupName = 0xC0,
+                  .CupTrack =
+                      {
+                          {0x3, 0x51}, // Crash Cove
+                          {0x4, 0x59}, // Tiger Temple
+                          {0x2, 0x4F}, // Blizzard Bluff
+                          {0xE, 0x43}  // Coco Park
+                      }},
 
-                    {.lngIndex_CupName = 0xC1,
-                     .CupTrack =
-                         {
-                             0x6, 0x5B, // Roo Tubes
-                             0x0, 0x53, // Dingo Canyon
-                             0x1, 0x54, // Dragon Mines
-                             0x8, 0x57  // Sewer Speedway
-                         }},
+                 {.lngIndex_CupName = 0xC1,
+                  .CupTrack =
+                      {
+                          {0x6, 0x5B}, // Roo Tubes
+                          {0x0, 0x53}, // Dingo Canyon
+                          {0x1, 0x54}, // Dragon Mines
+                          {0x8, 0x57}  // Sewer Speedway
+                      }},
 
-                    {.lngIndex_CupName = 0xC2,
-                     .CupTrack =
-                         {
-                             0x9, 0x4e, // Mystery Caves
-                             0x5, 0x5A, // Papu Pyramid
-                             0xA, 0x4D, // Cortex Castle
-                             0xF, 0x44  // Tiny Arena
-                         }},
+                 {.lngIndex_CupName = 0xC2,
+                  .CupTrack =
+                      {
+                          {0x9, 0x4e}, // Mystery Caves
+                          {0x5, 0x5A}, // Papu Pyramid
+                          {0xA, 0x4D}, // Cortex Castle
+                          {0xF, 0x44}  // Tiny Arena
+                      }},
 
-                    {.lngIndex_CupName = 0xC3,
-                     .CupTrack =
-                         {
-                             0xC, 0x50, // Polar Pass
-                             0xB, 0x52, // N Gin Labs
-                             0x7, 0x4C, // Hot Air Skyway
-                             0x10, 0x55 // Slide Col
-                         }}},
+                 {.lngIndex_CupName = 0xC3,
+                  .CupTrack =
+                      {
+                          {0xC, 0x50}, // Polar Pass
+                          {0xB, 0x52}, // N Gin Labs
+                          {0x7, 0x4C}, // Hot Air Skyway
+                          {0x10, 0x55} // Slide Col
+                      }}},
 
             .menuRacingWheelConfig =
                 {
-                    .stringIndexTitle = 0xFFFF,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0x88A3,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_CALLBACK_CENTERED,
                     .rows = 0,
                     .funcPtr = MainFreeze_MenuPtrOptions,
                     .drawStyle = 4,
@@ -4266,7 +4236,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0x8C83,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED,
                     .rows = &data.rowsQuit[0],
                     .funcPtr = MainFreeze_MenuPtrQuit,
                     .drawStyle = 4,
@@ -4394,11 +4364,11 @@ struct Data
 
             .menuAdvHub =
                 {
-                    .stringIndexTitle = 0xFFFF,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
                     .posX_curr = 0x100,
                     .posY_curr = 0xAF,
                     .unk1 = 0,
-                    .state = 0x8C83,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED,
                     .rows = &data.rowsAdvHub[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 4,
@@ -4419,7 +4389,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0xc883,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_CENTERED | BIG_TEXT_IN_TITLE,
                     .rows = &data.rowsAdvRace[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 4,
@@ -4439,7 +4409,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0xc883,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_CENTERED | BIG_TEXT_IN_TITLE,
                     .rows = &data.rowsAdvCup[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 6,
@@ -4463,7 +4433,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0xcc83,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED | BIG_TEXT_IN_TITLE,
                     .rows = &data.rowsBattle[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 4,
@@ -4483,7 +4453,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0xcc83,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED | BIG_TEXT_IN_TITLE,
                     .rows = &data.rowsArcadeCup[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 4,
@@ -4506,7 +4476,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x6c,
                     .unk1 = 0,
-                    .state = 0xcc83,
+                    .state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED | BIG_TEXT_IN_TITLE,
                     .rows = &data.rowsArcadeRace[0],
                     .funcPtr = MainFreeze_MenuPtrDefault,
                     .drawStyle = 4,
@@ -4815,14 +4785,14 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x96,
                     .unk1 = 0,
-                    .state = 0xC81,
+                    .state = RECTMENU_STATE_SMALL_EXEC_CENTER_X,
                     .rows = &data.rowsSaveGame[0],
                     .funcPtr = TakeCupProgress_MenuProc,
                     .drawStyle = 4,
                 },
 
-            .menuQueueLoadTrack = {.stringIndexTitle = 0xFFFF,
-                                   .state = 0x20, // no input, just funcPtr
+            .menuQueueLoadTrack = {.stringIndexTitle = RECTMENU_STRING_NONE,
+                                   .state = DISABLE_INPUT_ALLOW_FUNCPTRS, // no input, just funcPtr
                                    .funcPtr = QueueLoadTrack_MenuProc},
 
             .matrixTitleFlag = {.m =
@@ -4866,68 +4836,68 @@ struct Data
 
             .menuGreenLoadSave =
                 {
-                    .stringIndexTitle = -1,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
                     .posX_curr = 0x100,
                     .posY_curr = 0x7A,
                     .unk1 = 0,
-                    .state = 0xC81,
+                    .state = RECTMENU_STATE_SMALL_EXEC_CENTER_X,
                     .rows = &data.rowsGreenLoadSave[0],
                     .funcPtr = SelectProfile_AdvPickMode_MenuProc,
-                    .drawStyle = 0x10, // GREEN
+                    .drawStyle = SELECT_PROFILE_DRAW_STYLE_GREEN,
                 },
 
             .menuFourAdvProfiles =
                 {
-                    .stringIndexTitle = -1,
-                    .state = 0x2820,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
+                    .state = RECTMENU_STATE_INVISIBLE_CALLBACK,
                     .funcPtr = SelectProfile_AllProfiles_MenuProc,
                 },
 
             .menuGhostSelection =
                 {
-                    .stringIndexTitle = -1,
-                    .state = 0x2820,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
+                    .state = RECTMENU_STATE_INVISIBLE_CALLBACK,
                     .funcPtr = SelectProfile_AllProfiles_MenuProc,
                 },
 
             .menuWarning2 =
                 {
-                    .stringIndexTitle = -1,
-                    .state = 0x2820,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
+                    .state = RECTMENU_STATE_INVISIBLE_CALLBACK,
                     .funcPtr = SelectProfile_AllProfiles_MenuProc,
                 },
 
             .menuSubmitName =
                 {
-                    .stringIndexTitle = -1,
-                    .state = 0x820,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
+                    .state = RECTMENU_STATE_CALLBACK,
                     .funcPtr = SubmitName_MenuProc,
                 },
 
             .menuQueueLoadHub =
                 {
-                    .stringIndexTitle = -1,
-                    .state = 0x20,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
+                    .state = DISABLE_INPUT_ALLOW_FUNCPTRS,
                     .funcPtr = SelectProfile_QueueLoadHub_MenuProc,
                 },
 
             .MetaDataLoadSave =
                 {
-                    {0x61, 0x400, 0xF368, 0x99F, 0x232, 0x60, 0xA5, 0xFF},
+                    {0x61, 0x400, {{0xF368, 0x99F, 0x232}}, 0x60, 0xA5, 0xFF},
                     {0x62, 0x600},
-                    {0x63, 0x400, 0xF368, 0x99F, -0x2d8, 0xDC, 0xA6, 0x0},
+                    {0x63, 0x400, {{0xF368, 0x99F, -0x2d8}}, 0xDC, 0xA6, 0x0},
 
-                    {0x61, 0x400, 0xF368, 0x99F, 0x232, 0x60, 0xA5, 0xFF},
+                    {0x61, 0x400, {{0xF368, 0x99F, 0x232}}, 0x60, 0xA5, 0xFF},
                     {0x62, 0x600},
-                    {0x63, 0x400, 0xF368, 0x99F, -0x2d8, 0xDC, 0xA6, 0x0},
+                    {0x63, 0x400, {{0xF368, 0x99F, -0x2d8}}, 0xDC, 0xA6, 0x0},
 
-                    {0x61, 0x400, 0xF368, 0x99F, 0x232, 0x60, 0xA5, 0xFF},
+                    {0x61, 0x400, {{0xF368, 0x99F, 0x232}}, 0x60, 0xA5, 0xFF},
                     {0x62, 0x600},
-                    {0x63, 0x400, 0xF368, 0x99F, -0x2d8, 0xDC, 0xA6, 0x0},
+                    {0x63, 0x400, {{0xF368, 0x99F, -0x2d8}}, 0xDC, 0xA6, 0x0},
 
-                    {0x61, 0x400, 0xF368, 0x99F, 0x232, 0x60, 0xA5, 0xFF},
+                    {0x61, 0x400, {{0xF368, 0x99F, 0x232}}, 0x60, 0xA5, 0xFF},
                     {0x62, 0x600},
-                    {0x63, 0x400, 0xF368, 0x99F, -0x2d8, 0xDC, 0xA6, 0x0},
+                    {0x63, 0x400, {{0xF368, 0x99F, -0x2d8}}, 0xDC, 0xA6, 0x0},
                 },
 
             .spinOffset_LoadSave = {0x155, 0xF55, 0, 0},
@@ -4948,10 +4918,10 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x86,
                     .unk1 = 0,
-                    .state = 0x8A1,
+                    .state = RECTMENU_STATE_SMALL_CALLBACK_CENTER_X,
                     .rows = &data.rowsOverwrite[0],
                     .funcPtr = 0,
-                    .drawStyle = 0x10, // GREEN
+                    .drawStyle = SELECT_PROFILE_DRAW_STYLE_GREEN,
                 },
 
             .menuOverwriteGhost =
@@ -4960,7 +4930,7 @@ struct Data
                     .posX_curr = 0x100,
                     .posY_curr = 0x82,
                     .unk1 = 0,
-                    .state = 0x8A1,
+                    .state = RECTMENU_STATE_SMALL_CALLBACK_CENTER_X,
                     .rows = &data.rowsOverwrite[0],
                     .funcPtr = 0,
                     .drawStyle = 0, // NORMAL
@@ -5084,11 +5054,11 @@ struct Data
 
             .menuRetryExit =
                 {
-                    .stringIndexTitle = -1,
+                    .stringIndexTitle = RECTMENU_STRING_NONE,
                     .posX_curr = 0x100,
                     .posY_curr = 0xB4,
                     .unk1 = 0,
-                    .state = 0x803,
+                    .state = RECTMENU_STATE_CENTERED,
                     .rows = &data.rowsRetryExit[0],
                     .funcPtr = UI_RaceEnd_MenuProc,
                     .drawStyle = 4,
@@ -5107,8 +5077,7 @@ struct Data
 
             .playerIconAdvMap =
                 {
-                    .unk_playerAdvMap = {0, 0xFFF8, 0xFFF8},
-                    .unk2_playerAdvMap = {8, 8, 8},
+                    .pos = {{{0, 0xFFF8}}, {{0xFFF8, 8}}, {{8, 8}}},
 
                     .vertCol1 = {0xFFFF, 0xFF, 0xFF},
                     .vertCol2 = {0xFFFF80, 0xFF, 0xFF},
@@ -6748,11 +6717,7 @@ struct Data
                                                     .accel = 0,
                                                 }}},
 
-                    {.flags = 64,
-                     .initOffset = 1,
-
-                     // memcpy into particle
-                     .data = {0x4, 0, 0, 0, 0, 0x96, 0, 0, 0, 1, 0, 0x10, 1, 0, 0, 2}},
+                    {.flags = 64, .initOffset = 1, .oscillator = {.flags = PARTICLE_OSC_MODE_SQUARE, .period = 0x9600, .scale = 0x100, .offset = 0x1000, .min = 1, .max = 0x200}},
 
                     {.flags = 1,
                      .initOffset = 5,
@@ -6875,11 +6840,7 @@ struct Data
                                                     .accel = 0,
                                                 }}},
 
-                    {.flags = 64,
-                     .initOffset = 1,
-
-                     // memcpy into particle
-                     .data = {0x4, 0, 0, 0, 0, 0x96, 0, 0, 0, 1, 0, 0x10, 1, 0, 0, 2}},
+                    {.flags = 64, .initOffset = 1, .oscillator = {.flags = PARTICLE_OSC_MODE_SQUARE, .period = 0x9600, .scale = 0x100, .offset = 0x1000, .min = 1, .max = 0x200}},
 
                     {.flags = 1,
                      .initOffset = 5,
@@ -7024,74 +6985,142 @@ struct Data
             .MetaDataTerrain =
                 {
                     // asphalt
-                    [TERRAIN_ASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0xffff, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_ASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0xffff, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // dirt
-                    [TERRAIN_DIRT] = {0,  0,      140,    180,    256,    256,   &data.emSet_DirtLR[0], &data.emSet_DirtLR[0], 256, 256, 256, 4, 5, 4, 64, 18,
-                                      24, 0xffff, 0x0000, 0x008c, 0x00b4, 0x0100},
+                    [TERRAIN_DIRT] = {0,
+                                      0,
+                                      140,
+                                      180,
+                                      256,
+                                      256,
+                                      &data.emSet_DirtLR[0],
+                                      &data.emSet_DirtLR[0],
+                                      256,
+                                      256,
+                                      256,
+                                      {4, 5, 4, 64},
+                                      18,
+                                      24,
+                                      {{0xffff, 0x0000, 0x008c, 0x00b4}},
+                                      0x0100},
 
                     // grass
-                    [TERRAIN_GRASS] = {0,  0,      140,    180,    256,    256,   &data.emSet_GrassL[0], &data.emSet_GrassR[0], 256, 256, 256, 4, 4, 4, 56, 18,
-                                       24, 0xffff, 0x0000, 0x008c, 0x00b4, 0x0100},
+                    [TERRAIN_GRASS] = {0,
+                                       0,
+                                       140,
+                                       180,
+                                       256,
+                                       256,
+                                       &data.emSet_GrassL[0],
+                                       &data.emSet_GrassR[0],
+                                       256,
+                                       256,
+                                       256,
+                                       {4, 4, 4, 56},
+                                       18,
+                                       24,
+                                       {{0xffff, 0x0000, 0x008c, 0x00b4}},
+                                       0x0100},
 
                     // wood
-                    [TERRAIN_WOOD] = {0, 33, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 4, 64, 17, 21, 0xffff, 0x0021, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_WOOD] = {0, 33, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 4, 64}, 17, 21, {{0xffff, 0x0021, 0x0100, 0x0100}}, 0x0100},
 
                     // water
-                    [TERRAIN_WATER] = {0, 0, 180, 200, 256, 256, 0, 0, 256, 256, 256, 4, 3, 4, 56, -1, 25, 0xffff, 0x0000, 0x00b4, 0x00c8, 0x0100},
+                    [TERRAIN_WATER] = {0, 0, 180, 200, 256, 256, 0, 0, 256, 256, 256, {4, 3, 4, 56}, -1, 25, {{0xffff, 0x0000, 0x00b4, 0x00c8}}, 0x0100},
 
                     // stone
-                    [TERRAIN_STONE] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0xffff, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_STONE] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0xffff, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // ice
-                    [TERRAIN_ICE] = {0, 28, 256, 100, 0, 0, 0, 0, 32, 128, 32, 0, 0, 0, 0, -1, 22, 0xffff, 0x001c, 0x0100, 0x0064, 0x0020},
+                    [TERRAIN_ICE] = {0, 28, 256, 100, 0, 0, 0, 0, 32, 128, 32, {0, 0, 0, 0}, -1, 22, {{0xffff, 0x001c, 0x0100, 0x0064}}, 0x0020},
 
                     // track
-                    [TERRAIN_TRACK] = {0, 33, 140, 180, 256, 256, 0, 0, 256, 256, 256, 0, 0, 4, 64, 17, 21, 0xffff, 0x0021, 0x008c, 0x00b4, 0x0100},
+                    [TERRAIN_TRACK] = {0, 33, 140, 180, 256, 256, 0, 0, 256, 256, 256, {0, 0, 4, 64}, 17, 21, {{0xffff, 0x0021, 0x008c, 0x00b4}}, 0x0100},
 
                     // icy road
-                    [TERRAIN_ICY_ROAD] = {0, 64, 256, 256, 256, 256, 0, 0, 128, 256, 256, 0, 0, 0, 0, 19, -1, 0xffff, 0x0040, 0x0100, 0x0100, 0x0080},
+                    [TERRAIN_ICY_ROAD] = {0, 64, 256, 256, 256, 256, 0, 0, 128, 256, 256, {0, 0, 0, 0}, 19, -1, {{0xffff, 0x0040, 0x0100, 0x0100}}, 0x0080},
 
                     // snow
-                    [TERRAIN_SNOW] = {0,  0,      140,    180,    256,    256,   &data.emSet_SnowLR[0], &data.emSet_SnowLR[0], 128, 256, 256, 0, 0, 4, 56, 19,
-                                      23, 0xffff, 0x0000, 0x008c, 0x00b4, 0x0080},
+                    [TERRAIN_SNOW] = {0,
+                                      0,
+                                      140,
+                                      180,
+                                      256,
+                                      256,
+                                      &data.emSet_SnowLR[0],
+                                      &data.emSet_SnowLR[0],
+                                      128,
+                                      256,
+                                      256,
+                                      {0, 0, 4, 56},
+                                      19,
+                                      23,
+                                      {{0xffff, 0x0000, 0x008c, 0x00b4}},
+                                      0x0080},
 
                     // none
-                    [TERRAIN_NONE] = {0, 0, 256, 256, 0, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, -1, -1, 0xffff, 0x0000, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_NONE] = {0, 0, 256, 256, 0, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, -1, -1, {{0xffff, 0x0000, 0x0100, 0x0100}}, 0x0100},
 
                     // hardpack
-                    [TERRAIN_HARDPACK] = {0, 0, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 18, -1, 0xffff, 0x0000, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_HARDPACK] = {0, 0, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 18, -1, {{0xffff, 0x0000, 0x0100, 0x0100}}, 0x0100},
 
                     // metal
-                    [TERRAIN_METAL] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 4, 10, 0, 0, 17, 26, 0xffff, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_METAL] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {4, 10, 0, 0}, 17, 26, {{0xffff, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // fastwater
-                    [TERRAIN_FASTWATER] = {0, 0, 256, 256, 256, 256, 0, 0, 256, 256, 256, 4, 3, 4, 56, -1, 25, 0xffff, 0x0000, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_FASTWATER] = {0, 0, 256, 256, 256, 256, 0, 0, 256, 256, 256, {4, 3, 4, 56}, -1, 25, {{0xffff, 0x0000, 0x0100, 0x0100}}, 0x0100},
 
                     // mud
-                    [TERRAIN_MUD] = {0, 128, 140, 180, 256, 256, 0, 0, 512, 256, 256, 4, 5, 4, 64, -1, 27, 0xffff, 0x0080, 0x008c, 0x00b4, 0x0200},
+                    [TERRAIN_MUD] = {0, 128, 140, 180, 256, 256, 0, 0, 512, 256, 256, {4, 5, 4, 64}, -1, 27, {{0xffff, 0x0080, 0x008c, 0x00b4}}, 0x0200},
 
                     // sideslip
-                    [TERRAIN_SIDESLIP] = {0, 320, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0xffff, 0x0140, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_SIDESLIP] = {0, 320, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0xffff, 0x0140, 0x0100, 0x0100}}, 0x0100},
 
                     // riverasphalt
-                    [TERRAIN_RIVERASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0x0088, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_RIVERASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0x0088, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // steamasphalt
-                    [TERRAIN_STEAMASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0x008b, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_STEAMASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0x008b, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // oceanasphalt
-                    [TERRAIN_OCEANASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, 0, 0, 0, 0, 17, -1, 0x0087, 0x0040, 0x0100, 0x0100, 0x0100},
+                    [TERRAIN_OCEANASPHALT] = {0, 64, 256, 256, 256, 256, 0, 0, 256, 256, 256, {0, 0, 0, 0}, 17, -1, {{0x0087, 0x0040, 0x0100, 0x0100}}, 0x0100},
 
                     // slowgrass
-                    [TERRAIN_SLOWGRASS] =
-                        {0,  0,      100,    180,    256,    256,   &data.emSet_GrassL[0], &data.emSet_GrassR[0], 256, 256, 256, 4, 4, 4, 56, 18,
-                         24, 0xffff, 0x0000, 0x0064, 0x00b4, 0x0100},
+                    [TERRAIN_SLOWGRASS] = {0,
+                                           0,
+                                           100,
+                                           180,
+                                           256,
+                                           256,
+                                           &data.emSet_GrassL[0],
+                                           &data.emSet_GrassR[0],
+                                           256,
+                                           256,
+                                           256,
+                                           {4, 4, 4, 56},
+                                           18,
+                                           24,
+                                           {{0xffff, 0x0000, 0x0064, 0x00b4}},
+                                           0x0100},
 
                     // slowdirt
-                    [TERRAIN_SLOWDIRT] =
-                        {0,  0,      100,    180,    256,    256,   &data.emSet_DirtLR[0], &data.emSet_DirtLR[0], 256, 256, 256, 4, 5, 4, 64, 18,
-                         24, 0xffff, 0x0000, 0x0064, 0x00b4, 0x0100},
+                    [TERRAIN_SLOWDIRT] = {0,
+                                          0,
+                                          100,
+                                          180,
+                                          256,
+                                          256,
+                                          &data.emSet_DirtLR[0],
+                                          &data.emSet_DirtLR[0],
+                                          256,
+                                          256,
+                                          256,
+                                          {4, 5, 4, 64},
+                                          18,
+                                          24,
+                                          {{0xffff, 0x0000, 0x0064, 0x00b4}},
+                                          0x0100},
                 },
 
 // one way for this to fail,

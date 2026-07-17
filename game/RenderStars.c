@@ -54,7 +54,7 @@ static int RenderStars_IsVisible(u32 gteFlag, u32 sxy)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006e26c-0x8006e588
-void RenderStars(struct PushBuffer *pb, struct PrimMem *primMem, struct Stars *stars, char numPlyr)
+void RenderStars(struct PushBuffer *pb, struct PrimMem *primMem, struct Stars *stars, u8 numPlyr)
 {
 	u32 *prim = (u32 *)primMem->cursor;
 	int playerCount = numPlyr;
@@ -78,11 +78,11 @@ void RenderStars(struct PushBuffer *pb, struct PrimMem *primMem, struct Stars *s
 		int spread;
 		uint32_t *ot;
 
-		CTC2(*(u32 *)((char *)&pb->matrix_ViewProj + 0x00), 0);
-		CTC2(*(u32 *)((char *)&pb->matrix_ViewProj + 0x04), 1);
-		CTC2(*(u32 *)((char *)&pb->matrix_ViewProj + 0x08), 2);
-		CTC2(*(u32 *)((char *)&pb->matrix_ViewProj + 0x0c), 3);
-		CTC2(*(u32 *)((char *)&pb->matrix_ViewProj + 0x10), 4);
+		CTC2(CTR_ReadU32LE((char *)&pb->matrix_ViewProj + 0x00), 0);
+		CTC2(CTR_ReadU32LE((char *)&pb->matrix_ViewProj + 0x04), 1);
+		CTC2(CTR_ReadU32LE((char *)&pb->matrix_ViewProj + 0x08), 2);
+		CTC2(CTR_ReadU32LE((char *)&pb->matrix_ViewProj + 0x0c), 3);
+		CTC2(CTR_ReadU32LE((char *)&pb->matrix_ViewProj + 0x10), 4);
 
 		CTC2((u32)(s32)pb->rect.w << 15, 24);
 		CTC2((u32)(s32)pb->rect.h << 15, 25);

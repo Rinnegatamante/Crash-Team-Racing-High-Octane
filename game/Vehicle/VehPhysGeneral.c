@@ -1,16 +1,105 @@
 #include <common.h>
 
-// byte budget: 1996
-// current size: 1824
+enum
+{
+	VEH_PHYS_ANGULAR_STICK_MIN_SPEED = 0x10,
+	VEH_PHYS_ANGULAR_STEER_SPEED_THRESHOLD = 0x300,
+	VEH_PHYS_ANGULAR_STEER_ACCEL_COMPARE_SPEED = 0x2ff,
+	VEH_PHYS_ANGULAR_TURN_RESPONSE_COAST_SCALE = 0x32,
+	VEH_PHYS_ANGULAR_TURN_RESPONSE_ACCEL_SCALE = 100,
+	VEH_PHYS_ANGULAR_TURN_RESPONSE_DECEL_SCALE = 50,
+	VEH_PHYS_ANGULAR_DRIFT_SPINOUT_TIME = 0x140,
+	VEH_PHYS_ANGULAR_CLASS_SPEED_SHIFT = 0x10,
+	VEH_PHYS_ANGULAR_CLASS_SPEED_HALF_SHIFT = 0x11,
+	VEH_PHYS_ANGULAR_TERRAIN_SCALE_NEUTRAL = 0x100,
+	VEH_PHYS_ANGULAR_TURN_ASSIST_MIN_DELTA = 3,
+	VEH_PHYS_ANGULAR_TURN_WOBBLE_MIN_DELTA = 10,
+	VEH_PHYS_ANGULAR_TURN_WOBBLE_TIMER = 8,
+	VEH_PHYS_ANGULAR_TURN_WOBBLE_VELOCITY = 0x14,
+	VEH_PHYS_ANGULAR_TURN_WOBBLE_DISABLE_ANGLE = 0x32,
+	VEH_PHYS_ANGULAR_AIR_TURN_SPEED_MAX = 0x600,
+	VEH_PHYS_ANGULAR_ANGLE_MASK = 0xfff,
+	VEH_PHYS_ANGULAR_TURN_INTEGRATION_SHIFT = 5,
+	VEH_PHYS_ANGULAR_AXIS_INTEGRATION_SHIFT = 0xd,
+	VEH_PHYS_ANGULAR_BRAKE_LEAN_SCALE = 10,
+
+	VEH_PHYS_JUMP_NORMAL_Y_MIN = 0x15,
+	VEH_PHYS_JUMP_TURBO_PAD_ACCEL = 8000,
+	VEH_PHYS_JUMP_REVERSE_SLIDE_SPEED_COMPARE = 0x2ff,
+	VEH_PHYS_JUMP_TERRAIN_SCALE_NEUTRAL = 0x100,
+	VEH_PHYS_JUMP_FAST_SQRT_ITERATIONS = 0x10,
+	VEH_PHYS_JUMP_SPEED_FIXED_SHIFT = 8,
+	VEH_PHYS_JUMP_HIGH_TIMER_MS = 0x180,
+	VEH_PHYS_JUMP_FORCED_MS = 0xa0,
+	VEH_PHYS_JUMP_COOLDOWN_MS = 0x180,
+	VEH_PHYS_JUMP_RUMBLE_CHANNEL = 8,
+	VEH_PHYS_JUMP_RUMBLE_FORCE = 0x7f,
+	VEH_PHYS_JUMP_SPRING_SFX = 9,
+	VEH_PHYS_JUMP_NORMAL_SFX = 8,
+	VEH_PHYS_JUMP_FORCED_SFX = 0x7e,
+	VEH_PHYS_JUMP_VERTICAL_SPEED_DEFAULT = 0x3700,
+	VEH_PHYS_JUMP_VERTICAL_SPEED_MAX = 0x5000,
+	VEH_PHYS_JUMP_SPEEDOMETER_REVERSE_THRESHOLD = 0x100,
+	VEH_PHYS_JUMP_SPEEDOMETER_DECAY_SHIFT = 3,
+	VEH_PHYS_JUMP_SPEEDOMETER_BLEND_OLD = 0xd,
+	VEH_PHYS_JUMP_SPEEDOMETER_TIMER_MASK = 7,
+	VEH_PHYS_JUMP_SPEEDOMETER_TIMER_SCALE = 0x300,
+	VEH_PHYS_JUMP_SPEEDOMETER_BLEND_SHIFT = 4,
+	VEH_PHYS_JUMP_SPEEDOMETER_BLEND_NEW = 3,
+};
+
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_STICK_MIN_SPEED == 0x10);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_STEER_SPEED_THRESHOLD == 0x300);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_STEER_ACCEL_COMPARE_SPEED == 0x2ff);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_RESPONSE_COAST_SCALE == 0x32);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_RESPONSE_ACCEL_SCALE == 100);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_RESPONSE_DECEL_SCALE == 50);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_DRIFT_SPINOUT_TIME == 0x140);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_CLASS_SPEED_SHIFT == 0x10);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_CLASS_SPEED_HALF_SHIFT == 0x11);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TERRAIN_SCALE_NEUTRAL == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_ASSIST_MIN_DELTA == 3);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_WOBBLE_MIN_DELTA == 10);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_WOBBLE_TIMER == 8);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_WOBBLE_VELOCITY == 0x14);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_WOBBLE_DISABLE_ANGLE == 0x32);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_AIR_TURN_SPEED_MAX == 0x600);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_ANGLE_MASK == 0xfff);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_TURN_INTEGRATION_SHIFT == 5);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_AXIS_INTEGRATION_SHIFT == 0xd);
+CTR_STATIC_ASSERT(VEH_PHYS_ANGULAR_BRAKE_LEAN_SCALE == 10);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_NORMAL_Y_MIN == 0x15);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_TURBO_PAD_ACCEL == 8000);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_REVERSE_SLIDE_SPEED_COMPARE == 0x2ff);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_TERRAIN_SCALE_NEUTRAL == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_FAST_SQRT_ITERATIONS == 0x10);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEED_FIXED_SHIFT == 8);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_HIGH_TIMER_MS == 0x180);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_FORCED_MS == 0xa0);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_COOLDOWN_MS == 0x180);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_RUMBLE_CHANNEL == 8);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_RUMBLE_FORCE == 0x7f);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPRING_SFX == 9);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_NORMAL_SFX == 8);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_FORCED_SFX == 0x7e);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_VERTICAL_SPEED_DEFAULT == 0x3700);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_VERTICAL_SPEED_MAX == 0x5000);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_REVERSE_THRESHOLD == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_DECAY_SHIFT == 3);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_BLEND_OLD == 0xd);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_TIMER_MASK == 7);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_TIMER_SCALE == 0x300);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_BLEND_SHIFT == 4);
+CTR_STATIC_ASSERT(VEH_PHYS_JUMP_SPEEDOMETER_BLEND_NEW == 3);
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8005fc8c-0x80060458.
 void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 {
+	(void)thread;
 	int speedApprox;
 	int elapsedTimeMS;
 	int classSpeed_original;
 	int driverSpeed;
-	u32 destinedRot;
 	int classSpeed_halved;
 	struct Terrain *terrain;
 	int rotCurrW_original;
@@ -69,14 +158,16 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 	}
 	if (((actionsFlagSet & ACTION_TOUCH_GROUND) != 0) && ((driver->stepFlagSet & COLL_STEP_TRIGGER_TURBO_PAD_MASK) == 0))
 	{
-		rotCurrW_interp = VehCalc_MapToRange(speedApprox, 0x10, 0x300, 0, rotCurrW_interp);
+		rotCurrW_interp = VehCalc_MapToRange(speedApprox, VEH_PHYS_ANGULAR_STICK_MIN_SPEED, VEH_PHYS_ANGULAR_STEER_SPEED_THRESHOLD, 0, rotCurrW_interp);
 	}
 	terrain = driver->terrainMeta1;
 	rotCurrW_original = (int)driver->rotationSpinRate;
 	if (rotCurrW_interp == 0)
 	{
-		int rate =
-		    CTR_MipsSra(CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, 0x32)), terrain->turnResponseScale), 8);
+		int rate = CTR_MipsSra(
+		    CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, VEH_PHYS_ANGULAR_TURN_RESPONSE_COAST_SCALE)),
+		                  terrain->turnResponseScale),
+		    8);
 
 		rotCurrW_interp = VehCalc_InterpBySpeed(rotCurrW_original, rate, 0);
 
@@ -93,7 +184,9 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 		if (rotCurrW_original < rotCurrW_interp)
 		{
 			int rate = CTR_MipsSra(
-			    CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, 100)), terrain->turnResponseScale), 8);
+			    CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, VEH_PHYS_ANGULAR_TURN_RESPONSE_ACCEL_SCALE)),
+			                  terrain->turnResponseScale),
+			    8);
 			rotCurrW_original = CTR_MipsAddLo(rotCurrW_original, rate);
 
 			interpLessThanOriginal = rotCurrW_interp < rotCurrW_original;
@@ -106,7 +199,9 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 		else if (rotCurrW_interp < rotCurrW_original)
 		{
 			int rate = CTR_MipsSra(
-			    CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, 50)), terrain->turnResponseScale), 8);
+			    CTR_MipsMulLo(CTR_MipsAddLo(driver->const_TurnInputDelay, CTR_MipsMulLo((s8)driver->turnConst, VEH_PHYS_ANGULAR_TURN_RESPONSE_DECEL_SCALE)),
+			                  terrain->turnResponseScale),
+			    8);
 			rotCurrW_original = CTR_MipsSubLo(rotCurrW_original, rate);
 
 			interpLessThanOriginal = rotCurrW_original < rotCurrW_interp;
@@ -126,7 +221,7 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 	if (rotCurrW_interp != 0)
 	{
 		classSpeed_halved = CTR_MipsSubLo(rotCurrW_interp, elapsedTimeMS);
-		rotCurrW_interp = VehCalc_MapToRange(rotCurrW_interp, 0, 0x140, 0, (int)driver->previousFrameMultDrift);
+		rotCurrW_interp = VehCalc_MapToRange(rotCurrW_interp, 0, VEH_PHYS_ANGULAR_DRIFT_SPINOUT_TIME, 0, (int)driver->previousFrameMultDrift);
 		rotCurrW_original = CTR_MipsAddLo(rotCurrW_original, rotCurrW_interp);
 		if (classSpeed_halved < 0)
 		{
@@ -135,8 +230,8 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 		driver->timeUntilDriftSpinout = (s16)classSpeed_halved;
 	}
 
-	classSpeed_halved = CTR_MipsSll((u16)driver->const_Speed_ClassStat, 0x10);
-	classSpeed_original = CTR_MipsSra(classSpeed_halved, 0x10);
+	classSpeed_halved = CTR_MipsSll((u16)driver->const_Speed_ClassStat, VEH_PHYS_ANGULAR_CLASS_SPEED_SHIFT);
+	classSpeed_original = CTR_MipsSra(classSpeed_halved, VEH_PHYS_ANGULAR_CLASS_SPEED_SHIFT);
 	turnResistMax = CTR_MipsMulLo((u8)driver->const_turnResistMax, classSpeed_original);
 	turnResistMin = CTR_MipsMulLo((u8)driver->const_turnResistMin, classSpeed_original);
 	forwardDir = driver->turnAngleLerpVel;
@@ -148,7 +243,7 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 	if ((actionsFlagSet & ACTION_BRAKE_WITH_ACCEL) != 0)
 	{
 		turnResistMaxBitshift = CTR_MipsSra(turnResistMax, 9);
-		if (0x300 < speedApprox)
+		if (VEH_PHYS_ANGULAR_STEER_SPEED_THRESHOLD < speedApprox)
 		{
 			// driver is leaving skids
 			driver->actionsFlagSet |= ACTION_BACK_SKID;
@@ -165,10 +260,10 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 			{
 				turnResistMax = CTR_MipsNegLo(turnResistMax);
 			}
-			// Rotating the model to exaggerate the steering animation
-			// only do this if driver speed is more than 0x300
+			// Rotate the model to exaggerate steering above the steering speed threshold.
 			rotCurrW_interp =
-			    VehCalc_MapToRange(turnResistMax, 0x300, CTR_MipsSra(classSpeed_halved, 0x11), (int)driver->const_modelRotVelMin, rotCurrW_interp);
+			    VehCalc_MapToRange(turnResistMax, VEH_PHYS_ANGULAR_STEER_SPEED_THRESHOLD,
+			                       CTR_MipsSra(classSpeed_halved, VEH_PHYS_ANGULAR_CLASS_SPEED_HALF_SHIFT), (int)driver->const_modelRotVelMin, rotCurrW_interp);
 		}
 	}
 	driverSpeed = (int)driver->speed;
@@ -213,14 +308,15 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 
 	classSpeed_halved = (int)(s16)driver->turnAngleLerpVel;
 
-	if (terrain->turnAngleScale != 0x100)
+	if (terrain->turnAngleScale != VEH_PHYS_ANGULAR_TERRAIN_SCALE_NEUTRAL)
 	{
 		classSpeed_halved = CTR_MipsSra(CTR_MipsMulLo(terrain->turnAngleScale, classSpeed_halved), 8);
 	}
-	driftAngleCurr_Final = CTR_MipsAddLo(driftAngleCurr_og, CTR_MipsSra(CTR_MipsMulLo(classSpeed_halved, elapsedTimeMS), 5));
+	driftAngleCurr_Final =
+	    CTR_MipsAddLo(driftAngleCurr_og, CTR_MipsSra(CTR_MipsMulLo(classSpeed_halved, elapsedTimeMS), VEH_PHYS_ANGULAR_TURN_INTEGRATION_SHIFT));
 	driver->turnAngleCurr = (s16)driftAngleCurr_Final;
 	turnResistMinBitshift = rotCurrW_original;
-	if ((0x2ff < speedApprox) && ((actionsFlagSet & ACTION_TOUCH_GROUND) != 0))
+	if ((VEH_PHYS_ANGULAR_STEER_ACCEL_COMPARE_SPEED < speedApprox) && ((actionsFlagSet & ACTION_TOUCH_GROUND) != 0))
 	{
 		turnResistMaxBitshift = VehCalc_SteerAccel(driver->numFramesSpentSteering, (int)driver->const_SteerAccel_Stage2_FirstFrame,
 		                                           (int)driver->const_SteerAccel_Stage2_FrameLength, (int)driver->const_SteerAccel_Stage4_FirstFrame,
@@ -283,20 +379,20 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 			{
 				rotCurrW_interp = CTR_MipsNegLo(classSpeed_halved);
 			}
-			if (rotCurrW_interp < 3)
+			if (rotCurrW_interp < VEH_PHYS_ANGULAR_TURN_ASSIST_MIN_DELTA)
 			{
 				rotCurrW_interp = turnResistMax;
 				if (turnResistMax < 0)
 				{
 					rotCurrW_interp = CTR_MipsNegLo(turnResistMax);
 				}
-				if (rotCurrW_interp < 10)
+				if (rotCurrW_interp < VEH_PHYS_ANGULAR_TURN_WOBBLE_MIN_DELTA)
 				{
-					turnResistMaxBitshift = 8;
-					rotCurrW_original = 0x14;
+					turnResistMaxBitshift = VEH_PHYS_ANGULAR_TURN_WOBBLE_TIMER;
+					rotCurrW_original = VEH_PHYS_ANGULAR_TURN_WOBBLE_VELOCITY;
 					if (driftAngleCurr_Final < 0)
 					{
-						rotCurrW_original = -0x14;
+						rotCurrW_original = -VEH_PHYS_ANGULAR_TURN_WOBBLE_VELOCITY;
 					}
 				}
 			}
@@ -310,16 +406,16 @@ LAB_80060284:
 	{
 		rotCurrW_interp = CTR_MipsNegLo(turnResistMax);
 	}
-	if (0x32 < rotCurrW_interp)
+	if (VEH_PHYS_ANGULAR_TURN_WOBBLE_DISABLE_ANGLE < rotCurrW_interp)
 	{
 		turnResistMaxBitshift = 0;
 	}
 	if (turnResistMaxBitshift == 0)
 	{
-		rotCurrW_original = 10;
+		rotCurrW_original = VEH_PHYS_ANGULAR_TURN_WOBBLE_MIN_DELTA;
 		if (0 < turnResistMax)
 		{
-			rotCurrW_original = CTR_MipsNegLo(10);
+			rotCurrW_original = CTR_MipsNegLo(VEH_PHYS_ANGULAR_TURN_WOBBLE_MIN_DELTA);
 		}
 		rotCurrW_interp = rotCurrW_original;
 		if (rotCurrW_original < 0)
@@ -338,8 +434,8 @@ LAB_80060284:
 	driver->turnWobbleTimer = (s16)turnResistMaxBitshift;
 	driver->turnWobbleAngle = forwardDir;
 	driver->turnWobbleVelocity = (s16)rotCurrW_original;
-	rotCurrW_interp = VehCalc_MapToRange(speedApprox, 0, 0x600, classSpeed_halved, 0);
-	rotCurrW_original = CTR_MipsSra(CTR_MipsMulLo(rotCurrW_interp, elapsedTimeMS), 5);
+	rotCurrW_interp = VehCalc_MapToRange(speedApprox, 0, VEH_PHYS_ANGULAR_AIR_TURN_SPEED_MAX, classSpeed_halved, 0);
+	rotCurrW_original = CTR_MipsSra(CTR_MipsMulLo(rotCurrW_interp, elapsedTimeMS), VEH_PHYS_ANGULAR_TURN_INTEGRATION_SHIFT);
 	rotCurrW_interp = rotCurrW_original;
 	if (rotCurrW_original < 0)
 	{
@@ -347,28 +443,31 @@ LAB_80060284:
 	}
 	if (1 < rotCurrW_interp)
 	{
-		angle = (u16)(CTR_MipsSubLo(angle, rotCurrW_original) & 0xfff);
+		angle = (u16)(CTR_MipsSubLo(angle, rotCurrW_original) & VEH_PHYS_ANGULAR_ANGLE_MASK);
 	}
 	driver->ampTurnState = (s16)turnResistMinBitshift;
 
-	angle = (u16)(CTR_MipsAddLo(angle, CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, elapsedTimeMS), 0xd)) & 0xfff);
+	angle = (u16)(CTR_MipsAddLo(angle, CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, elapsedTimeMS), VEH_PHYS_ANGULAR_AXIS_INTEGRATION_SHIFT)) &
+	              VEH_PHYS_ANGULAR_ANGLE_MASK);
 	driver->angle = angle;
 
 	(driver->rotCurr).y = (s16)CTR_MipsAddLo(CTR_MipsAddLo(angle, (s16)driftAngleCurr_Final), forwardDir);
 
 	if (((actionsFlagSet & ACTION_ACCEL_PREVENTION) == 0) && (driver->accelTapCount < DRIVER_ACCEL_TAP_STEER_COUNT))
 	{
-		if (terrain->turnLeanScale != 0x100)
+		if (terrain->turnLeanScale != VEH_PHYS_ANGULAR_TERRAIN_SCALE_NEUTRAL)
 		{
 			turnResistMinBitshift = CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, terrain->turnLeanScale), 8);
 		}
 	}
 	else
 	{
-		turnResistMinBitshift = CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, 10), 8);
+		turnResistMinBitshift = CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, VEH_PHYS_ANGULAR_BRAKE_LEAN_SCALE), 8);
 	}
 
-	driver->axisRotationX = (s16)(CTR_MipsAddLo((u16)driver->axisRotationX, CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, elapsedTimeMS), 0xd)) & 0xfff);
+	driver->axisRotationX = (s16)(CTR_MipsAddLo((u16)driver->axisRotationX,
+	                                            CTR_MipsSra(CTR_MipsMulLo(turnResistMinBitshift, elapsedTimeMS), VEH_PHYS_ANGULAR_AXIS_INTEGRATION_SHIFT)) &
+	                              VEH_PHYS_ANGULAR_ANGLE_MASK);
 
 	PhysTerrainSlope(driver);
 }
@@ -409,7 +508,7 @@ int VehPhysGeneral_LerpToForwards(struct Driver *d, int currentAngle, int curren
 		targetAngle = CTR_MipsNegLo(targetAngle);
 	}
 
-	if (d->wallRubTimer != 0xf0)
+	if (d->wallRubTimer != DRIVER_WALL_RUB_TIMER_START)
 	{
 		if (targetAngle < currentAngle)
 		{
@@ -464,7 +563,7 @@ int VehPhysGeneral_JumpGetVelY(s16 *normalVec, Vec3 *speedXYZ)
 		absNormalY = CTR_MipsNegLo(absNormalY);
 	}
 
-	if (absNormalY < 0x15)
+	if (absNormalY < VEH_PHYS_JUMP_NORMAL_Y_MIN)
 	{
 		return 0;
 	}
@@ -565,7 +664,7 @@ void VehPhysGeneral_JumpAndFriction(struct Thread *t, struct Driver *d)
 
 	if (((d->stepFlagSet & COLL_STEP_TRIGGER_TURBO_PAD_MASK) != 0) && (d->baseSpeed > 0))
 	{
-		acceleration = 8000;
+		acceleration = VEH_PHYS_JUMP_TURBO_PAD_ACCEL;
 	}
 	else if (d->baseSpeed != 0)
 	{
@@ -574,7 +673,8 @@ void VehPhysGeneral_JumpAndFriction(struct Thread *t, struct Driver *d)
 			int speedApprox = d->speedApprox;
 			int absSpeedApprox = VehPhysGeneral_Jump_Abs(speedApprox);
 
-			if ((absSpeedApprox > 0x2ff) && ((d->baseSpeed < 1) || (speedApprox < 1)) && ((d->baseSpeed >= 0) || (speedApprox >= 0)))
+			if ((absSpeedApprox > VEH_PHYS_JUMP_REVERSE_SLIDE_SPEED_COMPARE) && ((d->baseSpeed < 1) || (speedApprox < 1)) &&
+			    ((d->baseSpeed >= 0) || (speedApprox >= 0)))
 			{
 				goto PROCESS_ACCEL;
 			}
@@ -590,14 +690,14 @@ void VehPhysGeneral_JumpAndFriction(struct Thread *t, struct Driver *d)
 			}
 
 			int slowUntilSpeed = d->terrainMeta1->slowUntilSpeed;
-			if ((slowUntilSpeed != 0x100) && ((d->actionsFlagSet & ACTION_MASK_WEAPON) == 0))
+			if ((slowUntilSpeed != VEH_PHYS_JUMP_TERRAIN_SCALE_NEUTRAL) && ((d->actionsFlagSet & ACTION_MASK_WEAPON) == 0))
 			{
-				acceleration = CTR_MipsSra(CTR_MipsMulLo(slowUntilSpeed, acceleration), 8);
+				acceleration = CTR_MipsSra(CTR_MipsMulLo(slowUntilSpeed, acceleration), VEH_PHYS_JUMP_SPEED_FIXED_SHIFT);
 			}
 		}
 		else if (d->baseSpeed > 0)
 		{
-			acceleration = 8000;
+			acceleration = VEH_PHYS_JUMP_TURBO_PAD_ACCEL;
 		}
 	}
 
@@ -633,7 +733,8 @@ PROCESS_ACCEL:
 
 	u32 movementLengthSq =
 	    (u32)CTR_MipsAddLo(CTR_MipsAddLo(CTR_MipsMulLo(movement.x, movement.x), CTR_MipsMulLo(movement.y, movement.y)), CTR_MipsMulLo(movement.z, movement.z));
-	speedLoss = CTR_MipsSubLo((s32)(VehCalc_FastSqrt(movementLengthSq, 0x10) >> 8), VehPhysGeneral_Jump_Abs(d->baseSpeed));
+	speedLoss = CTR_MipsSubLo((s32)(VehCalc_FastSqrt(movementLengthSq, VEH_PHYS_JUMP_FAST_SQRT_ITERATIONS) >> VEH_PHYS_JUMP_SPEED_FIXED_SHIFT),
+	                          VehPhysGeneral_Jump_Abs(d->baseSpeed));
 
 	b32 clampToForwardImpulse = forwardImpulse < speedLoss;
 	if (speedLoss < 0)
@@ -653,33 +754,33 @@ PROCESS_ACCEL:
 
 	if (d->jump_HighJumpTimerMS != 0)
 	{
-		d->jump_HighJumpTimerMS = 0x180;
+		d->jump_HighJumpTimerMS = VEH_PHYS_JUMP_HIGH_TIMER_MS;
 	}
 
 	if (d->kartState == KS_BLASTED)
 	{
-		GAMEPAD_ShockFreq(d, 8, 0);
-		GAMEPAD_ShockForce1(d, 8, 0x7f);
+		GAMEPAD_ShockFreq(d, VEH_PHYS_JUMP_RUMBLE_CHANNEL, 0);
+		GAMEPAD_ShockForce1(d, VEH_PHYS_JUMP_RUMBLE_CHANNEL, VEH_PHYS_JUMP_RUMBLE_FORCE);
 	}
 }
 
 	goto PROCESS_JUMP;
 
 CHECK_FOR_ANY_JUMP:
-	if (((d->actionsFlagSet & ACTION_WEAPON_FIRE_REQUEST) != 0) && (d->heldItemID == 5))
+	if (((d->actionsFlagSet & ACTION_WEAPON_FIRE_REQUEST) != 0) && (d->heldItemID == HELD_ITEM_SPRING))
 	{
 		d->actionsFlagSet &= ~ACTION_WEAPON_FIRE_REQUEST;
 
 		if ((d->jump_CoyoteTimerMS != 0) && (d->jump_CooldownMS == 0))
 		{
-			d->jump_ForcedMS = 0xa0;
+			d->jump_ForcedMS = VEH_PHYS_JUMP_FORCED_MS;
 
 			int jumpForce = CTR_MipsAddLo(CTR_MipsSll(d->const_JumpForce, 3), d->const_JumpForce);
 			d->jump_InitialVelY = (s16)VehPhysGeneral_Jump_Div4TowardZero(jumpForce);
 
-			OtherFX_Play_Echo(9, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+			OtherFX_Play_Echo(VEH_PHYS_JUMP_SPRING_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
 
-			d->jump_HighJumpTimerMS = 0x180;
+			d->jump_HighJumpTimerMS = VEH_PHYS_JUMP_HIGH_TIMER_MS;
 			goto PROCESS_JUMP;
 		}
 
@@ -712,25 +813,25 @@ CHECK_FOR_ANY_JUMP:
 			goto NOT_JUMPING;
 		}
 
-		d->jump_ForcedMS = 0xa0;
+		d->jump_ForcedMS = VEH_PHYS_JUMP_FORCED_MS;
 		d->numberOfJumps = (s16)CTR_MipsAddLo((u16)d->numberOfJumps, 1);
 		d->jump_InitialVelY = d->const_JumpForce;
 
-		OtherFX_Play_Echo(8, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+		OtherFX_Play_Echo(VEH_PHYS_JUMP_NORMAL_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
 	}
 	else
 	{
 		if ((d->jump_ForcedMS == 0) || (d->jump_InitialVelY == d->const_JumpForce))
 		{
-			OtherFX_Play(0x7e, 1);
+			OtherFX_Play(VEH_PHYS_JUMP_FORCED_SFX, 1);
 		}
 
-		d->jump_ForcedMS = 0xa0;
+		d->jump_ForcedMS = VEH_PHYS_JUMP_FORCED_MS;
 
 		int jumpForce = CTR_MipsAddLo(CTR_MipsSll(d->const_JumpForce, 1), d->const_JumpForce);
 		if (d->forcedJumpType == FORCED_JUMP_HIGH)
 		{
-			d->jump_HighJumpTimerMS = 0x180;
+			d->jump_HighJumpTimerMS = VEH_PHYS_JUMP_HIGH_TIMER_MS;
 			d->jump_InitialVelY = (s16)jumpForce;
 		}
 		else
@@ -742,7 +843,7 @@ CHECK_FOR_ANY_JUMP:
 	}
 
 PROCESS_JUMP:
-	d->jump_CooldownMS = 0x180;
+	d->jump_CooldownMS = VEH_PHYS_JUMP_COOLDOWN_MS;
 	d->jump_TenBuffer = 0;
 	d->actionsFlagSet |= ACTION_JUMP_STARTED | ACTION_TURBO_INPUT_LATCH;
 
@@ -768,16 +869,18 @@ PROCESS_JUMP:
 		bestJumpVelY = jumpVelY;
 	}
 
-	int verticalSpeed = VehCalc_FastSqrt((u32)CTR_MipsSra(CTR_MipsAddLo(jumpVelYSquared, CTR_MipsMulLo(d->jump_InitialVelY, d->jump_InitialVelY)), 8), 8);
+	int verticalSpeed = VehCalc_FastSqrt(
+	    (u32)CTR_MipsSra(CTR_MipsAddLo(jumpVelYSquared, CTR_MipsMulLo(d->jump_InitialVelY, d->jump_InitialVelY)), VEH_PHYS_JUMP_SPEED_FIXED_SHIFT),
+	    VEH_PHYS_JUMP_SPEED_FIXED_SHIFT);
 
-	int maxVerticalSpeed = sdata->gGT->level1->jumpVerticalSpeedCap << 8;
+	int maxVerticalSpeed = sdata->gGT->level1->jumpVerticalSpeedCap << VEH_PHYS_JUMP_SPEED_FIXED_SHIFT;
 	if (maxVerticalSpeed == 0)
 	{
-		maxVerticalSpeed = 0x3700;
+		maxVerticalSpeed = VEH_PHYS_JUMP_VERTICAL_SPEED_DEFAULT;
 	}
-	else if (maxVerticalSpeed > 0x5000)
+	else if (maxVerticalSpeed > VEH_PHYS_JUMP_VERTICAL_SPEED_MAX)
 	{
-		maxVerticalSpeed = 0x5000;
+		maxVerticalSpeed = VEH_PHYS_JUMP_VERTICAL_SPEED_MAX;
 	}
 
 	verticalSpeed = CTR_MipsSubLo(verticalSpeed, bestJumpVelY);
@@ -806,24 +909,30 @@ NOT_JUMPING:
 	{
 		speedApprox = VehPhysGeneral_Jump_Abs(speedApprox);
 
-		if (speedApprox < 0x100)
+		if (speedApprox < VEH_PHYS_JUMP_SPEEDOMETER_REVERSE_THRESHOLD)
 		{
-			d->speedometerNeedleValue = (s16)CTR_MipsSubLo((u16)d->speedometerNeedleValue, CTR_MipsSra(d->speedometerNeedleValue, 3));
+			d->speedometerNeedleValue =
+			    (s16)CTR_MipsSubLo((u16)d->speedometerNeedleValue, CTR_MipsSra(d->speedometerNeedleValue, VEH_PHYS_JUMP_SPEEDOMETER_DECAY_SHIFT));
 		}
 		else
 		{
 			d->speedometerNeedleValue =
-			    (s16)((u32)CTR_MipsAddLo(CTR_MipsMulLo(d->speedometerNeedleValue, 0xd), CTR_MipsMulLo(sdata->gGT->timer & 7, 0x300)) >> 4);
+			    (s16)((u32)CTR_MipsAddLo(CTR_MipsMulLo(d->speedometerNeedleValue, VEH_PHYS_JUMP_SPEEDOMETER_BLEND_OLD),
+			                             CTR_MipsMulLo(sdata->gGT->timer & VEH_PHYS_JUMP_SPEEDOMETER_TIMER_MASK, VEH_PHYS_JUMP_SPEEDOMETER_TIMER_SCALE)) >>
+			          VEH_PHYS_JUMP_SPEEDOMETER_BLEND_SHIFT);
 		}
 	}
 	else
 	{
-		d->speedometerNeedleValue = (s16)CTR_MipsSra(CTR_MipsAddLo(CTR_MipsMulLo(d->speedometerNeedleValue, 0xd), CTR_MipsMulLo(speedApprox, 3)), 4);
+		d->speedometerNeedleValue = (s16)CTR_MipsSra(CTR_MipsAddLo(CTR_MipsMulLo(d->speedometerNeedleValue, VEH_PHYS_JUMP_SPEEDOMETER_BLEND_OLD),
+		                                                           CTR_MipsMulLo(speedApprox, VEH_PHYS_JUMP_SPEEDOMETER_BLEND_NEW)),
+		                                             VEH_PHYS_JUMP_SPEEDOMETER_BLEND_SHIFT);
 	}
 }
 
 enum ItemSet
 {
+	ITEMSET_Invalid = -1,
 	ITEMSET_Race1 = 0,
 	ITEMSET_Race2,
 	ITEMSET_Race3,
@@ -831,35 +940,66 @@ enum ItemSet
 	ITEMSET_BattleDefault,
 	ITEMSET_BattleCustom,
 	ITEMSET_CrystalChallenge,
-	ITEMSET_BossRace
+	ITEMSET_BossRace,
+	ITEMSET_Count,
+	ITEMSET_RNG_BUCKET_COUNT = 0xc8,
+	ITEMSET_FALLBACK_ITEM_COUNT = HELD_ITEM_MISSILE_3X + 1,
+	ITEMSET_WEAPON_COUNT_RACE1 = 0x14,
+	ITEMSET_WEAPON_COUNT_RACE2 = 0x34,
+	ITEMSET_WEAPON_COUNT_RACE3 = 0x14,
+	ITEMSET_WEAPON_COUNT_RACE4 = 0x13,
+	ITEMSET_WEAPON_COUNT_BATTLE_DEFAULT = 0x14,
+	ITEMSET_WEAPON_COUNT_BOSS = 0x14,
+	ITEMSET_RNG_RANDOM_SHIFT = 3,
+	ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK_WARPBALL = 3,
+	ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK = 4,
+	ITEMSET_BOSS_LOSSES_REPLACE_CLOCK = 5,
+	ITEMSET_THREE_MISSILES_MIN_PLAYERS = 3,
+	ITEMSET_THREE_MISSILES_HELD_LIMIT = 2,
 };
 
 // all except CrystalChallenge
-extern u8 *charPtr[8];
-extern u8 numWeapons[8];
+extern u8 *itemSetWeaponTables[ITEMSET_Count];
+extern u8 itemSetWeaponCounts[ITEMSET_Count];
+
+CTR_STATIC_ASSERT(ITEMSET_Invalid == -1);
+CTR_STATIC_ASSERT(ITEMSET_Race1 == 0);
+CTR_STATIC_ASSERT(ITEMSET_BattleDefault == 4);
+CTR_STATIC_ASSERT(ITEMSET_BattleCustom == 5);
+CTR_STATIC_ASSERT(ITEMSET_CrystalChallenge == 6);
+CTR_STATIC_ASSERT(ITEMSET_BossRace == 7);
+CTR_STATIC_ASSERT(ITEMSET_Count == 8);
+CTR_STATIC_ASSERT(ITEMSET_RNG_BUCKET_COUNT == 0xc8);
+CTR_STATIC_ASSERT(ITEMSET_FALLBACK_ITEM_COUNT == 0xc);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_RACE1 == 0x14);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_RACE2 == 0x34);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_RACE3 == 0x14);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_RACE4 == 0x13);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_BATTLE_DEFAULT == 0x14);
+CTR_STATIC_ASSERT(ITEMSET_WEAPON_COUNT_BOSS == 0x14);
+CTR_STATIC_ASSERT(ITEMSET_RNG_RANDOM_SHIFT == 3);
+CTR_STATIC_ASSERT(ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK_WARPBALL == 3);
+CTR_STATIC_ASSERT(ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK == 4);
+CTR_STATIC_ASSERT(ITEMSET_BOSS_LOSSES_REPLACE_CLOCK == 5);
+CTR_STATIC_ASSERT(ITEMSET_THREE_MISSILES_MIN_PLAYERS == 3);
+CTR_STATIC_ASSERT(ITEMSET_THREE_MISSILES_HELD_LIMIT == 2);
 
 // Itemset infographic (outdated):
 // https://discord.com/channels/330945093416779787/550106151887568906/734368526294450267
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80060f0c-0x80061488.
 void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 {
-	s32 rng;
-	int itemSet;
-	u8 item;
-	s8 bossFails;
-	struct GameTracker *gGT;
+	struct GameTracker *gGT = sdata->gGT;
 
-	gGT = sdata->gGT;
-
-	itemSet = -1;
+	int itemSet = ITEMSET_Invalid;
 
 	if ((gGT->gameMode1 & BATTLE_MODE) != 0)
 	{
 		// 6th Itemset (Battle Mode Custom Itemset)
 		itemSet = ITEMSET_BattleCustom;
 
-		// 5th Itemset (Battle Mode Default Itemset, 0x34de)
-		if (gGT->battleSetup.enabledWeapons == 0x34de)
+		// 5th Itemset (Battle Mode Default Itemset)
+		if (gGT->battleSetup.enabledWeapons == BATTLE_DEFAULT_WEAPON_FLAGS)
 		{
 			itemSet = ITEMSET_BattleDefault;
 		}
@@ -913,7 +1053,7 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 				if (driver->driverRank == 1)
 				{
 					itemSet = ITEMSET_Race3;
-					rng = MixRNG_Scramble();
+					s32 rng = MixRNG_Scramble();
 					if (rng & 1)
 					{
 						goto Itemset2;
@@ -963,17 +1103,15 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 			// 1P Arcade
 			case 8:
 
-				// 0,1 = 0 (itemset1)
-				// 2,3 = 1 (itemset2)
-				// 4,5 = 2 (itemset3)
-				// 6,7 = 3 (itemset4)
-				itemSet = CTR_MipsSra(CTR_MipsAddLo(driver->driverRank, (u32)driver->driverRank >> 31), 1);
-
 				// if in 2nd place, get itemSet2
-				if (itemSet == 1)
+				if (driver->driverRank == 1)
 				{
 				Itemset2:
 					itemSet = ITEMSET_Race2;
+				}
+				else
+				{
+					itemSet = CTR_MipsSra(CTR_MipsAddLo(driver->driverRank, (u32)driver->driverRank >> 31), 1);
 				}
 			}
 		}
@@ -987,9 +1125,10 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 	}
 
 	// Decide item for Driver
-	rng = CTR_MipsSra(MixRNG_Scramble(), 0x3);
-	rng = CTR_MipsSubLo(rng, CTR_MipsMulLo(CTR_MipsDiv(rng, 0xc8), 0xc8));
+	s32 rng = CTR_MipsSra(MixRNG_Scramble(), ITEMSET_RNG_RANDOM_SHIFT);
+	rng = CTR_MipsSubLo(rng, CTR_MipsMulLo(CTR_MipsDiv(rng, ITEMSET_RNG_BUCKET_COUNT), ITEMSET_RNG_BUCKET_COUNT));
 
+	DriverHeldItem item;
 	switch (itemSet)
 	{
 	case ITEMSET_Race1:
@@ -998,30 +1137,32 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 	case ITEMSET_Race4:
 	case ITEMSET_BattleDefault:
 	case ITEMSET_BossRace:
-		driver->heldItemID = charPtr[itemSet][(rng * numWeapons[itemSet]) / 0xc8];
+		driver->heldItemID = itemSetWeaponTables[itemSet][(rng * itemSetWeaponCounts[itemSet]) / ITEMSET_RNG_BUCKET_COUNT];
 		break;
 
 	// uses int array instead of char,
 	// should fix that later, requires 230 rewrite
 	case ITEMSET_BattleCustom:
-		driver->heldItemID = gGT->battleSetup.RNG_itemSetCustom[(rng * gGT->battleSetup.numWeapons) / 0xc8];
+		driver->heldItemID = gGT->battleSetup.RNG_itemSetCustom[(rng * gGT->battleSetup.numWeapons) / ITEMSET_RNG_BUCKET_COUNT];
 		break;
 
 	case ITEMSET_CrystalChallenge:
 		// Item is bomb at Rocky Road, Nitro Court
 		// Item is turbo at Skull Rock and Rampage Ruins
-		item = 0x1;
+		item = HELD_ITEM_BOMB_1X;
 		if (gGT->levelID != SKULL_ROCK && gGT->levelID != RAMPAGE_RUINS)
 		{
 			goto SetItem;
 		}
-		driver->heldItemID = 0x0;
+		driver->heldItemID = HELD_ITEM_TURBO;
 		break;
 
 	// "-1st place": Undecided rank
 	default:
-		rng = MixRNG_Scramble();
-		item = (u8)CTR_MipsSubLo(rng, CTR_MipsMulLo(CTR_MipsDiv(rng, 0xc), 0xc));
+	{
+		s32 fallbackRng = MixRNG_Scramble();
+		item = (u8)CTR_MipsSubLo(fallbackRng, CTR_MipsMulLo(CTR_MipsDiv(fallbackRng, ITEMSET_FALLBACK_ITEM_COUNT), ITEMSET_FALLBACK_ITEM_COUNT));
+	}
 	SetItem:
 		driver->heldItemID = item;
 	}
@@ -1029,47 +1170,47 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 	// In Boss race
 	if (gGT->gameMode1 & ADVENTURE_BOSS)
 	{
-		bossFails = sdata->advProgress.timesLostBossRace[gGT->bossID];
+		s8 bossFails = sdata->advProgress.timesLostBossRace[gGT->bossID];
 
-		if (bossFails < 0x3)
+		if (bossFails < ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK_WARPBALL)
 		{
 			// Replace Clock, Mask,  with 3 Missiles
-			if ((u32)driver->heldItemID - 0x7 < 0x3)
+			if ((u32)driver->heldItemID - HELD_ITEM_MASK < (HELD_ITEM_WARPBALL - HELD_ITEM_MASK + 1))
 			{
-				driver->heldItemID = 0xb;
+				driver->heldItemID = HELD_ITEM_MISSILE_3X;
 			}
 		}
 
-		else if (bossFails < 0x4)
+		else if (bossFails < ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK)
 		{
 			// Replace Clock, Mask with 3 Missiles
-			if ((u32)driver->heldItemID - 0x7 < 0x2)
+			if ((u32)driver->heldItemID - HELD_ITEM_MASK < (HELD_ITEM_CLOCK - HELD_ITEM_MASK + 1))
 			{
-				driver->heldItemID = 0xb;
+				driver->heldItemID = HELD_ITEM_MISSILE_3X;
 			}
 		}
 
-		else if (bossFails < 0x5 && driver->heldItemID == 0x8)
+		else if (bossFails < ITEMSET_BOSS_LOSSES_REPLACE_CLOCK && driver->heldItemID == HELD_ITEM_CLOCK)
 		{
 			// Replace Clock with 3 Missiles
-			driver->heldItemID = 0xb;
+			driver->heldItemID = HELD_ITEM_MISSILE_3X;
 		}
 
 		// Replace 3 Missiles with 1 Missile if racing Komodo Joe
-		if (gGT->levelID == DRAGON_MINES && driver->heldItemID == 0xb)
+		if (gGT->levelID == DRAGON_MINES && driver->heldItemID == HELD_ITEM_MISSILE_3X)
 		{
-			driver->heldItemID = 0x2;
+			driver->heldItemID = HELD_ITEM_MISSILE_1X;
 		}
 	}
 
 	// Replace unused Spring item with Turbo
-	if (driver->heldItemID == 0x5)
+	if (driver->heldItemID == HELD_ITEM_SPRING)
 	{
-		driver->heldItemID = 0x0;
+		driver->heldItemID = HELD_ITEM_TURBO;
 	}
 
 	// Make sure only 1 Warpball is instanced at once
-	if (driver->heldItemID == 0x9)
+	if (driver->heldItemID == HELD_ITEM_WARPBALL)
 	{
 		// if nobody has warpball, then set flag that somebody has it
 		if ((gGT->gameMode1 & WARPBALL_HELD) == 0)
@@ -1080,22 +1221,22 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 		// if somebody has warpball already, then give 3 missiles
 		else
 		{
-			driver->heldItemID = 0xb;
+			driver->heldItemID = HELD_ITEM_MISSILE_3X;
 		}
 	}
 
 	if (
 	    // if you got 3 missiles
-	    driver->heldItemID == 0xb &&
+	    driver->heldItemID == HELD_ITEM_MISSILE_3X &&
 
-	    // if more than 2 players
-	    gGT->numPlyrCurrGame > 2 &&
+	    // if three or more players
+	    gGT->numPlyrCurrGame >= ITEMSET_THREE_MISSILES_MIN_PLAYERS &&
 
 	    // if not in battle mode
 	    ((gGT->gameMode1 & BATTLE_MODE) == 0))
 	{
 		// if less than 2 drivers have 3 missiles, then increase number of drivers that have it
-		if (gGT->numPlayersWith3Missiles < 2)
+		if (gGT->numPlayersWith3Missiles < ITEMSET_THREE_MISSILES_HELD_LIMIT)
 		{
 			gGT->numPlayersWith3Missiles++;
 		}
@@ -1103,54 +1244,83 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 		// if 2 drivers already have 3 missiles, now you have 1 missile
 		else
 		{
-			driver->heldItemID = 0x2;
+			driver->heldItemID = HELD_ITEM_MISSILE_1X;
 		}
 	}
 
 	// Set number of held items
-	if ((u32)driver->heldItemID - 0xA < 0x2)
+	if ((u32)driver->heldItemID - HELD_ITEM_BOMB_3X < (HELD_ITEM_MISSILE_3X - HELD_ITEM_BOMB_3X + 1))
 	{
-		driver->numHeldItems = 0x3;
+		driver->numHeldItems = HELD_ITEM_STACK_COUNT;
 	}
 
 	return;
 }
 
-u8 *charPtr[8] = {(u8 *)&data.RNG_itemSetRace1[0],
-                  (u8 *)&data.RNG_itemSetRace2[0],
-                  (u8 *)&data.RNG_itemSetRace3[0],
-                  (u8 *)&data.RNG_itemSetRace4[0],
-                  (u8 *)&data.RNG_itemSetBattleDefault[0],
-                  (u8 *)&sdata_static.gameTracker.battleSetup.RNG_itemSetCustom[0],
-                  NULL,
-                  (u8 *)&data.RNG_itemSetBossrace[0]};
+u8 *itemSetWeaponTables[ITEMSET_Count] = {(u8 *)&data.RNG_itemSetRace1[0],
+                                          (u8 *)&data.RNG_itemSetRace2[0],
+                                          (u8 *)&data.RNG_itemSetRace3[0],
+                                          (u8 *)&data.RNG_itemSetRace4[0],
+                                          (u8 *)&data.RNG_itemSetBattleDefault[0],
+                                          (u8 *)&sdata_static.gameTracker.battleSetup.RNG_itemSetCustom[0],
+                                          NULL,
+                                          (u8 *)&data.RNG_itemSetBossrace[0]};
 
-u8 numWeapons[8] = {0x14, 0x34, 0x14, 0x13, 0x14, 0, 0, 0x14};
+// NOTE(aalhendi): Race4 storage is 0x14 bytes, but retail samples 0x13 entries.
+u8 itemSetWeaponCounts[ITEMSET_Count] = {
+    ITEMSET_WEAPON_COUNT_RACE1, ITEMSET_WEAPON_COUNT_RACE2, ITEMSET_WEAPON_COUNT_RACE3, ITEMSET_WEAPON_COUNT_RACE4, ITEMSET_WEAPON_COUNT_BATTLE_DEFAULT, 0, 0,
+    ITEMSET_WEAPON_COUNT_BOSS};
+
+enum
+{
+	VEH_BASE_SPEED_MAX_WUMPA = 9,
+	VEH_BASE_SPEED_MAX_TURBO_MULTIPLIER = 5,
+	VEH_BASE_SPEED_STAT_BLEND_SHIFT = 0xc,
+	VEH_BASE_SPEED_STAT_DIVISOR = 5,
+	VEH_BASE_SPEED_STAT_OFFSET = 1,
+	VEH_BASE_SPEED_WUMPA_DIVISOR = 10,
+	VEH_BASE_SPEED_DAMAGE_HALF_SHIFT = 1,
+	VEH_BASE_SPEED_CLOCK_RANK_BASE = 0x14,
+	VEH_BASE_SPEED_CLOCK_DAMAGE_SHIFT = 4,
+	VEH_BASE_SPEED_NET_CAP = 0x6400,
+};
+
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_MAX_WUMPA == 9);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_MAX_TURBO_MULTIPLIER == 5);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_STAT_BLEND_SHIFT == 0xc);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_STAT_DIVISOR == 5);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_STAT_OFFSET == 1);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_WUMPA_DIVISOR == 10);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_DAMAGE_HALF_SHIFT == 1);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_CLOCK_RANK_BASE == 0x14);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_CLOCK_DAMAGE_SHIFT == 4);
+CTR_STATIC_ASSERT(VEH_BASE_SPEED_NET_CAP == 0x6400);
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80061488-0x8006163c.
 int VehPhysGeneral_GetBaseSpeed(struct Driver *driver)
 {
-	int netSpeed;
-	int statAdditional;
-	int speedAdditional;
-	statAdditional = (int)driver->const_Speed_ClassStat;
+	int statAdditional = (int)driver->const_Speed_ClassStat;
 
 	int netWumpaFruitCount = (int)driver->numWumpas;
-	if (netWumpaFruitCount > 9)
+	if (netWumpaFruitCount > VEH_BASE_SPEED_MAX_WUMPA)
 	{
-		netWumpaFruitCount = 9;
+		netWumpaFruitCount = VEH_BASE_SPEED_MAX_WUMPA;
 	}
 
 	int turboMultiplier = (int)driver->turboConst;
-	if (turboMultiplier > 5)
+	if (turboMultiplier > VEH_BASE_SPEED_MAX_TURBO_MULTIPLIER)
 	{
-		turboMultiplier = 5;
+		turboMultiplier = VEH_BASE_SPEED_MAX_TURBO_MULTIPLIER;
 	}
 
-	int netSpeedStat = CTR_MipsSubLo(CTR_MipsDiv(CTR_MipsSll(CTR_MipsSubLo(driver->const_AccelSpeed_ClassStat, driver->const_Speed_ClassStat), 0xc), 5), 1);
+	int netSpeedStat = CTR_MipsSubLo(
+	    CTR_MipsDiv(CTR_MipsSll(CTR_MipsSubLo(driver->const_AccelSpeed_ClassStat, driver->const_Speed_ClassStat), VEH_BASE_SPEED_STAT_BLEND_SHIFT),
+	                VEH_BASE_SPEED_STAT_DIVISOR),
+	    VEH_BASE_SPEED_STAT_OFFSET);
 
-	speedAdditional =
-	    CTR_MipsSra(CTR_MipsAddLo(CTR_MipsDiv(CTR_MipsMulLo(netWumpaFruitCount, netSpeedStat), 10), CTR_MipsMulLo(turboMultiplier, netSpeedStat)), 0xc);
+	int speedAdditional = CTR_MipsSra(
+	    CTR_MipsAddLo(CTR_MipsDiv(CTR_MipsMulLo(netWumpaFruitCount, netSpeedStat), VEH_BASE_SPEED_WUMPA_DIVISOR), CTR_MipsMulLo(turboMultiplier, netSpeedStat)),
+	    VEH_BASE_SPEED_STAT_BLEND_SHIFT);
 
 	if ((driver->actionsFlagSet & ACTION_MASK_WEAPON) != 0)
 	{
@@ -1179,7 +1349,7 @@ int VehPhysGeneral_GetBaseSpeed(struct Driver *driver)
 
 	if (driver->instTntRecv != 0)
 	{
-		subtract = CTR_MipsSra(driver->const_DamagedSpeed, 1);
+		subtract = CTR_MipsSra(driver->const_DamagedSpeed, VEH_BASE_SPEED_DAMAGE_HALF_SHIFT);
 	}
 
 	if (
@@ -1191,8 +1361,9 @@ int VehPhysGeneral_GetBaseSpeed(struct Driver *driver)
 
 	if (driver->clockReceive != 0)
 	{
-		// NOTE(aalhendi) Retail scales clock damage by rank: stronger near the front, still nonzero near the back.
-		int clockEffect = CTR_MipsSra(CTR_MipsMulLo(driver->const_DamagedSpeed, CTR_MipsSubLo(0x14, driver->driverRank)), 4);
+		// NOTE(aalhendi): Retail scales clock damage by rank: stronger near the front, still nonzero near the back.
+		int clockEffect = CTR_MipsSra(CTR_MipsMulLo(driver->const_DamagedSpeed, CTR_MipsSubLo(VEH_BASE_SPEED_CLOCK_RANK_BASE, driver->driverRank)),
+		                              VEH_BASE_SPEED_CLOCK_DAMAGE_SHIFT);
 
 		if (subtract < clockEffect)
 		{
@@ -1200,11 +1371,11 @@ int VehPhysGeneral_GetBaseSpeed(struct Driver *driver)
 		}
 	}
 
-	netSpeed = CTR_MipsSubLo(CTR_MipsAddLo(statAdditional, speedAdditional), subtract);
+	int netSpeed = CTR_MipsSubLo(CTR_MipsAddLo(statAdditional, speedAdditional), subtract);
 
-	if (0x6400 < netSpeed)
+	if (VEH_BASE_SPEED_NET_CAP < netSpeed)
 	{
-		netSpeed = 0x6400;
+		netSpeed = VEH_BASE_SPEED_NET_CAP;
 	}
 
 	return netSpeed;

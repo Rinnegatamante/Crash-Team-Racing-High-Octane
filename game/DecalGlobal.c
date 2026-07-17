@@ -1,5 +1,29 @@
 #include <common.h>
 
+enum
+{
+	DECAL_NAME_BYTE_COUNT = 0x10,
+	DECAL_NAME_WORD_COUNT = DECAL_NAME_BYTE_COUNT / (s32)sizeof(u32),
+};
+
+static u32 DecalGlobal_ReadNameWord(const char *name, s32 wordIndex)
+{
+	u32 word;
+	memcpy(&word, &name[wordIndex * (s32)sizeof(word)], sizeof(word));
+	return word;
+}
+
+static b32 DecalGlobal_NameEquals(const char *lhs, const char *rhs)
+{
+	return (DecalGlobal_ReadNameWord(lhs, 0) == DecalGlobal_ReadNameWord(rhs, 0)) && (DecalGlobal_ReadNameWord(lhs, 1) == DecalGlobal_ReadNameWord(rhs, 1)) &&
+	       (DecalGlobal_ReadNameWord(lhs, 2) == DecalGlobal_ReadNameWord(rhs, 2)) && (DecalGlobal_ReadNameWord(lhs, 3) == DecalGlobal_ReadNameWord(rhs, 3));
+}
+
+CTR_STATIC_ASSERT(DECAL_NAME_BYTE_COUNT == 0x10);
+CTR_STATIC_ASSERT(DECAL_NAME_WORD_COUNT == 4);
+CTR_STATIC_ASSERT(sizeof(((struct Icon *)0)->name) == DECAL_NAME_BYTE_COUNT);
+CTR_STATIC_ASSERT(sizeof(((struct IconGroup *)0)->name) == DECAL_NAME_BYTE_COUNT);
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80022b94-0x80022b9c.
 void DecalGlobal_EmptyFunc_MainFrame_ResetDB(void)
@@ -67,8 +91,7 @@ int *DecalGlobal_FindInLEV(struct Level *level, char *str)
 	{
 		struct IconGroup *group = *curr;
 
-		if (*(int *)&group->name[0x0] == *(int *)&str[0x0] && *(int *)&group->name[0x4] == *(int *)&str[0x4] &&
-		    *(int *)&group->name[0x8] == *(int *)&str[0x8] && *(int *)&group->name[0xc] == *(int *)&str[0xc])
+		if (DecalGlobal_NameEquals(group->name, str))
 		{
 			return (int *)group;
 		}
@@ -85,8 +108,7 @@ int *DecalGlobal_FindInMPK(u32 *icons, char *str)
 
 	for (; icon->name[0] != '\0'; icon++)
 	{
-		if (*(int *)&icon->name[0x0] == *(int *)&str[0x0] && *(int *)&icon->name[0x4] == *(int *)&str[0x4] && *(int *)&icon->name[0x8] == *(int *)&str[0x8] &&
-		    *(int *)&icon->name[0xc] == *(int *)&str[0xc])
+		if (DecalGlobal_NameEquals(icon->name, str))
 		{
 			return (int *)icon;
 		}

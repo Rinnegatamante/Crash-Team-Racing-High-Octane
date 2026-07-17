@@ -6,8 +6,6 @@ void Audio_SetState(u32 state)
 	u8 XA_type;
 	u8 XA_index;
 
-	int iVar1;
-
 	struct GameTracker *gGT = sdata->gGT;
 	u16 level;
 
@@ -147,7 +145,7 @@ void Audio_AdvHub_SwapSong(int levelID)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d554-0x8002d67c
 void Audio_SetMaskSong(u32 tempo)
 {
-	char i;
+	s32 i;
 	u8 isMaskUsed;
 	u32 songID;
 	struct GameTracker *gGT = sdata->gGT;
@@ -201,10 +199,10 @@ void Audio_SetMaskSong(u32 tempo)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d67c-0x8002dc4c; CTR_NATIVE guards demo null-driver reads.
 void Audio_Update1(void)
 {
-	char i;
+	s32 i;
 	int raceOrderIndex;
 	s16 uVar1;
-	u32 uVar2;
+	b32 tropyBeatenOnAllTracks;
 	struct Driver *d = 0;
 	u32 maskTempo;
 	int iVar7;
@@ -459,10 +457,10 @@ void Audio_Update1(void)
 				else
 				{
 					// Check if N Tropy has been beaten on all tracks
-					uVar2 = GAMEPROG_CheckGhostsBeaten(1);
+					tropyBeatenOnAllTracks = GAMEPROG_CheckGhostsBeaten(1);
 
 					// If there is a track where N Tropy has not been beaten
-					if ((uVar2 & 0xffff) == 0)
+					if (!tropyBeatenOnAllTracks)
 					{
 						// OtherFX_Play
 						OtherFX_Play(0x5f, 0);

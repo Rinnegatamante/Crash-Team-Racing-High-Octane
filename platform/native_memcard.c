@@ -379,6 +379,7 @@ internal enum NativeMemcardResult NativeMemcard_CopyCtrSavesFromDir(const char *
 	return NATIVE_MEMCARD_OK;
 }
 
+#if !defined(_WIN32)
 internal int NativeMemcard_MatchesPattern(const char *name, const char *pattern)
 {
 	while (*pattern != '\0')
@@ -419,6 +420,7 @@ internal int NativeMemcard_MatchesPattern(const char *name, const char *pattern)
 
 	return *name == '\0';
 }
+#endif
 
 internal void NativeMemcard_SplitPattern(const char *path, char *dir, int dir_size, char *pattern, int pattern_size)
 {
@@ -509,8 +511,8 @@ internal void NativeMemcard_BuildFindList(const char *pattern)
 
 		if (strcmp(dir, ".") == 0)
 			NativeMemcard_CopyString(search_path, sizeof(search_path), file_pattern);
-		else
-			snprintf(search_path, sizeof(search_path), "%s\\%s", dir, file_pattern);
+		else if (!NativeMemcard_JoinPath(search_path, sizeof(search_path), dir, file_pattern))
+			return;
 
 		find_handle = FindFirstFileA(search_path, &find_data);
 		if (find_handle == INVALID_HANDLE_VALUE)

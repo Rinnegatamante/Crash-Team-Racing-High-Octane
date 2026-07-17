@@ -4,10 +4,9 @@
 // NOTE(aalhendi): ASM-verified NTSC-U 926 PS1 path 0x8003e740-0x8003e80c; CTR_NATIVE uses host RAM.
 void MEMPACK_Init(int ramSize)
 {
-	struct Mempack *ptrMempack;
+	(void)ramSize;
 	u32 startPtr;
-	u32 maxOverlayEnd;
-	int packSize;
+	s32 packSize;
 
 #if defined(CTR_NATIVE)
 
@@ -19,6 +18,7 @@ void MEMPACK_Init(int ramSize)
 	printf("[CTR] MEMPACK native backing: base=%08x\n", (u32)arena->base);
 
 	MEMPACK_NewPack((void *)startPtr, packSize);
+	sdata->PtrMempack->endOfAllocator = (void *)(startPtr + packSize);
 	sdata->PtrMempack->endOfMemory = arena->endOfMemory;
 
 	printf("[CTR] MEMPACK native arena: start=%08x size=%08x end=%08x\n", startPtr, packSize, (u32)sdata->PtrMempack->endOfAllocator);
@@ -33,8 +33,8 @@ void MEMPACK_Init(int ramSize)
 	if (maxOverlayEnd < (u32)CS_EndOfFile)
 		maxOverlayEnd = (u32)CS_EndOfFile;
 
-	startPtr = (u32)OVR_Region3 + (((maxOverlayEnd - (u32)OVR_Region3) + 0x7ff) & ~0x7ff);
-	packSize = ramSize - (int)(startPtr & 0xffffff) - 0x800;
+	startPtr = (u32)OVR_Region3 + (((maxOverlayEnd - (u32)OVR_Region3) + MEMPACK_PS1_OVERLAY_ALIGNMENT_MASK) & ~MEMPACK_PS1_OVERLAY_ALIGNMENT_MASK);
+	packSize = ramSize - (int)(startPtr & MEMPACK_PS1_RAM_ADDRESS_MASK) - MEMPACK_PS1_END_GUARD_SIZE;
 
 	ptrMempack = sdata->PtrMempack;
 	ptrMempack->start = (void *)startPtr;
@@ -42,7 +42,7 @@ void MEMPACK_Init(int ramSize)
 	ptrMempack->lastFreeByte = (void *)(startPtr + packSize);
 	ptrMempack->packSize = packSize;
 	ptrMempack->numBookmarks = 0;
-	ptrMempack->endOfMemory = (void *)0x80200000;
+	ptrMempack->endOfMemory = (void *)MEMPACK_PS1_END_OF_MEMORY;
 	ptrMempack->firstFreeByte = (void *)startPtr;
 #endif
 }
@@ -64,7 +64,6 @@ void MEMPACK_NewPack(void *start, int size)
 	ptrMempack->packSize = size;
 	ptrMempack->start = start;
 	ptrMempack->lastFreeByte = end;
-	ptrMempack->endOfAllocator = end;
 	ptrMempack->endOfMemory = end;
 	ptrMempack->firstFreeByte = start;
 	ptrMempack->numBookmarks = 0;
@@ -83,8 +82,6 @@ int MEMPACK_GetFreeBytes()
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003e874-0x8003e8e8.
 void *MEMPACK_AllocMem(int allocSize)
 {
-	int firstFreeByte;
-	int newAllocSize;
 	struct Mempack *ptrMempack = sdata->PtrMempack;
 
 	if (MEMPACK_GetFreeBytes() < allocSize)
@@ -95,10 +92,10 @@ void *MEMPACK_AllocMem(int allocSize)
 		}
 	}
 
-	newAllocSize = (allocSize + 3) & 0xfffffffc;
+	s32 newAllocSize = MEMPACK_ALIGN_SIZE(allocSize);
 	ptrMempack->sizeOfPrevAllocation = newAllocSize;
 
-	firstFreeByte = (int)ptrMempack->firstFreeByte;
+	s32 firstFreeByte = (s32)ptrMempack->firstFreeByte;
 	ptrMempack->firstFreeByte = (void *)(firstFreeByte + newAllocSize);
 
 	return (void *)firstFreeByte;
@@ -108,16 +105,14 @@ void *MEMPACK_AllocMem(int allocSize)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003e8e8-0x8003e938.
 void *MEMPACK_AllocHighMem(int allocSize)
 {
-	int newLastFreeByte;
-
 	while (MEMPACK_GetFreeBytes() < allocSize)
 	{
 	}
 
-	allocSize = (allocSize + 3) & 0xfffffffc;
+	allocSize = MEMPACK_ALIGN_SIZE(allocSize);
 	sdata->PtrMempack->sizeOfPrevAllocation = allocSize;
 
-	newLastFreeByte = (int)sdata->PtrMempack->lastFreeByte - allocSize;
+	s32 newLastFreeByte = (s32)sdata->PtrMempack->lastFreeByte - allocSize;
 	sdata->PtrMempack->lastFreeByte = (void *)newLastFreeByte;
 
 	return (void *)newLastFreeByte;
@@ -134,11 +129,10 @@ void MEMPACK_ClearHighMem()
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003e94c-0x8003e978.
 void *MEMPACK_ReallocMem(int allocSize)
 {
-	int newAllocSize;
 	struct Mempack *ptrMempack = sdata->PtrMempack;
 
-	newAllocSize = (allocSize + 3) & 0xfffffffc;
-	ptrMempack->firstFreeByte = (void *)((int)ptrMempack->firstFreeByte - ptrMempack->sizeOfPrevAllocation + newAllocSize);
+	s32 newAllocSize = MEMPACK_ALIGN_SIZE(allocSize);
+	ptrMempack->firstFreeByte = (void *)((s32)ptrMempack->firstFreeByte - ptrMempack->sizeOfPrevAllocation + newAllocSize);
 	ptrMempack->sizeOfPrevAllocation = newAllocSize;
 
 	return ptrMempack->firstFreeByte;
@@ -149,10 +143,8 @@ void *MEMPACK_ReallocMem(int allocSize)
 int MEMPACK_PushState()
 {
 	struct Mempack *ptrMempack = sdata->PtrMempack;
-	int numBookmarks;
-
-	numBookmarks = ptrMempack->numBookmarks;
-	if (numBookmarks < 0x10)
+	s32 numBookmarks = ptrMempack->numBookmarks;
+	if (numBookmarks < MEMPACK_BOOKMARK_COUNT)
 	{
 		ptrMempack->bookmarks[numBookmarks] = ptrMempack->firstFreeByte;
 		ptrMempack->numBookmarks++;
@@ -176,9 +168,7 @@ void MEMPACK_ClearLowMem()
 void MEMPACK_PopState()
 {
 	struct Mempack *ptrMempack = sdata->PtrMempack;
-	int numBookmarks;
-
-	numBookmarks = ptrMempack->numBookmarks;
+	s32 numBookmarks = ptrMempack->numBookmarks;
 	if (numBookmarks > 0)
 	{
 		numBookmarks--;

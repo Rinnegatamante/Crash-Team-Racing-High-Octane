@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_COLL_H
+#define CTR_NATIVE_NAMESPACE_COLL_H
+
 struct BoundingBox
 {
 	SVec3 min;
@@ -502,3 +505,5 @@ CTR_STATIC_ASSERT(offsetof(struct ScratchpadStructExtended, cameraMatrix) == 0x2
 CTR_STATIC_ASSERT(offsetof(struct ScratchpadStructExtended, cameraRot) == 0x2EC);
 CTR_STATIC_ASSERT(offsetof(struct ScratchpadStructExtended, pad2F2) == 0x2F2);
 CTR_STATIC_ASSERT(offsetof(struct ScratchpadStructExtended, pad2F4) == 0x2F4);
+
+#endif

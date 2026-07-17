@@ -1,42 +1,67 @@
 #include <common.h>
 
+enum
+{
+	UI_ICON_FIXED_SHIFT = 0xc,
+	UI_ICON_QUAD_COUNT = 4,
+	UI_ICON_TPAGE_BLEND_MASK = 0x60,
+	UI_ICON_TPAGE_BLEND_STEP = 0x20,
+	UI_ICON_SEMI_TRANS_CODE_BIT = 2,
+	UI_WEAPON_SHINE_RESULT_SHIFT = 0xd,
+	UI_WEAPON_SHINE_BRIGHT_YELLOW_BASE = 0x7f,
+	UI_WEAPON_SHINE_ORANGE_GREEN_BASE = 0x32,
+	UI_WEAPON_SHINE_DARK_RED_BASE = 0x21,
+	UI_WEAPON_SHINE_DARK_GREEN_BASE = 0x10,
+	UI_WEAPON_SHINE_GRAY_BASE = 0x5f,
+	UI_WEAPON_SHINE_RESULT_SCALE = 0xff,
+	UI_WEAPON_SHINE_RESULT_BASE = 0x80,
+	UI_WEAPON_SHINE_COLOR_BRIGHT_ROW = 0,
+	UI_WEAPON_SHINE_COLOR_MID_ROW = 1,
+	UI_WEAPON_SHINE_COLOR_DARK_ROW = 2,
+	UI_WEAPON_SHINE_SECOND_COLOR_TRANSPARENCY = 3,
+	UI_TRACKER_BG_SHINE_THETA_STEP = 0x100,
+	UI_DRIVER_ICON_NTSC_CLIP_LIMIT = 166,
+	UI_DRIVER_ICON_NTSC_CLIP_MAX = 165,
+	UI_DRIVER_ICON_EUR_CLIP_LIMIT = 176,
+	UI_DRIVER_ICON_EUR_CLIP_MAX = 175,
+	UI_DRIVER_ICON_FT4_CODE = 0x2c,
+};
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004e0e0-0x8004e37c.
 void UI_WeaponBG_AnimateShine(void)
 {
 	int sine;
-	u32 local_18;
-	u32 local_14;
-	u32 local_10;
+	u32 brightYellow;
+	u32 orangeGreen;
+	u32 gray;
 
 	sine = MATH_Sin((int)sdata->wumpaShineTheta);
 	sine = (sine < 0) ? -sine : sine;
 
-	// Calculate wumpaShineColor1
-	local_18 = ((sine * 0x7f) >> 0xc) + 0x7f;
-	sdata->wumpaShineColor1[0][0] = local_18;
-	sdata->wumpaShineColor1[0][1] = local_18;
-	*(s16 *)&sdata->wumpaShineColor1[0][2] = 0;
+	brightYellow = ((sine * UI_WEAPON_SHINE_BRIGHT_YELLOW_BASE) >> UI_ICON_FIXED_SHIFT) + UI_WEAPON_SHINE_BRIGHT_YELLOW_BASE;
+	sdata->wumpaShineColor1[0][0] = brightYellow;
+	sdata->wumpaShineColor1[0][1] = brightYellow;
+	CTR_WriteU16LE(&sdata->wumpaShineColor1[0][2], 0);
 
-	local_14 = ((sine * 0x32) >> 0xc) + 0x32;
-	sdata->wumpaShineColor1[1][0] = local_18;
-	sdata->wumpaShineColor1[1][1] = local_14;
-	*(s16 *)&sdata->wumpaShineColor1[1][2] = 0;
+	orangeGreen = ((sine * UI_WEAPON_SHINE_ORANGE_GREEN_BASE) >> UI_ICON_FIXED_SHIFT) + UI_WEAPON_SHINE_ORANGE_GREEN_BASE;
+	sdata->wumpaShineColor1[1][0] = brightYellow;
+	sdata->wumpaShineColor1[1][1] = orangeGreen;
+	CTR_WriteU16LE(&sdata->wumpaShineColor1[1][2], 0);
 
-	sdata->wumpaShineColor1[2][0] = ((sine * 0x21) >> 0xc) + 0x21;
-	sdata->wumpaShineColor1[2][1] = ((sine * 0x10) >> 0xc) + 0x10;
-	*(s16 *)&sdata->wumpaShineColor1[2][2] = 0;
+	sdata->wumpaShineColor1[2][0] = ((sine * UI_WEAPON_SHINE_DARK_RED_BASE) >> UI_ICON_FIXED_SHIFT) + UI_WEAPON_SHINE_DARK_RED_BASE;
+	sdata->wumpaShineColor1[2][1] = ((sine * UI_WEAPON_SHINE_DARK_GREEN_BASE) >> UI_ICON_FIXED_SHIFT) + UI_WEAPON_SHINE_DARK_GREEN_BASE;
+	CTR_WriteU16LE(&sdata->wumpaShineColor1[2][2], 0);
 
-	// Calculate wumpaShineColor2
-	local_10 = ((sine * 0x5f) >> 0xc) + 0x5f;
-	sdata->wumpaShineColor2[0][0] = local_10;
-	sdata->wumpaShineColor2[0][1] = local_10;
-	*(s16 *)&sdata->wumpaShineColor2[0][2] = local_10;
+	gray = ((sine * UI_WEAPON_SHINE_GRAY_BASE) >> UI_ICON_FIXED_SHIFT) + UI_WEAPON_SHINE_GRAY_BASE;
+	sdata->wumpaShineColor2[0][0] = gray;
+	sdata->wumpaShineColor2[0][1] = gray;
+	CTR_WriteU16LE(&sdata->wumpaShineColor2[0][2], (u16)gray);
 
-	local_10 = *(int *)&sdata->wumpaShineColor2[0][0];
-	*(int *)&sdata->wumpaShineColor2[1][0] = local_10;
-	*(int *)&sdata->wumpaShineColor2[2][0] = local_10;
+	gray = CTR_ReadU32LE(&sdata->wumpaShineColor2[0][0]);
+	CTR_WriteU32LE(&sdata->wumpaShineColor2[1][0], gray);
+	CTR_WriteU32LE(&sdata->wumpaShineColor2[2][0], gray);
 
-	sdata->wumpaShineResult = (sine * 0xff >> 0xd) + 0x80;
+	sdata->wumpaShineResult = (sine * UI_WEAPON_SHINE_RESULT_SCALE >> UI_WEAPON_SHINE_RESULT_SHIFT) + UI_WEAPON_SHINE_RESULT_BASE;
 	return;
 }
 
@@ -44,126 +69,117 @@ void UI_WeaponBG_AnimateShine(void)
 void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, char transparency, s16 angleX, s16 angleY,
                            int unusedColor)
 {
-	s16 sVar1;
-	s16 sVar2;
-	s16 sVar3;
-	s16 sVar4;
-	s16 sVar5;
-	s16 sVar6;
+	s16 rightX;
+	s16 bottomY;
+	s16 widthOffset;
+	s16 heightOffset;
+	s16 altX;
+	s16 altY;
 	POLY_GT4 *p;
-	int i;
-	s16 sVar11;
-	s16 sVar12;
+	int quadIndex;
+	s16 topY;
+	s16 leftX;
 
 	(void)unusedColor;
 
-	u32 *wumpaShine = (u32 *)&sdata->wumpaShineColor1[0][0];
+	u8 *shineColors = &sdata->wumpaShineColor1[0][0];
 
-	if (transparency == 3)
+	if (transparency == UI_WEAPON_SHINE_SECOND_COLOR_TRANSPARENCY)
 	{
-		wumpaShine = (u32 *)&sdata->wumpaShineColor2[0][0];
+		shineColors = &sdata->wumpaShineColor2[0][0];
 	}
 
-	sVar3 = (s16)(((icon->texLayout.u1 - icon->texLayout.u0) * (int)angleX) >> 0xc);
-	sVar1 = posX + sVar3;
-	angleX = angleX >> 0xc;
-	sVar12 = sVar1 - angleX;
+	widthOffset = (s16)(((icon->texLayout.u1 - icon->texLayout.u0) * (int)angleX) >> UI_ICON_FIXED_SHIFT);
+	rightX = posX + widthOffset;
+	angleX = angleX >> UI_ICON_FIXED_SHIFT;
+	leftX = rightX - angleX;
 
-	sVar4 = (s16)(((icon->texLayout.v2 - icon->texLayout.v0) * (int)angleY) >> 0xc);
-	sVar2 = posY + sVar4;
-	angleY = angleY >> 0xc;
-	sVar11 = sVar2 - angleY;
+	heightOffset = (s16)(((icon->texLayout.v2 - icon->texLayout.v0) * (int)angleY) >> UI_ICON_FIXED_SHIFT);
+	bottomY = posY + heightOffset;
+	angleY = angleY >> UI_ICON_FIXED_SHIFT;
+	topY = bottomY - angleY;
 
-	// loop 4 times
-	for (i = 0; i < 4; i++)
+	for (quadIndex = 0; quadIndex < UI_ICON_QUAD_COUNT; quadIndex++)
 	{
 		p = primMem->cursor;
-		*(int *)&p->u0 = *(int *)&icon->texLayout.u0;
-		*(int *)&p->u1 = *(int *)&icon->texLayout.u1;
-		*(int *)&p->u2 = *(int *)&icon->texLayout.u2;
-		*(s16 *)&p->u3 = *(s16 *)&icon->texLayout.u3;
+		CtrGpu_WritePackedUVWord(&p->u0, CTR_ReadU32LE(&icon->texLayout.u0));
+		CtrGpu_WritePackedUVWord(&p->u1, CTR_ReadU32LE(&icon->texLayout.u1));
+		CtrGpu_WritePackedUVWord(&p->u2, CTR_ReadU32LE(&icon->texLayout.u2));
+		CtrGpu_WritePackedUV(&p->u3, CTR_ReadU16LE(&icon->texLayout.u3));
 
-		switch (i)
+		switch (quadIndex)
 		{
-		// top left
 		case 0:
-			// xy0
 			p->x0 = posX;
 			p->y0 = posY;
 
-			p->x1 = sVar1;
+			p->x1 = rightX;
 			p->y1 = posY;
 			p->x2 = posX;
-			p->y2 = sVar2;
-			p->x3 = sVar1;
-			p->y3 = sVar2;
+			p->y2 = bottomY;
+			p->x3 = rightX;
+			p->y3 = bottomY;
 			break;
 
-		// top right
 		case 1:
-			// xy0
-			sVar5 = (posX + sVar3 * 2) - angleX;
-			p->x0 = sVar5;
+			altX = (posX + widthOffset * 2) - angleX;
+			p->x0 = altX;
 			p->y0 = posY;
 
-			p->x1 = sVar12;
+			p->x1 = leftX;
 			p->y1 = posY;
-			p->x2 = sVar5;
-			p->y2 = sVar2;
-			p->x3 = sVar12;
-			p->y3 = sVar2;
+			p->x2 = altX;
+			p->y2 = bottomY;
+			p->x3 = leftX;
+			p->y3 = bottomY;
 
 			break;
 
 		case 2:
-			// xy0
-			sVar5 = (posY + sVar4 * 2) - angleY;
+			altY = (posY + heightOffset * 2) - angleY;
 			p->x0 = posX;
-			p->y0 = sVar5;
+			p->y0 = altY;
 
-			p->x1 = sVar1;
-			p->y1 = sVar5;
+			p->x1 = rightX;
+			p->y1 = altY;
 			p->x2 = posX;
-			p->y2 = sVar11;
-			p->x3 = sVar1;
-			p->y3 = sVar11;
+			p->y2 = topY;
+			p->x3 = rightX;
+			p->y3 = topY;
 
 			break;
 
 		case 3:
-			// xy0
-			sVar5 = (posX + sVar3 * 2) - angleX;
-			sVar6 = (posY + sVar4 * 2) - angleY;
-			p->x0 = sVar5;
-			p->y0 = sVar6;
+			altX = (posX + widthOffset * 2) - angleX;
+			altY = (posY + heightOffset * 2) - angleY;
+			p->x0 = altX;
+			p->y0 = altY;
 
-			p->x1 = sVar12;
-			p->y1 = sVar6;
-			p->x2 = sVar5;
-			p->y2 = sVar11;
-			p->x3 = sVar12;
-			p->y3 = sVar11;
+			p->x1 = leftX;
+			p->y1 = altY;
+			p->x2 = altX;
+			p->y2 = topY;
+			p->x3 = leftX;
+			p->y3 = topY;
 
 			break;
 		}
 
-		// color RGB
-		*(u32 *)&p->r0 = wumpaShine[2];
-		*(u32 *)&p->r1 = wumpaShine[1];
-		*(u32 *)&p->r2 = wumpaShine[1];
-		*(u32 *)&p->r3 = wumpaShine[0];
+		CtrGpu_WriteColorCode(&p->r0, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_DARK_ROW * sizeof(u32)]));
+		CtrGpu_WriteColorCode(&p->r1, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_MID_ROW * sizeof(u32)]));
+		CtrGpu_WriteColorCode(&p->r2, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_MID_ROW * sizeof(u32)]));
+		CtrGpu_WriteColorCode(&p->r3, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_BRIGHT_ROW * sizeof(u32)]));
 
 		setPolyGT4(p);
 
 		if (transparency != 0)
 		{
-			p->tpage = (p->tpage & ~(0x60)) | (((u16)transparency - 1) * 0x20);
-			p->code |= 2;
+			p->tpage = (p->tpage & ~UI_ICON_TPAGE_BLEND_MASK) | (((u16)transparency - 1) * UI_ICON_TPAGE_BLEND_STEP);
+			p->code |= UI_ICON_SEMI_TRANS_CODE_BIT;
 		}
 
 		AddPrim(ot, p);
 
-		// increment primMem
 		primMem->cursor = p + 1;
 	}
 }
@@ -174,58 +190,51 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 {
 	s16 rightX;
 	s16 bottomY;
-	s16 offsY;
-	s16 tmpX;
-	s16 tmpY;
+	s16 heightOffset;
 	POLY_FT4 *p;
-	int offsX;
+	int widthOffset;
 	int quadIndex;
 	s16 topY;
 	s16 leftX;
 
-	// wumpaShineTheta (given to sine)
-	sdata->wumpaShineTheta += 0x100;
+	sdata->wumpaShineTheta += UI_TRACKER_BG_SHINE_THETA_STEP;
 
-	offsX = ((targetIcon->texLayout.u1 - targetIcon->texLayout.u0) * angleX) >> 0xc;
-	offsY = ((targetIcon->texLayout.v2 - targetIcon->texLayout.v0) * angleY) >> 0xc;
+	widthOffset = ((targetIcon->texLayout.u1 - targetIcon->texLayout.u0) * angleX) >> UI_ICON_FIXED_SHIFT;
+	heightOffset = ((targetIcon->texLayout.v2 - targetIcon->texLayout.v0) * angleY) >> UI_ICON_FIXED_SHIFT;
 
-	rightX = centerX + offsX;
-	angleX >>= 0xc;
+	rightX = centerX + widthOffset;
+	angleX >>= UI_ICON_FIXED_SHIFT;
 	leftX = rightX - angleX;
 
-	bottomY = centerY + offsY;
-	angleY >>= 0xc;
+	bottomY = centerY + heightOffset;
+	angleY >>= UI_ICON_FIXED_SHIFT;
 	topY = bottomY - angleY;
 
-	int altX0 = (centerX + (offsX * 2)) - angleX;
-	int altY0 = (centerY + (offsY * 2)) - angleY;
+	int altX = (centerX + (widthOffset * 2)) - angleX;
+	int altY = (centerY + (heightOffset * 2)) - angleY;
 
-	// loop 4 times
-	for (quadIndex = 0; quadIndex < 4; quadIndex++)
+	for (quadIndex = 0; quadIndex < UI_ICON_QUAD_COUNT; quadIndex++)
 	{
 		p = primMem->cursor;
 		primMem->cursor = (p + 1);
 
-		*(int *)&p->r0 = *(int *)&color;
-		*(int *)&p->u0 = *(int *)&targetIcon->texLayout.u0;
-		*(int *)&p->u1 = *(int *)&targetIcon->texLayout.u1;
-		*(s16 *)&p->u2 = *(s16 *)&targetIcon->texLayout.u2;
-		*(s16 *)&p->u3 = *(s16 *)&targetIcon->texLayout.u3;
+		CtrGpu_WriteColorCode(&p->r0, (u32)color);
+		CtrGpu_WritePackedUVWord(&p->u0, CTR_ReadU32LE(&targetIcon->texLayout.u0));
+		CtrGpu_WritePackedUVWord(&p->u1, CTR_ReadU32LE(&targetIcon->texLayout.u1));
+		CtrGpu_WritePackedUV(&p->u2, CTR_ReadU16LE(&targetIcon->texLayout.u2));
+		CtrGpu_WritePackedUV(&p->u3, CTR_ReadU16LE(&targetIcon->texLayout.u3));
 
 		setPolyFT4(p);
 
 		if (transparency != 0)
 		{
-			p->tpage = (p->tpage & 0xff9f) | (((u16)transparency - 1) * 0x20);
-			p->code |= 2;
+			p->tpage = (p->tpage & ~UI_ICON_TPAGE_BLEND_MASK) | (((u16)transparency - 1) * UI_ICON_TPAGE_BLEND_STEP);
+			p->code |= UI_ICON_SEMI_TRANS_CODE_BIT;
 		}
 
-		// compiler optimization will remove this,
-		// if not using widescreen hacks
-		int len = 0;
+		const int widescreenOffset = 0;
 
-		// quadIndex(0)
-		p->x0 = centerX + len;
+		p->x0 = centerX + widescreenOffset;
 		p->x1 = rightX;
 		p->y0 = centerY;
 		p->y2 = bottomY;
@@ -233,21 +242,22 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 		switch (quadIndex)
 		{
 		case 1:
-			p->x0 = altX0 - len;
+			p->x0 = altX - widescreenOffset;
 			p->x1 = leftX;
 			break;
 
 		case 2:
-			p->y0 = altY0;
+			p->y0 = altY;
 			p->y2 = topY;
 			break;
 
 		case 3:
-			p->x0 = altX0 - len;
-			p->y0 = altY0;
+			p->x0 = altX - widescreenOffset;
+			p->y0 = altY;
 
 			p->x1 = leftX;
 			p->y2 = topY;
+			break;
 		}
 
 		p->x2 = p->x0;
@@ -271,18 +281,20 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 
 	int width = icon->texLayout.u1 - icon->texLayout.u0;
 	int height = icon->texLayout.v2 - icon->texLayout.v0;
+	int scaledWidth = FP_Mult(width, scale);
+	int scaledHeight = FP_Mult(height, scale);
 	int topX = posX;
-	int bottomX = topX + FP_Mult(width, scale);
+	int bottomX = topX + scaledWidth;
 #if BUILD != EurRetail
-	int topY = (posY < 166) ? posY : 165;
-	int bottomY = ((posY + FP_Mult(height, scale)) < 166) ? (posY + FP_Mult(height, scale)) : 165;
+	int topY = (posY < UI_DRIVER_ICON_NTSC_CLIP_LIMIT) ? posY : UI_DRIVER_ICON_NTSC_CLIP_MAX;
+	int bottomY = ((posY + scaledHeight) < UI_DRIVER_ICON_NTSC_CLIP_LIMIT) ? (posY + scaledHeight) : UI_DRIVER_ICON_NTSC_CLIP_MAX;
 #else
-	int topY = (posY < 176) ? posY : 175;
-	int bottomY = ((posY + FP_Mult(height, scale)) < 176) ? (posY + FP_Mult(height, scale)) : 175;
+	int topY = (posY < UI_DRIVER_ICON_EUR_CLIP_LIMIT) ? posY : UI_DRIVER_ICON_EUR_CLIP_MAX;
+	int bottomY = ((posY + scaledHeight) < UI_DRIVER_ICON_EUR_CLIP_LIMIT) ? (posY + scaledHeight) : UI_DRIVER_ICON_EUR_CLIP_MAX;
 #endif
 
 	p->tag.size = (sizeof(*p) - sizeof(p->tag)) / sizeof(u32);
-	p->colorCode.code.code = 0x2c;
+	p->colorCode.code.code = UI_DRIVER_ICON_FT4_CODE;
 
 	p->v[0].pos.x = topX;
 	p->v[0].pos.y = topY;
@@ -303,7 +315,7 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 		p->colorCode.code.poly.semiTransparency = 1;
 	}
 
-	u32 bottomV = (icon->texLayout.v0 + bottomY) - posY;
+	u8 bottomV = (u8)((icon->texLayout.v0 + bottomY) - posY);
 	p->v[0].texCoords.u = icon->texLayout.u0;
 	p->v[0].texCoords.v = icon->texLayout.v0;
 	p->v[1].texCoords.u = icon->texLayout.u1;

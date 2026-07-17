@@ -7,28 +7,20 @@
 
 #if defined(_WIN32)
 #include <io.h>
+#include "platform/native_win32.h"
 #else
 #include <unistd.h>
 #endif
 
-#if __GNUC__
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #define _EnterCriticalSection(x)
 #define EnterCriticalSection(x)
 #define ExitCriticalSection()
-#endif
 
-#include "psx/libetc.h"
-#include "psx/libgte.h"
-#include "psx/libgpu.h"
-#include "psx/libspu.h"
-#include "psx/libcd.h"
-#include "psx/libapi.h"
-#include "psx/strings.h"
-#include "psx/inline_c.h"
 #include "platform/native_assets.h"
 #include "platform/native_log.h"
+#include "platform/native_memory.h"
 #include "platform/native_perf.h"
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
@@ -69,29 +61,8 @@ DIR *__wrap_opendir(const char *fname) {
 #endif
 #endif
 
-#ifndef __GNUC__
-#define __attribute__(x)
-#endif
-
-#define RECT RECT16
-typedef enum
-{
-	PAD_ID_MOUSE = 0x1,
-	PAD_ID_NEGCON = 0x2,
-	PAD_ID_IRQ10_GUN = 0x3,
-	PAD_ID_DIGITAL = 0x4,
-	PAD_ID_ANALOG_STICK = 0x5,
-	PAD_ID_GUNCON = 0x6,
-	PAD_ID_ANALOG = 0x7,
-	PAD_ID_MULTITAP = 0x8,
-	PAD_ID_JOGCON = 0xe,
-	PAD_ID_CONFIG_MODE = 0xf,
-	PAD_ID_NONE = 0xf
-} PadTypeID;
-
-#include "platform.h"
-
-#include "game_includes.h"
+#include <platform.h>
+#include "game/game_unity.h"
 
 #include "game/zGlobal_RDATA.c"
 #include "game/zGlobal_DATA.c"
@@ -99,6 +70,7 @@ typedef enum
 
 #undef RECT
 
+#include "platform/native_disc_image.c"
 #include "platform/native_assets.c"
 #include "platform/native_audio.c"
 #include "platform/native_memory.c"
@@ -119,6 +91,7 @@ typedef enum
 #include "platform/native_libspu.c"
 #include "platform/native_log.c"
 #include "platform/native_memcard.c"
+#include "platform/native_memcard_adapter.c"
 #include "platform/native_perf.c"
 #include "platform/native_platform.c"
 #include "platform/native_replay_scheduler.c"
@@ -128,7 +101,7 @@ typedef enum
 #include "platform/native_str.c"
 
 #ifndef CC
-#if __GNUC__
+#if defined(__GNUC__)
 #if _WIN32
 #ifndef __clang__
 #define CC "MINGW-GCC"

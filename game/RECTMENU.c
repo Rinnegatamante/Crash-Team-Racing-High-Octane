@@ -30,7 +30,7 @@ static const char s_rectMenuTimeFormat[] = "%ld:%ld%ld:%ld%ld";
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80044ff8-0x80045134.
-u8 *RECTMENU_DrawTime(int milliseconds)
+char *RECTMENU_DrawTime(int milliseconds)
 {
 	// 32 is added to milliseconds every frame,
 	// 960 per second, the rest is basic math
@@ -53,7 +53,7 @@ u8 *RECTMENU_DrawTime(int milliseconds)
 	    CTR_PRINTF_PSX_LONG(((milliseconds * 100) / 0x3c0) % 10) // milliseconds
 	);
 
-	return (u8 *)str;
+	return str;
 }
 
 #undef RECTMENU_TIME_FORMAT
@@ -68,20 +68,18 @@ void RECTMENU_DrawRwdBlueRect_Subset(s16 *pos, int *color, uint32_t *ot, struct 
 	{
 		primMem->cursor = p + 1;
 
-		*(int *)&p->r0 = color[0] & 0xffffff;
-		*(int *)&p->r1 = color[1] & 0xffffff;
-		*(int *)&p->r2 = color[2] & 0xffffff;
-		*(int *)&p->r3 = color[3] & 0xffffff;
+		CtrGpu_WriteColorCode(&p->r0, (color[0] & 0xffffff) | 0x38000000);
+		CtrGpu_WriteColorCode(&p->r1, color[1] & 0xffffff);
+		CtrGpu_WriteColorCode(&p->r2, color[2] & 0xffffff);
+		CtrGpu_WriteColorCode(&p->r3, color[3] & 0xffffff);
 
-		p->code = 0x38;
+		CtrGpu_WritePackedXY(&p->x0, CTR_PackS16Pair(pos[0], pos[1]));
+		CtrGpu_WritePackedXY(&p->x1, CTR_PackS16Pair(pos[0] + pos[2], pos[1]));
+		CtrGpu_WritePackedXY(&p->x2, CTR_PackS16Pair(pos[0], pos[1] + pos[3]));
+		CtrGpu_WritePackedXY(&p->x3, CTR_PackS16Pair(pos[0] + pos[2], pos[1] + pos[3]));
 
-		*(int *)&p->x0 = *(int *)&pos[0];
-		*(int *)&p->x1 = (pos[0] + pos[2]) | (pos[1] << 16);
-		*(int *)&p->x2 = pos[0] | ((pos[1] + pos[3]) << 16);
-		*(int *)&p->x3 = (pos[0] + pos[2]) | ((pos[1] + pos[3]) << 16);
-
-		*(int *)p = CtrGpu_PackOTTag(*ot, 0x8000000);
-		*(int *)ot = (int)CtrGpu_PrimToOTLink24(p);
+		p->tag = CtrGpu_PackOTTag(*ot, 0x8000000);
+		*ot = CtrGpu_PrimToOTLink24(p);
 	}
 }
 
@@ -219,7 +217,7 @@ void RECTMENU_DrawQuip(char *comment, s16 startX, int startY, u32 sizeX, s16 fon
 	if ((textFlag & 0x8000) != 0)
 	{
 		// posX with text un-centered
-		posX = startX - (sizeX >> 1);
+		posX = startX - ((s16)sizeX / 2);
 	}
 
 	sizeY = (u32)data.PlayerCommentBoxParams[fontType];
@@ -239,8 +237,8 @@ void RECTMENU_DrawQuip(char *comment, s16 startX, int startY, u32 sizeX, s16 fon
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800457b0-0x800459ec.
 void RECTMENU_DrawInnerRect(RECT *r, int type, uint32_t *ot)
 {
-	int *colorDataNormal;
-	int *colorDataSpecial;
+	u32 *colorDataNormal;
+	u32 *colorDataSpecial;
 	int drawMode;
 	RECT adjustedRect;
 
@@ -281,8 +279,8 @@ void RECTMENU_DrawInnerRect(RECT *r, int type, uint32_t *ot)
 		}
 		else
 		{
-			Color *color = (Color *)&sdata->DrawSolidBoxData[0];
-			CTR_Box_DrawSolidBox(&adjustedRect, *color, ot);
+			Color color = {.self = sdata->DrawSolidBoxData[0]};
+			CTR_Box_DrawSolidBox(&adjustedRect, color, ot);
 		}
 	}
 
@@ -296,7 +294,7 @@ void RECTMENU_DrawInnerRect(RECT *r, int type, uint32_t *ot)
 		adjustedRect.w = horizontalOffset;
 		adjustedRect.h = r->h;
 
-		int *color = &sdata->DrawSolidBoxData[0];
+		u32 *color = &sdata->DrawSolidBoxData[0];
 		CTR_Box_DrawClearBox(&adjustedRect, (Color *)color, 0, ot);
 
 		adjustedRect.x = r->x + horizontalOffset;
@@ -318,7 +316,7 @@ void RECTMENU_DrawFullRect(struct RectMenu *menu, RECT *inner)
 	struct GameTracker *gGT = sdata->gGT;
 
 	// if title text exists
-	if ((-1 < menu->stringIndexTitle) && ((menu->state & 4) == 0))
+	if ((-1 < menu->stringIndexTitle) && ((menu->state & ONLY_DRAW_TITLE) == 0))
 	{
 		rgb = (menu->drawStyle & 0x10) ? &sdata->battleSetup_Color_UI_2 : &sdata->battleSetup_Color_UI_1;
 
@@ -326,11 +324,11 @@ void RECTMENU_DrawFullRect(struct RectMenu *menu, RECT *inner)
 		outer.y = inner->y + 6;
 
 		// pixel-height of non-title menu rows
-		if ((menu->state & 0x80) == 0)
+		if ((menu->state & USE_SMALL_FONT) == 0)
 		{
 			outer.y = inner->y + 9 + data.font_charPixHeight[1];
 		}
-		else if ((menu->state & 0x4000) == 0)
+		else if ((menu->state & BIG_TEXT_IN_TITLE) == 0)
 		{
 			outer.y += data.font_charPixHeight[2];
 		}
@@ -431,7 +429,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 	fontType = FONT_BIG;
 
 	// if menu should have tiny text
-	if ((m->state & 0x80) != 0)
+	if ((m->state & USE_SMALL_FONT) != 0)
 	{
 		fontType = FONT_SMALL;
 	}
@@ -453,7 +451,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 	if (m->stringIndexTitle >= 0)
 	{
 		// if force title to be big
-		if ((m->state & 0x4000) != 0)
+		if ((m->state & BIG_TEXT_IN_TITLE) != 0)
 		{
 			// override
 			fontType = FONT_BIG;
@@ -470,7 +468,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 	}
 
 	// if submenu needs to be drawn
-	if ((m->state & 0x10) != 0)
+	if ((m->state & DRAW_NEXT_MENU_IN_HIERARCHY) != 0)
 	{
 		if ((boolCheckSubmenu & 0xffff) != 0)
 		{
@@ -519,16 +517,16 @@ void RECTMENU_DrawSelf(struct RectMenu *menu, int posX, s16 posY, s16 menuWidth)
 		uVar8 = 0x1d;
 	}
 	offsetY = posY;
-	if ((menu->state & 0x60000) == 0x60000)
+	if ((menu->state & RECTMENU_DRAW_CALLBACK_FLAGS) == RECTMENU_DRAW_CALLBACK_FLAGS)
 	{
-		menu->unk1e = 2;
+		menu->funcState = RECTMENU_FUNC_STATE_DRAW;
 		if (menu->funcPtr != NULL)
 		{
 			menu->funcPtr(menu);
 		}
 	}
 	posX_prev = 2;
-	if ((menu->state & 0x80) == 0)
+	if ((menu->state & USE_SMALL_FONT) == 0)
 	{
 		posX_prev = 1;
 		local_50 = 2;
@@ -538,7 +536,7 @@ void RECTMENU_DrawSelf(struct RectMenu *menu, int posX, s16 posY, s16 menuWidth)
 	{
 		local_50 = 0;
 		sVar7 = data.font_charPixHeight[2];
-		if ((menu->state & 0x4000) == 0)
+		if ((menu->state & BIG_TEXT_IN_TITLE) == 0)
 		{
 			local_48 = data.font_charPixHeight[2];
 			goto LAB_80045e94;
@@ -555,16 +553,16 @@ LAB_80045e94:
 	state = menu->state;
 
 	menu->width = menuWidth;
-	menu->state &= 0xfffffff7;
+	menu->state &= ~RECTMENU_CLOSE_TRANSIENT;
 	menu->height = local_60;
 
-	if ((state & 2) != 0)
+	if ((state & CENTER_ON_Y) != 0)
 	{
 		menuHeight = 0;
 		RECTMENU_GetHeight(menu, &menuHeight, 1);
 		local_38 = (s16)(-menuHeight / 2);
 	}
-	if ((state & 1) != 0)
+	if ((state & CENTER_ON_X) != 0)
 	{
 		local_40 = (s16)(-menuWidth / 2);
 	}
@@ -572,18 +570,18 @@ LAB_80045e94:
 	row = &menu->rows[0];
 	index = menu->stringIndexTitle;
 	posY_prev = local_50 + local_38 + offsetY + menu->posY_prev;
-	if ((-1 < index) && ((state & 4) == 0))
+	if ((-1 < index) && ((state & ONLY_DRAW_TITLE) == 0))
 	{
 		sVar4 = 1;
-		if ((state & 0x4000) == 0)
+		if ((state & BIG_TEXT_IN_TITLE) == 0)
 		{
 			sVar4 = posX_prev;
 		}
-		if ((state & 0x200) == 0)
+		if ((state & CENTER_MENU_TEXT) == 0)
 		{
 			offsetX = (s16)(posX + menu->posX_prev);
 			uVar5 = uVar8;
-			if ((state & 1) != 0)
+			if ((state & CENTER_ON_X) != 0)
 			{
 				uVar5 = uVar8 | 0x8000;
 			}
@@ -606,7 +604,7 @@ LAB_80045e94:
 		do
 		{
 			state = menu->state;
-			if (((state & 0x44) == 0) || (sVar6 == menu->rowSelected))
+			if (((state & (ONLY_DRAW_TITLE | SHOW_ONLY_HIGHLIT_ROW)) == 0) || (sVar6 == menu->rowSelected))
 			{
 				uVar5 = row->stringIndex;
 				textFlags = 0x17;
@@ -616,10 +614,10 @@ LAB_80045e94:
 				}
 				if ((uVar5 & 0x7fff) != 0)
 				{
-					if ((state & 0x200) == 0)
+					if ((state & CENTER_MENU_TEXT) == 0)
 					{
 						sVar4 = (s16)(posX + menu->posX_prev + 1);
-						if ((state & 1) != 0)
+						if ((state & CENTER_ON_X) != 0)
 						{
 							textFlags |= 0x8000;
 						}
@@ -641,11 +639,11 @@ LAB_80045e94:
 			sVar6++;
 		} while (row->stringIndex != -1);
 	}
-	if ((menu->state & 0x104) == 0)
+	if ((menu->state & (HIDE_ROW_HIGHLIGHT | ONLY_DRAW_TITLE)) == 0)
 	{
 		background.x = local_40 + posX + menu->posX_prev;
 		background.y = offsetY + menu->posY_prev + local_38;
-		if ((menu->state & 0x40) == 0)
+		if ((menu->state & SHOW_ONLY_HIGHLIT_ROW) == 0)
 		{
 			background.y += menu->rowSelected * sVar7 + local_50 + -1;
 		}
@@ -653,7 +651,7 @@ LAB_80045e94:
 		{
 			background.y += local_50 + -1;
 		}
-		if ((menu->state & 0x80) == 0)
+		if ((menu->state & USE_SMALL_FONT) == 0)
 		{
 			background.h = -3;
 		}
@@ -675,13 +673,13 @@ LAB_80045e94:
 
 		CTR_Box_DrawClearBox(&background, rgb, 1, gGT->backBuffer->otMem.uiOT);
 	}
-	if ((menu->state & 0x10) != 0)
+	if ((menu->state & DRAW_NEXT_MENU_IN_HIERARCHY) != 0)
 	{
 		RECTMENU_DrawSelf(menu->ptrNextBox_InHierarchy, posX + menu->posX_prev, local_38 + offsetY + menu->posY_prev + sVar7 + 0xc, menuWidth);
 	}
 	posX_prev = menu->posX_prev;
 	posY_prev = menu->posY_prev;
-	if ((menu->state & 4) == 0)
+	if ((menu->state & ONLY_DRAW_TITLE) == 0)
 	{
 		borders.h = (local_60 + 8) - (*(u8 *)&menu->state >> 7);
 	}
@@ -755,7 +753,20 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 
 	int returnVal = 0;
 
-	RngDeadCoed(&sdata->const_0x30215400);
+	RngDeadCoed(&sdata->advRng);
+
+	if (((m->state & ONLY_DRAW_TITLE) == 0) && ((m->state & RECTMENU_DRAW_CALLBACK_FLAGS) != RECTMENU_DRAW_CALLBACK_FLAGS))
+	{
+		if (sdata->activeSubMenu != m)
+		{
+			sdata->activeSubMenu = m;
+
+			if ((m->state & KEEP_INPUTS_IN_SUBMENU) == 0)
+			{
+				RECTMENU_ClearInput();
+			}
+		}
+	}
 
 	// button from any player
 	button = sdata->AnyPlayerTap;
@@ -773,11 +784,11 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 	    // therefore this is the bottom of hierarchy
 	    ((m->state & ONLY_DRAW_TITLE) == 0) &&
 
-	    // must be both 0x20000 and 0x40000
-	    ((m->state & 0x60000) != 0x60000) &&
+	    // draw callbacks suppress normal input
+	    ((m->state & RECTMENU_DRAW_CALLBACK_FLAGS) != RECTMENU_DRAW_CALLBACK_FLAGS) &&
 
-	    // D-pad or Cross/Triangle
-	    ((button & 0x4007f) != 0) &&
+	    // D-pad or menu confirm/back buttons
+	    ((button & RECTMENU_INPUT_MENU) != 0) &&
 
 	    // No cheat code entering
 	    ((sdata->buttonHeldPerPlayer[0] & (BTN_L1 | BTN_R1)) == 0))
@@ -786,17 +797,6 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 		newRow = oldRow;
 
 		currMenuRow = &m->rows[oldRow];
-
-		if (sdata->activeSubMenu != m)
-		{
-			sdata->activeSubMenu = m;
-
-			// if input should clear upon opening
-			if ((m->state & KEEP_INPUTS_IN_SUBMENU) == 0)
-			{
-				RECTMENU_ClearInput();
-			}
-		}
 
 		// optimized way to check all four button presses:
 		// up, down, left, right, and get new row
@@ -819,11 +819,11 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 			}
 		}
 
-		if ((button & (BTN_CROSS | BTN_CIRCLE)) == 0)
+		if ((button & (BTN_CROSS_one | BTN_CIRCLE)) == 0)
 		{
 			if (
 			    // if Triangle or Square
-			    ((button & (BTN_TRIANGLE | BTN_SQUARE)) != 0) &&
+			    ((button & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0) &&
 
 			    // if this is not the top of the menu
 			    ((m->state & MENU_CANT_GO_BACK) == 0))
@@ -838,7 +838,7 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 
 				returnVal = -1;
 
-				m->unk1e = 0;
+				m->funcState = RECTMENU_FUNC_STATE_INPUT;
 
 				m->rowSelected = -1;
 
@@ -864,7 +864,7 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 					OtherFX_Play(1, 1);
 				}
 
-				m->unk1e = 0;
+				m->funcState = RECTMENU_FUNC_STATE_INPUT;
 
 				// Save row BEFORE processing the Cross button,
 				// this is why you can glitch into 3P VS with
@@ -910,7 +910,6 @@ int RECTMENU_ProcessInput(struct RectMenu *m)
 void RECTMENU_ProcessState()
 {
 	struct RectMenu *currMenu;
-	int currState;
 	s16 width;
 	int state;
 
@@ -949,10 +948,11 @@ void RECTMENU_ProcessState()
 	// run funcPtr if it exists
 	if ((state & (EXECUTE_FUNCPTR | DISABLE_INPUT_ALLOW_FUNCPTRS)) != 0)
 	{
-		currMenu->unk1e = 1;
+		currMenu->funcState = RECTMENU_FUNC_STATE_UPDATE;
 		currMenu->funcPtr(currMenu);
 
 		// check if funcPtr changed "state"
+		currMenu = sdata->ptrActiveMenu;
 		state = currMenu->state;
 	}
 
@@ -963,6 +963,7 @@ void RECTMENU_ProcessState()
 		RECTMENU_ProcessInput(currMenu);
 
 		// check if ProcessInput changed "state"
+		currMenu = sdata->ptrActiveMenu;
 		state = currMenu->state;
 
 		// if Menu border is not invisible
@@ -977,16 +978,22 @@ void RECTMENU_ProcessState()
 		}
 	}
 
+	currMenu = sdata->ptrActiveMenu;
+	state = currMenu->state;
+
 	// not sure what this is
-	if ((state & 0x800) == 0)
+	if ((state & RECTMENU_UNKNOWN_0x800) == 0)
 	{
 		if (RaceFlag_GetCanDraw() == 0)
 		{
 			RaceFlag_SetCanDraw(1);
 		}
 
-		sdata->gGT->renderFlags |= 0x20;
+		sdata->gGT->renderFlags |= RENDER_FLAG_RENDER_BUCKET;
 	}
+
+	currMenu = sdata->ptrActiveMenu;
+	state = currMenu->state;
 
 	// if menu needs to close
 	if ((state & NEEDS_TO_CLOSE) != 0)
@@ -1011,12 +1018,12 @@ void RECTMENU_Show(struct RectMenu *m)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800469c8-0x800469dc.
 void RECTMENU_Hide(struct RectMenu *m)
 {
-	m->state |= 0x1000;
+	m->state |= NEEDS_TO_CLOSE;
 }
 
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800469dc-0x800469f0.
-int RECTMENU_BoolHidden(struct RectMenu *m)
+b32 RECTMENU_BoolHidden(struct RectMenu *m)
 {
 	return ((m->state & NEEDS_TO_CLOSE) != 0);
 }

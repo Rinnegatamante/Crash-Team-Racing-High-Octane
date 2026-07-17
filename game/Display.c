@@ -1,58 +1,5 @@
 #include <common.h>
 
-struct DisplayBlurFlatPacket
-{
-	u32 tag;
-	u32 drawModeStart;
-	u32 maskBitEnable;
-	u32 colorAndCode;
-	u32 xy0;
-	u32 xy1;
-	u32 xy2;
-	u32 xy3;
-	u32 drawModeEnd;
-	u32 maskBitDisable;
-};
-
-CTR_STATIC_ASSERT(sizeof(struct DisplayBlurFlatPacket) == 0x28);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, tag) == 0x00);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, drawModeStart) == 0x04);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, maskBitEnable) == 0x08);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, colorAndCode) == 0x0C);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, xy0) == 0x10);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, xy1) == 0x14);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, xy2) == 0x18);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, xy3) == 0x1C);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, drawModeEnd) == 0x20);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurFlatPacket, maskBitDisable) == 0x24);
-
-struct DisplayBlurTile
-{
-	s16 srcX;
-	s16 srcY;
-	s16 srcW;
-	s16 srcH;
-	s16 dstX;
-	s16 dstY;
-	s16 dstW;
-	s16 dstH;
-};
-
-CTR_STATIC_ASSERT(sizeof(struct DisplayBlurTile) == 0x10);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, srcX) == 0x00);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, srcY) == 0x02);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, srcW) == 0x04);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, srcH) == 0x06);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, dstX) == 0x08);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, dstY) == 0x0A);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, dstW) == 0x0C);
-CTR_STATIC_ASSERT(offsetof(struct DisplayBlurTile, dstH) == 0x0E);
-
-static u32 DISPLAY_Blur_PackS16Pair(int x, int y)
-{
-	return ((u32)(u16)x) | ((u32)(u16)y << 16);
-}
-
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80023a40-0x80023d4c
 u32 *DISPLAY_Blur_SubFunc(u32 *prim, struct DisplayBlurTile *tile)
 {
@@ -133,14 +80,14 @@ u32 *DISPLAY_Blur_SubFunc(u32 *prim, struct DisplayBlurTile *tile)
 	int dstY = tile->dstY;
 	int dstW = tile->dstW;
 	int dstH = tile->dstH;
-	u32 tpage = (((u32)srcY & 0x100) >> 4) | (((u32)srcX & 0x3ff) >> 6) | 0x100 | (((u32)srcY & 0x200) << 2);
+	u32 tpage = getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)srcX, (u32)srcY);
 	POLY_FT4 *poly = (POLY_FT4 *)prim;
 
 	CtrGpu_WritePackedUVWord(&poly->u0, u0 | v0);
-	CtrGpu_WritePackedXY(&poly->x0, DISPLAY_Blur_PackS16Pair(dstX, dstY));
-	CtrGpu_WritePackedXY(&poly->x1, DISPLAY_Blur_PackS16Pair(dstX + dstW, dstY));
-	CtrGpu_WritePackedXY(&poly->x2, DISPLAY_Blur_PackS16Pair(dstX, dstY + dstH));
-	CtrGpu_WritePackedXY(&poly->x3, DISPLAY_Blur_PackS16Pair(dstX + dstW, dstY + dstH));
+	CtrGpu_WritePackedXY(&poly->x0, CTR_PackS16Pair(dstX, dstY));
+	CtrGpu_WritePackedXY(&poly->x1, CTR_PackS16Pair(dstX + dstW, dstY));
+	CtrGpu_WritePackedXY(&poly->x2, CTR_PackS16Pair(dstX, dstY + dstH));
+	CtrGpu_WritePackedXY(&poly->x3, CTR_PackS16Pair(dstX + dstW, dstY + dstH));
 	CtrGpu_WritePackedUV(&poly->u2, (u16)(u0 | v1));
 	CtrGpu_WritePackedUV(&poly->u3, (u16)(u1 | v1));
 	poly->code = 0x2f;
@@ -175,10 +122,10 @@ void DISPLAY_Blur_Main(struct PushBuffer *pb, int strength)
 		packet->drawModeStart = 0xe1000a20;
 		packet->maskBitEnable = 0xe6000001;
 		packet->maskBitDisable = 0xe6000000;
-		packet->xy0 = DISPLAY_Blur_PackS16Pair(x, y);
-		packet->xy1 = DISPLAY_Blur_PackS16Pair(x + w, y);
-		packet->xy2 = DISPLAY_Blur_PackS16Pair(x, y + h);
-		packet->xy3 = DISPLAY_Blur_PackS16Pair(x + w, y + h);
+		packet->xy0 = CTR_PackS16Pair(x, y);
+		packet->xy1 = CTR_PackS16Pair(x + w, y);
+		packet->xy2 = CTR_PackS16Pair(x, y + h);
+		packet->xy3 = CTR_PackS16Pair(x + w, y + h);
 		packet->colorAndCode = (strength < 0) ? 0x2affffff : 0x2a000000;
 
 		ot = gGT->otSwapchainDB[gGT->swapchainIndex];

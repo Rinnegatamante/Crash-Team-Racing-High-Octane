@@ -2,14 +2,20 @@ cmake_minimum_required(VERSION 3.20)
 project(CTR-Native C)
 include(CheckCCompilerFlag)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS ON)
-set(CTR_NATIVE_VERSION "0.1.0-beta.6.1")
+set(CTR_NATIVE_VERSION "0.1.0-beta.7.1")
 
-if(NOT CMAKE_C_COMPILER_TARGET MATCHES "i.86" AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
-    set(CMAKE_C_FLAGS "-m32 ${CMAKE_C_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "-m32 ${CMAKE_EXE_LINKER_FLAGS}")
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(FATAL_ERROR
+        "CTR Native currently requires a 32-bit target. "
+        "Select Win32 for MSVC, an i686 MinGW compiler on Windows, or pass -m32 "
+        "in the initial compiler and linker flags on Linux."
+    )
+endif()
+
+set(CTR_NATIVE_MSVC_FRONTEND OFF)
+if(CMAKE_C_COMPILER_ID STREQUAL "MSVC" OR CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
+    set(CTR_NATIVE_MSVC_FRONTEND ON)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
@@ -36,11 +42,8 @@ execute_process(
 if(CTR_NATIVE_GIT_DIRTY EQUAL 0)
     set(CTR_NATIVE_BUILD_ID "${CTR_NATIVE_GIT_HASH}")
 else()
-    string(TIMESTAMP CTR_NATIVE_BUILD_TIMESTAMP "%Y%m%d%H%M%S" UTC)
-    set(CTR_NATIVE_BUILD_ID "${CTR_NATIVE_GIT_HASH}-dirty-${CTR_NATIVE_BUILD_TIMESTAMP}")
+    set(CTR_NATIVE_BUILD_ID "${CTR_NATIVE_GIT_HASH}-dirty")
 endif()
-
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse -Wno-error -g")
 
 function(ctr_native_add_label_warning_if_supported target warning flag_check)
     set(saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
@@ -81,6 +84,12 @@ add_subdirectory(externals/SDL)
 
 # CTR Native
 add_executable(ctr_native main.c)
+set_target_properties(ctr_native PROPERTIES
+    C_STANDARD 17
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
 target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
@@ -89,17 +98,46 @@ target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
 )
-target_compile_options(ctr_native PRIVATE -O2)
-if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(ctr_native PRIVATE -Wenum-conversion -Wenum-compare -Wswitch-enum -Wformat -Wparentheses)
-endif()
-if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    ctr_native_add_label_warning_if_supported(ctr_native -Wfree-labels CTR_HAS_WFREE_LABELS)
-elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    ctr_native_add_label_warning_if_supported(ctr_native -Wc23-extensions CTR_HAS_WC23_EXTENSIONS)
+if(CTR_NATIVE_MSVC_FRONTEND)
+    target_compile_options(ctr_native PRIVATE
+        /W4 #TODO(aalhendi): fix warnings
+        /bigobj
+        /arch:SSE2
+        /wd4152
+        /wd4244
+        /wd4245
+        /wd4310
+        /wd5287
+    )
+else()
+    target_compile_options(ctr_native PRIVATE
+        -msse
+        -Wenum-conversion
+        -Wenum-compare
+        -Wswitch-enum
+        -Wformat
+        -Wparentheses
+        $<$<CONFIG:Release>:-O2>
+        $<$<CONFIG:Release>:-g>
+    )
+
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(ctr_native PRIVATE -Wall -Wextra -Wstrict-aliasing=2)
+        ctr_native_add_label_warning_if_supported(ctr_native -Wfree-labels CTR_HAS_WFREE_LABELS)
+    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+        ctr_native_add_label_warning_if_supported(ctr_native -Wc23-extensions CTR_HAS_WC23_EXTENSIONS)
+    endif()
 endif()
 target_link_libraries(ctr_native SDL3::SDL3)
-target_link_options(ctr_native PRIVATE -static-libgcc)
-if(WIN32)
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_link_options(ctr_native PRIVATE -static-libgcc)
+endif()
+if(MINGW)
     target_link_options(ctr_native PRIVATE -static)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_test(NAME ctr_native_version COMMAND $<TARGET_FILE:ctr_native> --version)
+    set_tests_properties(ctr_native_version PROPERTIES PASS_REGULAR_EXPRESSION "^CTR Native ")
 endif()

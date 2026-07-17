@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_OVR_231_H
+#define CTR_NATIVE_OVR_231_H
+
 
 // used all over 231,
 // Plant, FlameJet, etc
@@ -47,6 +50,39 @@ struct MaskHeadWeapon
 
 	// 0x14 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct MaskHeadWeapon) == 0x14);
+
+enum
+{
+	MASK_HEAD_DURATION_NORMAL = 0x1e00,
+	MASK_HEAD_DURATION_JUICED = 0x2d00,
+	MASK_HEAD_SCALE_NORMAL = FP(1.0),
+	MASK_HEAD_ROT_WORLD_SPACE = 0x1,
+};
+
+CTR_STATIC_ASSERT(MASK_HEAD_DURATION_NORMAL == 0x1e00);
+CTR_STATIC_ASSERT(MASK_HEAD_DURATION_JUICED == 0x2d00);
+CTR_STATIC_ASSERT(MASK_HEAD_SCALE_NORMAL == 0x1000);
+CTR_STATIC_ASSERT(MASK_HEAD_ROT_WORLD_SPACE == 0x1);
+
+typedef u16 TrackerWeaponFlags;
+
+enum
+{
+	TRACKER_FLAG_POWERED_UP = 0x0001,
+	TRACKER_FLAG_WARPBALL_TARGET_PATH = 0x0004,
+	TRACKER_FLAG_WARPBALL_FALLBACK_PATH = 0x0008,
+	TRACKER_FLAG_WARPBALL_MASK_REPATH = 0x0010,
+	TRACKER_FLAG_BOMB_BACKWARD = 0x0020,
+	TRACKER_FLAG_WARPBALL_HIT_DRIVER = 0x0040,
+	TRACKER_FLAG_WARPBALL_TURN_AROUND = 0x0100,
+	TRACKER_FLAG_WARPBALL_BACKTRACKING = 0x0200,
+
+	TRACKER_FLAG_WARPBALL_PATH_MODE = TRACKER_FLAG_WARPBALL_TARGET_PATH | TRACKER_FLAG_WARPBALL_FALLBACK_PATH,
+	TRACKER_FLAG_WARPBALL_TARGET_REFRESH_BLOCKED = TRACKER_FLAG_WARPBALL_TARGET_PATH | TRACKER_FLAG_WARPBALL_BACKTRACKING,
+};
+
+CTR_STATIC_ASSERT(TRACKER_FLAG_WARPBALL_MASK_REPATH == 0x0010);
 
 // bomb, missile, warpball
 // yes, the bomb chases you and steers towards targets
@@ -68,9 +104,7 @@ struct TrackerWeapon
 	SVec3 vel;
 
 	// 0x16
-	// & 1 - used 10 wumpa fruit
-	// & 0x20 - bomb backwards
-	u16 flags;
+	TrackerWeaponFlags flags;
 
 	// 0x18
 	SVec3 dir;
@@ -79,11 +113,11 @@ struct TrackerWeapon
 	s16 rotY;
 
 	// 0x20
-	s16 frameCount_DontHurtParent;
-	s16 frameCount_Blind;
+	s16 parentSafetyFrames;
+	s16 blindFrames;
 
 	// 0x24
-	int audioPtr;
+	u32 soundIDCount;
 
 	// 0x28
 	u32 distanceToTarget;
@@ -91,11 +125,10 @@ struct TrackerWeapon
 	// === This point and beyond is Warpball ===
 
 	// 0x2c
-	// lev->0x14c + "this" * 0xC
-	int respawnPointIndex;
+	int pathProgress;
 
 	// 0x30
-	int fadeAway_frameCount5;
+	int fadeFrame;
 
 	// 0x34
 	// bitshift with driver->driverID
@@ -125,19 +158,31 @@ struct TrackerWeapon
 	int timeAlive;
 
 	// 0x4c
-	int unk4c;
+	union
+	{
+		struct
+		{
+			s16 savedPosX;
+			s16 savedPosY;
+		};
+		u32 savedPosXY;
+	};
 
 	// 0x50
-	s16 unk50;
+	s16 savedPosZ;
 
 	// 0x52
-	s16 turnAround;
+	s16 turnAroundFrames;
 
 	// 0x54
-	int framesSeekMine;
+	int framesSeekTargetTnt;
 
 	// 0x58 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct TrackerWeapon, pathProgress) == 0x2c);
+CTR_STATIC_ASSERT(offsetof(struct TrackerWeapon, savedPosXY) == 0x4c);
+CTR_STATIC_ASSERT(offsetof(struct TrackerWeapon, savedPosZ) == 0x50);
+CTR_STATIC_ASSERT(sizeof(struct TrackerWeapon) == 0x58);
 
 struct RainLocal
 {
@@ -149,7 +194,8 @@ struct RainLocal
 	int frameCount;
 
 	// 0xC
-	s16 unk1[4];
+	SVec3 scroll;
+	s16 _pad_scroll;
 
 	// 0x14
 	SVec3 vel;
@@ -164,6 +210,10 @@ struct RainLocal
 
 	// 0x28 -- size
 };
+CTR_STATIC_ASSERT(offsetof(struct RainLocal, scroll) == 0xc);
+CTR_STATIC_ASSERT(offsetof(struct RainLocal, vel) == 0x14);
+CTR_STATIC_ASSERT(offsetof(struct RainLocal, pos) == 0x1c);
+CTR_STATIC_ASSERT(sizeof(struct RainLocal) == 0x28);
 
 struct RainCloud
 {
@@ -181,6 +231,16 @@ struct RainCloud
 CTR_STATIC_ASSERT(offsetof(struct RainCloud, effect) == 0x6);
 CTR_STATIC_ASSERT(sizeof(struct RainCloud) == 0x8);
 
+typedef u16 ShieldFlags;
+
+enum
+{
+	SHIELD_FLAG_POP_ON_DAMAGE = 0x1,
+	SHIELD_FLAG_SHOOT = 0x2,
+	SHIELD_FLAG_BLUE = 0x4,
+	SHIELD_FLAG_CRASH_ATTACK = 0x8,
+};
+
 struct Shield
 {
 	// 0x0
@@ -190,11 +250,7 @@ struct Shield
 	s16 duration;
 
 	// 0x6
-	// & 1 - popped by VehPickState_NewState
-	// & 2 - shooting
-	// & 4 - blue shield
-	// & ??? - shooting
-	s16 flags;
+	ShieldFlags flags;
 
 	// 0x8
 	struct Instance *instColor;
@@ -208,17 +264,37 @@ struct Shield
 
 	// 0x18
 };
+CTR_STATIC_ASSERT(offsetof(struct Shield, flags) == 0x6);
+CTR_STATIC_ASSERT(sizeof(struct Shield) == 0x18);
 
 struct MineWeapon;
 
 struct WeaponSlot231
 {
-	// 0x0
-	struct WeaponSlot231 *next;
-	struct WeaponSlot231 *prev;
+	union
+	{
+		// 0x0
+		struct Item item;
+
+		struct
+		{
+			// 0x0
+			struct WeaponSlot231 *next;
+			struct WeaponSlot231 *prev;
+		};
+	};
 
 	// 0x8
 	struct MineWeapon *mineWeapon;
+};
+CTR_STATIC_ASSERT(sizeof(struct WeaponSlot231) == 0xc);
+
+typedef u16 MineWeaponFlags;
+
+enum
+{
+	MINE_WEAPON_FLAG_RED_BEAKER = 0x1,
+	MINE_WEAPON_FLAG_THROWN = 0x2,
 };
 
 // Tnt, Nitro, Beaker
@@ -263,40 +339,40 @@ struct MineWeapon
 
 	// 0x24
 	// number of frames that mine can't hurt parent
-	s16 frameCount_DontHurtParent;
+	s16 parentSafetyFrames;
 
 	// 0x26
 	s16 tntSpinY;
 
 	// 0x28
-	// 1 - red beaker
-	// 2 - thrown (papu or komodo joe) (tnt/potion)
-	u16 extraFlags;
+	MineWeaponFlags flags;
 
 	// 0x2a
 	s16 cooldown;
 };
+CTR_STATIC_ASSERT(offsetof(struct MineWeapon, flags) == 0x28);
+CTR_STATIC_ASSERT(sizeof(struct MineWeapon) == 0x2c);
 
 struct Baron
 {
 	// 0x0
 	// for the baron plane
-	char unused0[0x6];
+	char pad_00[0x6];
 
 	// 0x6
-	s16 unk06;
+	s16 unused06;
 
 	// 0x8
-	char unused8[0x12];
+	char pad_08[0x12];
 
 	// 0x1a
-	s16 unk1A;
+	s16 unused1A;
 
 	// 0x1c
-	char unused1C[0x6];
+	char pad_1C[0x6];
 
 	// 0x22
-	s16 unk22;
+	s16 unused22;
 
 	// 0x24
 	u32 soundID_flags;
@@ -311,6 +387,9 @@ struct Baron
 
 	// 0x30 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Baron, soundID_flags) == 0x24);
+CTR_STATIC_ASSERT(offsetof(struct Baron, pointIndex) == 0x2c);
+CTR_STATIC_ASSERT(sizeof(struct Baron) == 0x30);
 
 struct Blade
 {
@@ -318,6 +397,7 @@ struct Blade
 
 	// 0x4 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct Blade) == 0x4);
 
 struct Crate
 {
@@ -337,6 +417,7 @@ struct Crystal
 
 	// 0x8 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct Crystal) == 0x8);
 
 struct CtrLetter
 {
@@ -344,6 +425,7 @@ struct CtrLetter
 	s16 padding;
 	// 0x8 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct CtrLetter) == 0x8);
 
 struct StartBanner
 {
@@ -351,6 +433,7 @@ struct StartBanner
 	s16 numVertices;
 	// 0x4 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct StartBanner) == 0x4);
 
 struct Armadillo
 {
@@ -393,8 +476,13 @@ struct Armadillo
 	// 0x1c
 	s16 timeAtEdge;
 
+	// 0x1e
+	s16 padding1E;
+
 	// 0x20 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Armadillo, direction) == 0x1a);
+CTR_STATIC_ASSERT(sizeof(struct Armadillo) == 0x20);
 
 struct Fireball
 {
@@ -409,8 +497,8 @@ struct Fireball
 	// just like spiders
 	s16 cooldown;
 
-	// 0x6 (maybe a rot[3]?)
-	s16 unused[3];
+	// 0x6
+	SVec3 rot_unused;
 
 	// 0xC
 	s16 velY;
@@ -421,6 +509,8 @@ struct Fireball
 
 	// 0x10 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Fireball, rot_unused) == 0x6);
+CTR_STATIC_ASSERT(sizeof(struct Fireball) == 0x10);
 
 struct FlameJet
 {
@@ -435,16 +525,19 @@ struct FlameJet
 
 	// 0xC
 	// adds 0x100 per frame
-	s16 unk;
+	s16 unusedPhase;
 
 	// 0xe
 	s16 cooldown;
 
 	// 0x10
-	int audioPtr;
+	u32 soundIDCount;
 
 	// 0x14 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct FlameJet, unusedPhase) == 0xc);
+CTR_STATIC_ASSERT(offsetof(struct FlameJet, soundIDCount) == 0x10);
+CTR_STATIC_ASSERT(sizeof(struct FlameJet) == 0x14);
 
 struct Follower
 {
@@ -456,11 +549,13 @@ struct Follower
 	SVec3 realPos;
 	s16 _pad_realPos;
 };
+CTR_STATIC_ASSERT(sizeof(struct Follower) == 0x18);
 
 struct Fruit
 {
 	struct Driver *driver;
 };
+CTR_STATIC_ASSERT(sizeof(struct Fruit) == 0x4);
 
 struct Minecart
 {
@@ -494,10 +589,12 @@ struct Minecart
 	s16 rotSpeed;
 
 	// 0x28
-	int audioPtr;
+	u32 soundIDCount;
 
 	// 0x2c bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Minecart, posIndex) == 0x14);
+CTR_STATIC_ASSERT(sizeof(struct Minecart) == 0x2c);
 
 struct Orca
 {
@@ -526,13 +623,15 @@ struct Orca
 	s16 numFrames;
 
 	// 0x28
-	s16 midpoint[3]; // ?
+	SVec3 pathDelta;
 
 	// 0x2e
 	s16 direction;
 
 	// 0x30 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Orca, pathDelta) == 0x28);
+CTR_STATIC_ASSERT(sizeof(struct Orca) == 0x30);
 
 struct Plant
 {
@@ -545,13 +644,15 @@ struct Plant
 	// 0x4
 	// 0: left side of track
 	// 1: right side of track
-	s16 LeftOrRight;
+	s16 side;
 
 	// 0x6
 	s16 boolEatingPlayer;
 
 	// 0x8 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Plant, side) == 0x4);
+CTR_STATIC_ASSERT(sizeof(struct Plant) == 0x8);
 
 struct Seal
 {
@@ -562,7 +663,6 @@ struct Seal
 	s16 sealID;
 
 	// 0x8
-	// unused, should erase
 	SVec3 endPos;
 
 	// 0xe
@@ -579,8 +679,7 @@ struct Seal
 	s16 direction;
 
 	// 0x20
-	// unused, should erase
-	SVec3 rotDesiredAlt;
+	SVec3 turnAroundRot;
 
 	// 0x26
 	s16 numFramesSpinning;
@@ -591,6 +690,9 @@ struct Seal
 
 	// 0x30 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Seal, endPos) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct Seal, turnAroundRot) == 0x20);
+CTR_STATIC_ASSERT(sizeof(struct Seal) == 0x30);
 
 struct Snowball
 {
@@ -607,10 +709,11 @@ struct Snowball
 	s16 snowID;
 
 	// 0xC
-	int audioPtr;
+	u32 soundIDCount;
 
 	// 0x10 bytes large
 };
+CTR_STATIC_ASSERT(sizeof(struct Snowball) == 0x10);
 
 struct Spider
 {
@@ -625,7 +728,7 @@ struct Spider
 	s16 delay;
 
 	// 0x6
-	s16 boolNearRoof; // 0 on ground, 1 near roof
+	s16 isNearRoof;
 
 	// 0x8
 	s16 unused;
@@ -636,17 +739,24 @@ struct Spider
 
 	// 0x10 bytes large
 };
+CTR_STATIC_ASSERT(offsetof(struct Spider, isNearRoof) == 0x6);
 CTR_STATIC_ASSERT(offsetof(struct Spider, delay) == 0x4);
 CTR_STATIC_ASSERT(offsetof(struct Spider, shadowInst) == 0xc);
 CTR_STATIC_ASSERT(sizeof(struct Spider) == 0x10);
 
+typedef s32 TeethDirection;
+
+enum
+{
+	TEETH_DIRECTION_CLOSING = -1,
+	TEETH_DIRECTION_IDLE = 0,
+	TEETH_DIRECTION_OPENING = 1,
+};
+
 struct Teeth
 {
 	// 0x0
-	// -1: closing
-	// 0: not moving
-	// 1: opening
-	int direction;
+	TeethDirection direction;
 
 	// 0x4
 	// countdown starts when door
@@ -658,29 +768,37 @@ struct Teeth
 };
 CTR_STATIC_ASSERT(sizeof(struct Teeth) == 0x8);
 
+typedef s16 TurtleDirection;
+typedef s16 TurtleState;
+
+enum
+{
+	TURTLE_DIRECTION_RISING = 0,
+	TURTLE_DIRECTION_FALLING = 1,
+
+	TURTLE_STATE_FULLY_DOWN = 0,
+	TURTLE_STATE_NOT_FULLY_DOWN = 1,
+};
+
 struct Turtle
 {
 	// 0x0
 	s16 timer;
 
 	// 0x2
-	// 0 from moment it hits bottom to moment it hits top
-	// 1 from moment it hits top to moment it hits bottom
-	s16 direction;
+	TurtleDirection direction;
 
 	// 0x4
 	s16 turtleID;
 
 	// 0x6
-	s16 unk6;
+	s16 padding6;
 
 	// 0x8
-	// 0 - fully down
-	// 1 - not fully down
-	s16 state;
+	TurtleState state;
 
 	// 0xA
-	s16 unkA;
+	s16 paddingA;
 
 	// 0xC bytes large
 };
@@ -713,3 +831,5 @@ struct OverlayDATA_231
 
 extern struct OverlayRDATA_231 R231;
 extern struct OverlayDATA_231 D231;
+
+#endif

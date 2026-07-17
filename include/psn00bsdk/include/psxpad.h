@@ -13,10 +13,13 @@
 
 #pragma once
 
-#ifdef INTELLISENSE_HINT
-#include <stdint-gcc.h>
-#else
 #include <stdint.h>
+
+#if defined(_MSC_VER)
+#pragma pack(push, 1)
+#define PSN00BSDK_PACKED
+#else
+#define PSN00BSDK_PACKED __attribute__((packed))
 #endif
 
 /* Controller type and button definitions */
@@ -117,7 +120,7 @@ typedef enum
 
 /* Controller response as returned by BIOS driver */
 
-typedef struct __attribute__((packed)) _PADTYPE
+typedef struct PSN00BSDK_PACKED _PADTYPE
 {
 	uint8_t stat;     // Status
 	uint8_t len : 4;  // Payload length / 2, 0 for multitap
@@ -163,7 +166,7 @@ typedef struct __attribute__((packed)) _PADTYPE
 
 /* Raw responses */
 
-typedef struct __attribute__((packed)) _PadResponse
+typedef struct PSN00BSDK_PACKED _PadResponse
 {
 	uint8_t len : 4;  // Payload length / 2, 0 for multitap
 	uint8_t type : 4; // Device type (PadTypeID)
@@ -202,7 +205,7 @@ typedef struct __attribute__((packed)) _PadResponse
 	};
 } PadResponse;
 
-typedef struct __attribute__((packed)) _MemCardResponse
+typedef struct PSN00BSDK_PACKED _MemCardResponse
 {
 	uint8_t flags; // Status flags (MemCardStatusFlag)
 	uint8_t type1; // Must be 0x5a
@@ -242,7 +245,7 @@ typedef struct __attribute__((packed)) _MemCardResponse
 
 /* Raw requests */
 
-typedef struct __attribute__((packed)) _PadRequest
+typedef struct PSN00BSDK_PACKED _PadRequest
 {
 	uint8_t addr;     // Must be 0x01 (or 02/03/04 for multitap pads)
 	uint8_t cmd;      // Command (PadCommand)
@@ -252,7 +255,7 @@ typedef struct __attribute__((packed)) _PadRequest
 	uint8_t dummy[4];
 } PadRequest;
 
-typedef struct __attribute__((packed)) _MemCardRequest
+typedef struct PSN00BSDK_PACKED _MemCardRequest
 {
 	uint8_t addr; // Must be 0x81 (or 02/03/04 for multitap cards)
 	uint8_t cmd;  // Command (MemCardCommand)
@@ -263,3 +266,8 @@ typedef struct __attribute__((packed)) _MemCardRequest
 	uint8_t checksum;  // = lba_h ^ lba_l ^ data (CMD_WRITE only)
 	uint8_t dummy2[3];
 } MemCardRequest;
+
+#if defined(_MSC_VER)
+#pragma pack(pop)
+#endif
+#undef PSN00BSDK_PACKED

@@ -19,8 +19,6 @@ enum ArcadeAdventureEndMenuConstants
 	AA_CTR_ALREADY_UNLOCKED_FLYOUT_FRAME = CTR_SECONDS_TO_FRAMES(10),
 	AA_CONFIRM_BUTTON_MASK = BTN_CROSS_one | BTN_CIRCLE,
 	AA_MENU_READY_FLAG = 1,
-	AA_RACE_HUD_FLAG = 1,
-	AA_CUP_STANDINGS_HUD_FLAG = 4,
 	AA_RESULT_WAIT_FRAMES = CTR_SECONDS_TO_FRAMES(1),
 	AA_RESULT_MAX_FRAMES = CTR_SECONDS_TO_FRAMES(30),
 	AA_DRIVER_ICON_STAGGER_FRAMES = 10,
@@ -121,7 +119,7 @@ void AA_EndEvent_DrawMenu(void)
 			b32 shouldDrawToken = false;
 			b32 shouldScaleLetters = false;
 			s32 tokenAwardTextFrame = -1;
-			if (CHECK_ADV_BIT(adv->rewards, rewardBit) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, rewardBit))
 			{
 				letterScaleOffset = hudC->scale.x;
 				letterScaleOffset -= (letterScaleOffset < AA_CTR_LETTER_BASE_SCALE) ? AA_CTR_LETTER_SCALE_BIAS_LOW : AA_CTR_LETTER_BASE_SCALE;
@@ -396,10 +394,10 @@ void AA_EndEvent_DrawMenu(void)
 		sdata->numIconsEOR = 1;
 
 		// Disable HUD
-		gGT->hudFlags &= ~AA_RACE_HUD_FLAG;
+		gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 
 		// Enable Cup Standings
-		gGT->hudFlags |= AA_CUP_STANDINGS_HUD_FLAG;
+		gGT->hudFlags |= HUD_FLAG_CUP_STANDINGS;
 		return;
 	}
 
@@ -437,15 +435,6 @@ void AA_EndEvent_DrawMenu(void)
 
 	RECTMENU_ClearInput();
 
-	sdata->Loading.OnBegin.AddBitsConfig0 |= ADVENTURE_ARENA;
-	sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_BOSS;
-	sdata->Loading.OnBegin.RemBitsConfig8 |= TOKEN_RACE;
-
-	if (IS_BOSS_RACE(gGT->gameMode1))
-	{
-		sdata->Loading.OnBegin.AddBitsConfig8 |= SPAWN_AT_BOSS;
-	}
-
 	if (!didWin)
 	{
 		RECTMENU_Show(&data.menuRetryExit);
@@ -457,12 +446,16 @@ void AA_EndEvent_DrawMenu(void)
 
 	sdata->framesSinceRaceEnded = 0;
 	sdata->numIconsEOR = 1;
+	sdata->Loading.OnBegin.AddBitsConfig0 |= ADVENTURE_ARENA;
 
 	// Load the levelID for Adventure Hub that you came from
 	s16 levSpawn = gGT->prevLEV;
 
 	if (IS_BOSS_RACE(gGT->gameMode1))
 	{
+		sdata->Loading.OnBegin.AddBitsConfig8 |= SPAWN_AT_BOSS;
+		sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_BOSS;
+
 		// Reward bit of key unlocked, and boss beaten.
 		rewardBit = gGT->bossID + ADV_REWARD_FIRST_BOSS_KEY;
 
@@ -470,7 +463,7 @@ void AA_EndEvent_DrawMenu(void)
 		if (gGT->bossID < AA_KEY_BOSS_COUNT)
 		{
 			// only if first time beating boss
-			if (CHECK_ADV_BIT(adv->rewards, rewardBit) == 0)
+			if (!CHECK_ADV_BIT(adv->rewards, rewardBit))
 			{
 				// Go to Podium after returning to Adventure Hub
 				gGT->podiumRewardID = STATIC_KEY; // key
@@ -517,7 +510,7 @@ void AA_EndEvent_DrawMenu(void)
 	// if trophy is not won,
 	// Dingo Bingo needs to win trophy and token in the same race
 	rewardBit = gGT->levelID + ADV_REWARD_FIRST_TROPHY;
-	if (CHECK_ADV_BIT(adv->rewards, rewardBit) == 0)
+	if (!CHECK_ADV_BIT(adv->rewards, rewardBit))
 	{
 		// unlock tropy
 		UNLOCK_ADV_BIT(adv->rewards, rewardBit);
@@ -526,6 +519,7 @@ void AA_EndEvent_DrawMenu(void)
 		gGT->podiumRewardID = STATIC_TROPHY;
 	}
 
+	sdata->Loading.OnBegin.RemBitsConfig8 |= TOKEN_RACE;
 	MainRaceTrack_RequestLoad(levSpawn);
 }
 
@@ -685,7 +679,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 
 	UI_Lerp2D_Linear(pos.v, lerpStartX, lerpEndY, lerpEndX, lerpEndY, currFrame, endFrame);
 
-	UI_DrawRaceClock(pos.x, pos.y, 1, driver);
+	UI_DrawRaceClock(pos.x, pos.y, UI_RACE_CLOCK_SHOW_RESULTS, driver);
 
 	s16 totalTextWidth = DecalFont_GetLineWidth(sdata->lngStrings[LNG_TOTAL], FONT_BIG);
 
@@ -734,7 +728,7 @@ struct MenuRow rows222[5] = {
     },
     // NULL, end of menu
     {
-        .stringIndex = 0xFFFF,
+        .stringIndex = RECTMENU_STRING_NONE,
         .rowOnPressUp = 0,
         .rowOnPressDown = 0,
         .rowOnPressLeft = 0,
@@ -742,11 +736,11 @@ struct MenuRow rows222[5] = {
     }};
 
 struct RectMenu menu222 = {
-    .stringIndexTitle = 0xFFFF,
+    .stringIndexTitle = RECTMENU_STRING_NONE,
     .posX_curr = 256,
     .posY_curr = 170,
     .unk1 = 0,
-    .state = (0x800 | USE_SMALL_FONT | CENTER_ON_COORDS), // 0x883
+    .state = RECTMENU_STATE_SMALL_CENTERED,
     .rows = rows222,
     .funcPtr = UI_RaceEnd_MenuProc,
     .drawStyle = 4,
@@ -754,11 +748,11 @@ struct RectMenu menu222 = {
 };
 
 struct RectMenu menu222_2P = {
-    .stringIndexTitle = 0xFFFF,
+    .stringIndexTitle = RECTMENU_STRING_NONE,
     .posX_curr = 256,
     .posY_curr = 108,
     .unk1 = 0,
-    .state = (0x800 | USE_SMALL_FONT | CENTER_ON_COORDS), // 0x883
+    .state = RECTMENU_STATE_SMALL_CENTERED,
     .rows = rows222,
     .funcPtr = UI_RaceEnd_MenuProc,
     .drawStyle = 4,

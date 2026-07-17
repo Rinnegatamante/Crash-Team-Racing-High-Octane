@@ -40,11 +40,10 @@ void RB_GenericMine_LInB(struct Instance *inst)
 	inst->thread = t;
 	t->inst = inst;
 
-	// Do we need the parent?
-	// why are these paired to P1 in Crystal Challenge?
+	// Retail parents crystal-challenge level mines to driver 0.
 	parentInst = gGT->drivers[0]->instSelf;
 
-	t->funcThCollide = RB_Hazard_ThCollide_Generic;
+	t->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 	t->parentThread = parentInst->thread;
 	t->modelIndex = inst->model->id;
 
@@ -56,8 +55,9 @@ void RB_GenericMine_LInB(struct Instance *inst)
 	mw->velocity.y = 0;
 	mw->velocity.z = 0;
 	mw->boolDestroyed = 0;
-	mw->frameCount_DontHurtParent = 0;
-	mw->extraFlags = 0;
+	mw->parentSafetyFrames = 0;
+	mw->tntSpinY = 0;
+	mw->flags = 0;
 	mw->stopFallAtY = inst->matrix.t[1];
 
 	RB_MinePool_Add(mw);
@@ -85,10 +85,10 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	mw = inst->thread->object;
 	model = inst->model->id;
 
-	boolPotion = (u32)(model - 0x46) < 2;
+	boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;
 
 	// if weapon is "thrown" like Komodo Joe
-	if ((mw->extraFlags & 2) != 0)
+	if ((mw->flags & MINE_WEAPON_FLAG_THROWN) != 0)
 	{
 		if (model == STATIC_CRATE_TNT)
 		{
@@ -178,7 +178,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		param = 0x1900;
 	}
 
-	coll = RB_Hazard_CollideWithDrivers(inst, mw->frameCount_DontHurtParent, param, mw->instParent);
+	coll = RB_Hazard_CollideWithDrivers(inst, mw->parentSafetyFrames, param, mw->instParent);
 
 	// if no collision
 	if (coll == 0)
@@ -213,7 +213,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		coll = (struct Instance *)RB_Hazard_HurtDriver(d, 1, mw->instParent->thread->object, param);
 
 		// if collision, and if this was a red potion
-		if ((coll != 0) && (mw->extraFlags & 1) != 0)
+		if ((coll != 0) && (mw->flags & MINE_WEAPON_FLAG_RED_BEAKER) != 0)
 		{
 			RB_RainCloud_Init(d);
 		}
@@ -236,7 +236,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		param = 0x1e;
 
 		// green beaker
-		if (model == 0x47)
+		if (model == STATIC_BEAKER_GREEN)
 		{
 			// make player icon green
 			param = -0x1e;
@@ -290,11 +290,9 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		}
 
 		// if model is Nitro
-		if (model == 6)
+		if (model == PU_EXPLOSIVE_CRATE)
 		{
 			RB_Hazard_HurtDriver(d, 2, mw->instParent->thread->object, 2);
-
-			// Why does icon turn red in gameplay?
 
 			// icon damage timer, draw icon as green
 			d->damageColorTimer = -0x1e;
@@ -303,9 +301,9 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		}
 
 		// if model is TNT
-		if (model == 0x27)
+		if (model == STATIC_CRATE_TNT)
 		{
-			// RB_Hazard_HurtDriver (keep driving?)
+			// damageType 0 keeps driving unless the shield/mask path absorbs TNT.
 			crate = (struct Crate *)RB_Hazard_HurtDriver(d, 0, mw->instParent->thread->object, 2);
 
 			if (crate == 0)
@@ -332,7 +330,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 				// play Hit TNT "bounce" sound
 				PlaySound3D(0x50, inst);
 
-				inst->bitCompressed_NormalVector_AndDriverIndex = 0;
+				inst->compressedNormalAndDriverIndex = 0;
 				inst->flags |= PIXEL_LOD;
 				mw->velocity.y = 0x30;
 				mw->velocity.x = 0;
@@ -347,31 +345,28 @@ void RB_GenericMine_ThTick(struct Thread *t)
 			}
 
 			// if this TNT has an InstDef, then it is part of LEV,
-			// kill the old thread and birth a new one (why?)
+			// hide the level instance and birth a carried TNT instance
 			else
 			{
-				// DAT_800ab9fc
-				// "tnt1"
-
 				// create thread for TNT, get an Instance
-				instCrate = INSTANCE_BirthWithThread(0x27, sdata->s_tnt1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
+				instCrate = INSTANCE_BirthWithThread(STATIC_CRATE_TNT, sdata->s_tnt1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
 
 				instCrate->matrix = inst->matrix;
 
 				instCrate->thread->funcThDestroy = PROC_DestroyInstance;
 
-				instCrate->thread->funcThCollide = RB_Hazard_ThCollide_Generic;
+				instCrate->thread->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
 				// Get object from thread
 				tnt = instCrate->thread->object;
 
 				tnt->instParent = d->instSelf;
 
-				tnt->frameCount_DontHurtParent = 10;
+				tnt->parentSafetyFrames = 10;
 				tnt->boolDestroyed = 0;
 				tnt->tntSpinY = 0;
 				tnt->crateInst = 0;
-				tnt->extraFlags = 0;
+				tnt->flags = 0;
 
 				// give driver to tnt object
 				tnt->driverTarget = d;
@@ -385,7 +380,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 				// TNT bounce sound
 				PlaySound3D(0x50, instCrate);
 
-				instCrate->bitCompressed_NormalVector_AndDriverIndex = 0;
+				instCrate->compressedNormalAndDriverIndex = 0;
 				instCrate->flags |= PIXEL_LOD;
 				tnt->velocity.x = 0;
 				tnt->velocity.y = 0x30;
@@ -412,9 +407,9 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	}
 LAB_800ad17c:
 
-	if (mw->frameCount_DontHurtParent != 0)
+	if (mw->parentSafetyFrames != 0)
 	{
-		mw->frameCount_DontHurtParent--;
+		mw->parentSafetyFrames--;
 	}
 
 	// if mineWeapon->boolDestroyed == 0

@@ -290,5 +290,6 @@ u8 *howl_GetNextNote(u8 *currNote, int *noteLen)
 
 void cseq_opcode00_empty(struct SongSeq *seq)
 {
+	(void)seq;
 	// left empty by ND
 }

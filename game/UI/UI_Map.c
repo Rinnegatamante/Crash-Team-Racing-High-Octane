@@ -1,11 +1,60 @@
 #include <common.h>
 
+enum UIMapConstants
+{
+	UI_MAP_NEUTRAL_COLOR = 0x808080,
+	UI_MAP_COLOR_MODE_BLACK = 2,
+	UI_MAP_COLOR_MODE_BLUE = 3,
+	UI_MAP_BLUE_OUTLINE_COLOR = 0x402000,
+	UI_MAP_TPAGE_BLEND_MASK = 0xff9f,
+	UI_MAP_TPAGE_BLEND_SHIFT = 5,
+	UI_MAP_SEMI_TRANS_CODE_BIT = 2,
+	UI_MAP_MODE_0_DEGREES = 0,
+	UI_MAP_MODE_90_DEGREES = 1,
+	UI_MAP_MODE_180_DEGREES = 2,
+	UI_MAP_ICON_Y_OFFSET = 0x10,
+	UI_MAP_3P_OFFSET_X = 60,
+	UI_MAP_3P_OFFSET_Y = 10,
+	UI_MAP_PLAYER_ICON_AI = 0x31,
+	UI_MAP_PLAYER_ICON_HUMAN = 0x32,
+	UI_MAP_WARPBALL_ICON = 0x20,
+	UI_MAP_WARPBALL_TARGET_ICON = 0x21,
+	UI_MAP_ICON_GROUP = 5,
+	UI_MAP_ARROW_ROT_FLIP = 0x800,
+	UI_MAP_ARROW_ROT_FLAG = 0x1000,
+	UI_MAP_ICON_SCALE = 0x1000,
+	UI_MAP_ADV_ARROW_SCALE = 0x800,
+};
+
+CTR_STATIC_ASSERT(UI_MAP_NEUTRAL_COLOR == 0x808080);
+CTR_STATIC_ASSERT(UI_MAP_COLOR_MODE_BLACK == 2);
+CTR_STATIC_ASSERT(UI_MAP_COLOR_MODE_BLUE == 3);
+CTR_STATIC_ASSERT(UI_MAP_BLUE_OUTLINE_COLOR == 0x402000);
+CTR_STATIC_ASSERT(UI_MAP_TPAGE_BLEND_MASK == 0xff9f);
+CTR_STATIC_ASSERT(UI_MAP_TPAGE_BLEND_SHIFT == 5);
+CTR_STATIC_ASSERT(UI_MAP_SEMI_TRANS_CODE_BIT == 2);
+CTR_STATIC_ASSERT(UI_MAP_MODE_0_DEGREES == 0);
+CTR_STATIC_ASSERT(UI_MAP_MODE_90_DEGREES == 1);
+CTR_STATIC_ASSERT(UI_MAP_MODE_180_DEGREES == 2);
+CTR_STATIC_ASSERT(UI_MAP_ICON_Y_OFFSET == 0x10);
+CTR_STATIC_ASSERT(UI_MAP_3P_OFFSET_X == 60);
+CTR_STATIC_ASSERT(UI_MAP_3P_OFFSET_Y == 10);
+CTR_STATIC_ASSERT(UI_MAP_PLAYER_ICON_AI == 0x31);
+CTR_STATIC_ASSERT(UI_MAP_PLAYER_ICON_HUMAN == 0x32);
+CTR_STATIC_ASSERT(UI_MAP_WARPBALL_ICON == 0x20);
+CTR_STATIC_ASSERT(UI_MAP_WARPBALL_TARGET_ICON == 0x21);
+CTR_STATIC_ASSERT(UI_MAP_ICON_GROUP == 5);
+CTR_STATIC_ASSERT(UI_MAP_ARROW_ROT_FLIP == 0x800);
+CTR_STATIC_ASSERT(UI_MAP_ARROW_ROT_FLAG == 0x1000);
+CTR_STATIC_ASSERT(UI_MAP_ICON_SCALE == 0x1000);
+CTR_STATIC_ASSERT(UI_MAP_ADV_ARROW_SCALE == 0x800);
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004d614-0x8004d8b4.
 void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *otMem, u32 colorID)
 {
 	s16 mapBottomHeight;
 	s16 mapTopHeight;
-	int iVar9;
+	struct UIMapSpawnMetadata *mapMetadata;
 	POLY_FT4 *p;
 	u32 color;
 	u32 transparency;
@@ -13,15 +62,15 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	gGT = sdata->gGT;
 
-	iVar9 = 0;
+	mapMetadata = NULL;
 
 	// draw minimap with neutral/none vertex color, minimap's regular color is white
-	color = 0x808080;
+	color = UI_MAP_NEUTRAL_COLOR;
 	transparency = colorID;
 
 	// draw map black
 	// used for the minimap shadow in the track select screen
-	if (colorID == 2)
+	if (colorID == UI_MAP_COLOR_MODE_BLACK)
 	{
 		color = 0;
 		transparency = 0;
@@ -29,16 +78,16 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	// draw minimap blue
 	// used for the minimap outline in the track select screen
-	if (colorID == 3)
+	if (colorID == UI_MAP_COLOR_MODE_BLUE)
 	{
-		color = 0x402000;
+		color = UI_MAP_BLUE_OUTLINE_COLOR;
 		transparency = 0;
 	}
 
 	if (gGT->level1->ptrSpawnType1 != 0)
 	{
 		void **pointers = ST1_GETPOINTERS(gGT->level1->ptrSpawnType1);
-		iVar9 = (int)pointers[ST1_MAP];
+		mapMetadata = pointers[ST1_MAP];
 	}
 
 	// position of the bottom margin of the primitive for the bottom half of the minimap
@@ -48,13 +97,13 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	// if these conditions are met, then draw the top half of the minimap; otherwise, only draw the bottom half
 	// not sure when the game ever draws only the bottom half
-	if (((iVar9 != 0) && (*(s16 *)(iVar9 + 0x12) == 0)) ||
+	if (((mapMetadata != NULL) && (mapMetadata->topHalfMode == 0)) ||
 
 	    // if in main menu (character selection, track selection, any part of it)
 	    ((gGT->gameMode1 & MAIN_MENU) != 0))
 	{
 		// r0, g0, b0 (vertex color)
-		*(int *)&p->r0 = color;
+		CtrGpu_WriteColorCode(&p->r0, color);
 
 		// position of the top margin of the primitive for the top half of the minimap
 		mapTopHeight = posY - (((u16)mapTop->texLayout.v2 - (u16)mapTop->texLayout.v0) + mapBottomHeight);
@@ -70,7 +119,7 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 	}
 
 	// r0, g0, b0 (vertex color)
-	*(int *)&p->r0 = color;
+	CtrGpu_WriteColorCode(&p->r0, color);
 
 	p->y0 = posY - mapBottomHeight;
 	p->y1 = posY - mapBottomHeight;
@@ -84,6 +133,8 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empty, struct PrimMem *primMem, uint32_t *otMem, u32 transparency)
 {
+	(void)empty;
+	(void)primMem;
 	s16 leftX;
 	s16 sizeX;
 
@@ -102,48 +153,29 @@ void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empt
 	setPolyFT4(p);
 
 	// UVs
-	*(int *)&p->u0 = *(int *)&icon->texLayout.u0;
-	*(int *)&p->u1 = *(int *)&icon->texLayout.u1;
-	*(int *)&p->u2 = *(int *)&icon->texLayout.u2;
-	*(s16 *)&p->u3 = *(s16 *)&icon->texLayout.u3;
+	CtrGpu_WritePackedUVWord(&p->u0, CTR_ReadU32LE(&icon->texLayout.u0));
+	CtrGpu_WritePackedUVWord(&p->u1, CTR_ReadU32LE(&icon->texLayout.u1));
+	CtrGpu_WritePackedUVWord(&p->u2, CTR_ReadU32LE(&icon->texLayout.u2));
+	CtrGpu_WritePackedUV(&p->u3, CTR_ReadU16LE(&icon->texLayout.u3));
 
 	if (transparency != 0)
 	{
-		p->tpage = (p->tpage & 0xff9f) | ((u16)transparency << 5);
+		p->tpage = (p->tpage & UI_MAP_TPAGE_BLEND_MASK) | ((u16)transparency << UI_MAP_TPAGE_BLEND_SHIFT);
 	}
 
-	p->code |= 2;
+	p->code |= UI_MAP_SEMI_TRANS_CODE_BIT;
 
 	AddPrim(otMem, p);
 }
 
-// move to headers later
-struct Map
-{
-	s16 worldEndX;
-	s16 worldEndY;
-	s16 worldStartX;
-	s16 worldStartY;
-
-	s16 iconSizeX;
-	s16 iconSizeY;
-	s16 iconStartX;
-	s16 iconStartY;
-
-	s16 mode;
-};
-
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004d8b4-0x8004dbac.
-void UI_Map_GetIconPos(s16 *m, int *posX, int *posY)
-
+void UI_Map_GetIconPos(struct UIMap *map, int *posX, int *posY)
 {
 	s16 mode;
 	int addX;
 	int addY;
 	int worldRangeX;
 	int worldRangeY;
-
-	struct Map *map = (struct Map *)m;
 
 #if 0
   // trap() functions were removed from original,
@@ -156,21 +188,21 @@ void UI_Map_GetIconPos(s16 *m, int *posX, int *posY)
 	worldRangeX = map->worldEndX - map->worldStartX;
 	worldRangeY = map->worldEndY - map->worldStartY;
 
-	if (mode == 0)
+	if (mode == UI_MAP_MODE_0_DEGREES)
 	{
 		// 0 degrees
 		addX = (*posX * map->iconSizeX) / worldRangeX;
 		addY = (*posY * map->iconSizeY * 2) / worldRangeY;
 	}
 
-	else if (mode == 1)
+	else if (mode == UI_MAP_MODE_90_DEGREES)
 	{
 		// 90 degrees
 		addX = -(*posY * map->iconSizeX) / worldRangeY;
 		addY = (*posX * map->iconSizeY * 2) / worldRangeX;
 	}
 
-	else if (mode == 2)
+	else if (mode == UI_MAP_MODE_180_DEGREES)
 	{
 		// 180 degrees
 		addX = -(*posX * map->iconSizeX) / worldRangeX;
@@ -186,27 +218,29 @@ void UI_Map_GetIconPos(s16 *m, int *posX, int *posY)
 
 	if (sdata->gGT->numPlyrCurrGame == 3)
 	{
-		addX -= 60;
-		addY += 10;
+		addX -= UI_MAP_3P_OFFSET_X;
+		addY += UI_MAP_3P_OFFSET_Y;
 	}
 
 	*posX = map->iconStartX + addX;
-	*posY = map->iconStartY + addY - 0x10;
+	*posY = map->iconStartY + addY - UI_MAP_ICON_Y_OFFSET;
 	return;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004dbac-0x8004dc44.
 // Draw dot for Player on 2D Adv Map
-void UI_Map_DrawAdvPlayer(int ptrMap, int *matrix, int unused1, int unused2, s16 param_5, s16 param_6)
+void UI_Map_DrawAdvPlayer(struct UIMap *map, const s32 worldPos[3], int unused1, int unused2, s16 rot, s16 scale)
 {
+	(void)unused1;
+	(void)unused2;
 	int *arrowColor;
 	int posX;
 	int posY;
 
-	posX = *matrix;
-	posY = matrix[2];
+	posX = worldPos[0];
+	posY = worldPos[2];
 
-	UI_Map_GetIconPos((s16 *)ptrMap, &posX, &posY);
+	UI_Map_GetIconPos(map, &posX, &posY);
 
 	arrowColor = &data.playerIconAdvMap.vertCol1[0];
 	if ((sdata->gGT->timer & 2) != 0)
@@ -214,30 +248,30 @@ void UI_Map_DrawAdvPlayer(int ptrMap, int *matrix, int unused1, int unused2, s16
 		arrowColor = &data.playerIconAdvMap.vertCol2[0];
 	}
 
-	AH_Map_HubArrow(posX, posY, &data.playerIconAdvMap.unk_playerAdvMap[0], (char *)arrowColor, (int)param_6, (int)param_5);
+	AH_Map_HubArrow(posX, posY, &data.playerIconAdvMap.pos[0], (char *)arrowColor, (int)scale, (int)rot);
 
 	return;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004dc44-0x8004dd5c.
 // Draw icon on map
-void UI_Map_DrawRawIcon(int ptrMap, int *param_2, int iconID, int colorID, int unused, s16 scale)
+void UI_Map_DrawRawIcon(struct UIMap *map, const s32 worldPos[3], int iconID, int colorID, int unused, s16 scale)
 {
 	int posX;
 	int posY;
-	int *ptrColor;
+	u32 *ptrColor;
 	struct GameTracker *gGT = sdata->gGT;
 
 	(void)unused;
 
-	posX = param_2[0];
-	posY = param_2[2];
+	posX = worldPos[0];
+	posY = worldPos[2];
 
-	UI_Map_GetIconPos((s16 *)ptrMap, &posX, &posY);
+	UI_Map_GetIconPos(map, &posX, &posY);
 
 	ptrColor = data.ptrColor[colorID];
 
-	struct Icon **iconPtrArray = ICONGROUP_GETICONS(sdata->gGT->iconGroup[5]);
+	struct Icon **iconPtrArray = ICONGROUP_GETICONS(sdata->gGT->iconGroup[UI_MAP_ICON_GROUP]);
 
 	DecalHUD_DrawPolyGT4(iconPtrArray[iconID], posX, posY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, ptrColor[0], ptrColor[1], ptrColor[2],
 	                     ptrColor[3], 0, (int)scale);
@@ -246,23 +280,21 @@ void UI_Map_DrawRawIcon(int ptrMap, int *param_2, int iconID, int colorID, int u
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004dd5c-0x8004dee8.
-void UI_Map_DrawDrivers(int ptrMap, struct Thread *bucket, s16 *param_3)
-
+void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIconCounter)
 {
 	int kartColor;
 	int iconID;
 	struct Driver *d;
 	struct GameTracker *gGT = sdata->gGT;
 
-	// if 2P or 4P
-	if ((gGT->numPlyrCurrGame & 1) == 0)
+	for (/* bucket */; bucket != 0; bucket = bucket->siblingThread, *driverIconCounter = *driverIconCounter + 1)
 	{
-		// quit, no map drawn
-		return;
-	}
+		// if 2P or 4P
+		if ((gGT->numPlyrCurrGame & 1) == 0)
+		{
+			continue;
+		}
 
-	for (/* bucket */; bucket != 0; bucket = bucket->siblingThread, *param_3 = *param_3 + 1)
-	{
 		// Player structure
 		d = bucket->object;
 
@@ -271,7 +303,7 @@ void UI_Map_DrawDrivers(int ptrMap, struct Thread *bucket, s16 *param_3)
 		kartColor = data.characterIDs[d->driverID] + 5;
 
 		// default (AI)
-		iconID = 0x31;
+		iconID = UI_MAP_PLAYER_ICON_AI;
 
 		// TO-DO: Should we just spawn player threads
 		// and enable the AI flag anyway? What would it do?
@@ -289,22 +321,23 @@ void UI_Map_DrawDrivers(int ptrMap, struct Thread *bucket, s16 *param_3)
 			if ((gGT->gameMode1 & ADVENTURE_ARENA) != 0)
 			{
 				// Draw dot for Player on 2D Adv Map
-				UI_Map_DrawAdvPlayer(ptrMap, (int *)&bucket->inst->matrix.t[0], 0x32, kartColor, (d->rotCurr.y + 0x800U) | 0x1000, 0x800);
+				UI_Map_DrawAdvPlayer(map, &bucket->inst->matrix.t[0], UI_MAP_PLAYER_ICON_HUMAN, kartColor,
+				                     (d->rotCurr.y + UI_MAP_ARROW_ROT_FLIP) | UI_MAP_ARROW_ROT_FLAG, UI_MAP_ADV_ARROW_SCALE);
 
 				continue;
 			}
 
 			// Player
-			iconID = 0x32;
+			iconID = UI_MAP_PLAYER_ICON_HUMAN;
 		}
 
-		UI_Map_DrawRawIcon(ptrMap, (int *)&bucket->inst->matrix.t[0], iconID, (s16)kartColor, 0, 0x1000);
+		UI_Map_DrawRawIcon(map, &bucket->inst->matrix.t[0], iconID, (s16)kartColor, 0, UI_MAP_ICON_SCALE);
 	}
 	return;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004dee8-0x8004dffc.
-void UI_Map_DrawGhosts(int ptrMap, struct Thread *bucket)
+void UI_Map_DrawGhosts(struct UIMap *map, struct Thread *bucket)
 {
 	int color;
 	struct Driver *d;
@@ -314,16 +347,14 @@ void UI_Map_DrawGhosts(int ptrMap, struct Thread *bucket)
 	{
 		d = bucket->object;
 
-		// Need to finish Driver struct
-
 		// if ghost not initialized
-		if (*(s16 *)((int)d + 0x632) == 0)
+		if (d->ghostBoolInit == 0)
 		{
 			continue;
 		}
 
 		// ghost made by player
-		if (*(s16 *)((int)d + 0x630) == 0)
+		if (d->ghostID == 0)
 		{
 			// flash red and blue
 
@@ -353,16 +384,15 @@ void UI_Map_DrawGhosts(int ptrMap, struct Thread *bucket)
 			}
 		}
 
-		UI_Map_DrawRawIcon(ptrMap, (int *)&bucket->inst->matrix.t[0], 0x31, color, 0, 0x1000);
+		UI_Map_DrawRawIcon(map, &bucket->inst->matrix.t[0], UI_MAP_PLAYER_ICON_AI, color, 0, UI_MAP_ICON_SCALE);
 	}
 	return;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004dffc-0x8004e0e0.
-void UI_Map_DrawTracking(int ptrMap, struct Thread *bucket)
-
+void UI_Map_DrawTracking(struct UIMap *map, struct Thread *bucket)
 {
-	int uVar1;
+	int targetColor;
 	struct Instance *inst;
 	struct TrackerWeapon *tw;
 	struct Driver *d;
@@ -381,7 +411,7 @@ void UI_Map_DrawTracking(int ptrMap, struct Thread *bucket)
 		// == only draw warpball ==
 
 		// draw warpball
-		UI_Map_DrawRawIcon(ptrMap, (int *)&inst->matrix.t[0], 0x20, 0, 0, 0x1000);
+		UI_Map_DrawRawIcon(map, &inst->matrix.t[0], UI_MAP_WARPBALL_ICON, 0, 0, UI_MAP_ICON_SCALE);
 
 		// driver target
 		tw = (struct TrackerWeapon *)inst->thread->object;
@@ -396,13 +426,13 @@ void UI_Map_DrawTracking(int ptrMap, struct Thread *bucket)
 		// == only draw target if target exists ==
 
 		// flicker
-		uVar1 = 4;
+		targetColor = CRASH_BLUE;
 		if ((sdata->gGT->timer & 1) != 0)
 		{
-			uVar1 = 3;
+			targetColor = CORTEX_RED;
 		}
 
-		UI_Map_DrawRawIcon(ptrMap, (int *)&d->instSelf->matrix.t[0], 0x21, uVar1, 0, 0x1000);
+		UI_Map_DrawRawIcon(map, &d->instSelf->matrix.t[0], UI_MAP_WARPBALL_TARGET_ICON, targetColor, 0, UI_MAP_ICON_SCALE);
 	}
 	return;
 }

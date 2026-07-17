@@ -1,6 +1,6 @@
 #include <common.h>
 
-struct OverlayDATA_231 D231 = {.minePoolItem = {0}, .minePoolTaken = 0, .minePoolFree = 0};
+struct OverlayDATA_231 D231;
 
 #ifdef CTR_NATIVE
 static struct OverlayDATA_231 s_d231InitialState;

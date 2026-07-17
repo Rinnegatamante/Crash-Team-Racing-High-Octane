@@ -232,87 +232,87 @@ extern int doCOP2(int op);
 // load ctc2 8-11
 #define gte_SetLightMatrix(r0)                      \
 	{                                               \
-		CTC2(*(uint32_t *)((char *)(r0)), 8);       \
-		CTC2(*(uint32_t *)((char *)(r0) + 4), 9);   \
-		CTC2(*(uint32_t *)((char *)(r0) + 8), 10);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 12), 11); \
-		CTC2(*(uint32_t *)((char *)(r0) + 16), 12); \
+		CTC2(CTR_ReadU32LE((char *)(r0)), 8);       \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 4), 9);   \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 8), 10);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 12), 11); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 16), 12); \
 	}
 
 // load ctc2 16-20
 #define gte_SetColorMatrix(r0)                      \
 	{                                               \
-		CTC2(*(uint32_t *)((char *)(r0)), 16);      \
-		CTC2(*(uint32_t *)((char *)(r0) + 4), 17);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 8), 18);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 12), 19); \
-		CTC2(*(uint32_t *)((char *)(r0) + 16), 20); \
+		CTC2(CTR_ReadU32LE((char *)(r0)), 16);      \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 4), 17);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 8), 18);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 12), 19); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 16), 20); \
 	}
 
 // load ctc2 0-4
 #define gte_SetRotMatrix(r0)                       \
 	{                                              \
-		CTC2(*(uint32_t *)((char *)(r0)), 0);      \
-		CTC2(*(uint32_t *)((char *)(r0) + 4), 1);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 8), 2);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 12), 3); \
-		CTC2(*(uint32_t *)((char *)(r0) + 16), 4); \
+		CTC2(CTR_ReadU32LE((char *)(r0)), 0);      \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 4), 1);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 8), 2);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 12), 3); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 16), 4); \
 	}
 
 // load ctc2 5-7
-#define gte_SetTransVector(r0)                 \
-	{                                          \
-		CTC2_S(*(int *)((char *)(r0) + 0), 5); \
-		CTC2_S(*(int *)((char *)(r0) + 4), 6); \
-		CTC2_S(*(int *)((char *)(r0) + 8), 7); \
+#define gte_SetTransVector(r0)                           \
+	{                                                    \
+		CTC2_S((s32)CTR_ReadU32LE((char *)(r0) + 0), 5); \
+		CTC2_S((s32)CTR_ReadU32LE((char *)(r0) + 4), 6); \
+		CTC2_S((s32)CTR_ReadU32LE((char *)(r0) + 8), 7); \
 	}
 
 // load ctc2 5-7
 #define gte_SetTransMatrix(r0)                     \
 	{                                              \
-		CTC2(*(uint32_t *)((char *)(r0) + 20), 5); \
-		CTC2(*(uint32_t *)((char *)(r0) + 24), 6); \
-		CTC2(*(uint32_t *)((char *)(r0) + 28), 7); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 20), 5); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 24), 6); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 28), 7); \
 	}
 
 // ctc2 8-12
 #define gte_SetLightMatrix(r0)                      \
 	{                                               \
-		CTC2(*(uint32_t *)((char *)(r0)), 8);       \
-		CTC2(*(uint32_t *)((char *)(r0) + 4), 9);   \
-		CTC2(*(uint32_t *)((char *)(r0) + 8), 10);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 12), 11); \
-		CTC2(*(uint32_t *)((char *)(r0) + 16), 12); \
+		CTC2(CTR_ReadU32LE((char *)(r0)), 8);       \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 4), 9);   \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 8), 10);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 12), 11); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 16), 12); \
 	}
 
 // ctc2 16-20
 #define gte_SetColorMatrix(r0)                      \
 	{                                               \
-		CTC2(*(uint32_t *)((char *)(r0)), 16);      \
-		CTC2(*(uint32_t *)((char *)(r0) + 4), 17);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 8), 18);  \
-		CTC2(*(uint32_t *)((char *)(r0) + 12), 19); \
-		CTC2(*(uint32_t *)((char *)(r0) + 16), 20); \
+		CTC2(CTR_ReadU32LE((char *)(r0)), 16);      \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 4), 17);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 8), 18);  \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 12), 19); \
+		CTC2(CTR_ReadU32LE((char *)(r0) + 16), 20); \
 	}
 
 // mtc2 9,10,11
 #define gte_ldopv2SV(r0)                           \
 	{                                              \
-		MTC2(*(uint16_t *)((char *)(r0)), 9);      \
-		MTC2(*(uint16_t *)((char *)(r0) + 2), 10); \
-		MTC2(*(uint16_t *)((char *)(r0) + 4), 11); \
+		MTC2(CTR_ReadU16LE((char *)(r0)), 9);      \
+		MTC2(CTR_ReadU16LE((char *)(r0) + 2), 10); \
+		MTC2(CTR_ReadU16LE((char *)(r0) + 4), 11); \
 	}
 
 // ctc2 0,2,4
 #define gte_ldopv1SV(r0)                          \
 	{                                             \
-		CTC2(*(uint16_t *)((char *)(r0)), 0);     \
-		CTC2(*(uint16_t *)((char *)(r0) + 2), 2); \
-		CTC2(*(uint16_t *)((char *)(r0) + 4), 4); \
+		CTC2(CTR_ReadU16LE((char *)(r0)), 0);     \
+		CTC2(CTR_ReadU16LE((char *)(r0) + 2), 2); \
+		CTC2(CTR_ReadU16LE((char *)(r0) + 4), 4); \
 	}
 
 // mtc2 30
-#define gte_ldlzc(r0) MTC2(*(uint32_t *)((char *)(r0)), 30);
+#define gte_ldlzc(r0) MTC2(CTR_ReadU32LE((char *)(r0)), 30);
 
 /*
  * Type 2 functions
@@ -604,25 +604,25 @@ extern int doCOP2(int op);
  */
 
 // store mfc2 9,10,11
-#define gte_stclmv(r0)                                        \
-	{                                                         \
-		*(uint16_t *)((char *)(r0)) = MFC2(9) & 0xFFFF;       \
-		*(uint16_t *)((char *)(r0) + 6) = MFC2(10) & 0xFFFF;  \
-		*(uint16_t *)((char *)(r0) + 12) = MFC2(11) & 0xFFFF; \
+#define gte_stclmv(r0)                               \
+	{                                                \
+		CTR_WriteU16LE((char *)(r0), MFC2(9));       \
+		CTR_WriteU16LE((char *)(r0) + 6, MFC2(10));  \
+		CTR_WriteU16LE((char *)(r0) + 12, MFC2(11)); \
 	}
 
 // swc2 14
 #define gte_stsxy(r0)                           \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(14); \
+		CTR_WriteU32LE((char *)(r0), MFC2(14)); \
 	}
 
 // mfc2 12-14
 #define gte_stsxy3(r0, r1, r2)                  \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(12); \
-		*(uint32_t *)((char *)(r1)) = MFC2(13); \
-		*(uint32_t *)((char *)(r2)) = MFC2(14); \
+		CTR_WriteU32LE((char *)(r0), MFC2(12)); \
+		CTR_WriteU32LE((char *)(r1), MFC2(13)); \
+		CTR_WriteU32LE((char *)(r2), MFC2(14)); \
 	}
 
 // swc2 14
@@ -631,65 +631,65 @@ extern int doCOP2(int op);
 // swc2 13
 #define gte_stsxy1(r0)                          \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(13); \
+		CTR_WriteU32LE((char *)(r0), MFC2(13)); \
 	}
 
 // swc2 12
 #define gte_stsxy0(r0)                          \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(12); \
+		CTR_WriteU32LE((char *)(r0), MFC2(12)); \
 	}
 
 // swc2 8
 #define gte_stdp(r0)                           \
 	{                                          \
-		*(uint32_t *)((char *)(r0)) = MFC2(8); \
+		CTR_WriteU32LE((char *)(r0), MFC2(8)); \
 	}
 
 // cfc2 31
 #define gte_stflg(r0)                           \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = CFC2(31); \
+		CTR_WriteU32LE((char *)(r0), CFC2(31)); \
 	}
 
 // swc2 7
 #define gte_stotz(r0)                          \
 	{                                          \
-		*(uint32_t *)((char *)(r0)) = MFC2(7); \
+		CTR_WriteU32LE((char *)(r0), MFC2(7)); \
 	}
 
 // mfc2 19
 #define gte_stszotz(r0)                              \
 	{                                                \
-		*(uint32_t *)((char *)(r0)) = MFC2(19) >> 2; \
+		CTR_WriteU32LE((char *)(r0), MFC2(19) >> 2); \
 	}
 
 // swc2 24
 #define gte_stopz(r0)                           \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(24); \
+		CTR_WriteU32LE((char *)(r0), MFC2(24)); \
 	}
 
 // swc2 19
 #define gte_stsz(r0)                            \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(19); \
+		CTR_WriteU32LE((char *)(r0), MFC2(19)); \
 	}
 
 // swc2 9-11
 #define gte_stlvl(r0)                               \
 	{                                               \
-		*(uint32_t *)((char *)(r0)) = MFC2(9);      \
-		*(uint32_t *)((char *)(r0) + 4) = MFC2(10); \
-		*(uint32_t *)((char *)(r0) + 8) = MFC2(11); \
+		CTR_WriteU32LE((char *)(r0), MFC2(9));      \
+		CTR_WriteU32LE((char *)(r0) + 4, MFC2(10)); \
+		CTR_WriteU32LE((char *)(r0) + 8, MFC2(11)); \
 	}
 
 // mfc2 9, 10, 11
-#define gte_stsv(r0)                                         \
-	{                                                        \
-		*(uint16_t *)((char *)(r0)) = MFC2(9) & 0xFFFF;      \
-		*(uint16_t *)((char *)(r0) + 2) = MFC2(10) & 0xFFFF; \
-		*(uint16_t *)((char *)(r0) + 4) = MFC2(11) & 0xFFFF; \
+#define gte_stsv(r0)                                \
+	{                                               \
+		CTR_WriteU16LE((char *)(r0), MFC2(9));      \
+		CTR_WriteU16LE((char *)(r0) + 2, MFC2(10)); \
+		CTR_WriteU16LE((char *)(r0) + 4, MFC2(11)); \
 	}
 
 // mfc2 9,10
@@ -710,17 +710,17 @@ extern int doCOP2(int op);
 // swc2 17,18,19
 #define gte_stsz3(r0, r1, r2)                   \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(17); \
-		*(uint32_t *)((char *)(r1)) = MFC2(18); \
-		*(uint32_t *)((char *)(r2)) = MFC2(19); \
+		CTR_WriteU32LE((char *)(r0), MFC2(17)); \
+		CTR_WriteU32LE((char *)(r1), MFC2(18)); \
+		CTR_WriteU32LE((char *)(r2), MFC2(19)); \
 	}
 
 // swc2 25,26,27
 #define gte_stlvnl(r0)                              \
 	{                                               \
-		*(uint32_t *)((char *)(r0) + 0) = MFC2(25); \
-		*(uint32_t *)((char *)(r0) + 4) = MFC2(26); \
-		*(uint32_t *)((char *)(r0) + 8) = MFC2(27); \
+		CTR_WriteU32LE((char *)(r0) + 0, MFC2(25)); \
+		CTR_WriteU32LE((char *)(r0) + 4, MFC2(26)); \
+		CTR_WriteU32LE((char *)(r0) + 8, MFC2(27)); \
 	}
 
 // ctc2 5,6,7
@@ -734,74 +734,74 @@ extern int doCOP2(int op);
 // cfc2 5,6,7
 #define gte_sttr(r0)                               \
 	{                                              \
-		*(uint32_t *)((char *)(r0) + 0) = CFC2(5); \
-		*(uint32_t *)((char *)(r0) + 4) = CFC2(6); \
-		*(uint32_t *)((char *)(r0) + 8) = CFC2(7); \
+		CTR_WriteU32LE((char *)(r0) + 0, CFC2(5)); \
+		CTR_WriteU32LE((char *)(r0) + 4, CFC2(6)); \
+		CTR_WriteU32LE((char *)(r0) + 8, CFC2(7)); \
 	}
 
 // swc2 22
 #define gte_strgb(r0)                           \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(22); \
+		CTR_WriteU32LE((char *)(r0), MFC2(22)); \
 	}
 
 // swc2 20 21 22
 #define gte_strgb3(r0, r1, r2)                  \
 	{                                           \
-		*(uint32_t *)((char *)(r0)) = MFC2(20); \
-		*(uint32_t *)((char *)(r1)) = MFC2(21); \
-		*(uint32_t *)((char *)(r2)) = MFC2(22); \
+		CTR_WriteU32LE((char *)(r0), MFC2(20)); \
+		CTR_WriteU32LE((char *)(r1), MFC2(21)); \
+		CTR_WriteU32LE((char *)(r2), MFC2(22)); \
 	}
 
 
 // store cfc2 0-7
 #define gte_ReadRotMatrix(r0)                       \
 	{                                               \
-		*(uint32_t *)((char *)(r0)) = CFC2(0);      \
-		*(uint32_t *)((char *)(r0) + 4) = CFC2(1);  \
-		*(uint32_t *)((char *)(r0) + 8) = CFC2(2);  \
-		*(uint32_t *)((char *)(r0) + 12) = CFC2(3); \
-		*(uint32_t *)((char *)(r0) + 16) = CFC2(4); \
-		*(uint32_t *)((char *)(r0) + 20) = CFC2(5); \
-		*(uint32_t *)((char *)(r0) + 24) = CFC2(6); \
-		*(uint32_t *)((char *)(r0) + 28) = CFC2(7); \
+		CTR_WriteU32LE((char *)(r0), CFC2(0));      \
+		CTR_WriteU32LE((char *)(r0) + 4, CFC2(1));  \
+		CTR_WriteU32LE((char *)(r0) + 8, CFC2(2));  \
+		CTR_WriteU32LE((char *)(r0) + 12, CFC2(3)); \
+		CTR_WriteU32LE((char *)(r0) + 16, CFC2(4)); \
+		CTR_WriteU32LE((char *)(r0) + 20, CFC2(5)); \
+		CTR_WriteU32LE((char *)(r0) + 24, CFC2(6)); \
+		CTR_WriteU32LE((char *)(r0) + 28, CFC2(7)); \
 	}
 
 // cfc2 16-23
 #define gte_ReadColorMatrix(r0)                      \
 	{                                                \
-		*(uint32_t *)((char *)(r0)) = CFC2(16);      \
-		*(uint32_t *)((char *)(r0) + 4) = CFC2(17);  \
-		*(uint32_t *)((char *)(r0) + 8) = CFC2(18);  \
-		*(uint32_t *)((char *)(r0) + 12) = CFC2(19); \
-		*(uint32_t *)((char *)(r0) + 16) = CFC2(20); \
-		*(uint32_t *)((char *)(r0) + 20) = CFC2(21); \
-		*(uint32_t *)((char *)(r0) + 24) = CFC2(22); \
-		*(uint32_t *)((char *)(r0) + 28) = CFC2(23); \
+		CTR_WriteU32LE((char *)(r0), CFC2(16));      \
+		CTR_WriteU32LE((char *)(r0) + 4, CFC2(17));  \
+		CTR_WriteU32LE((char *)(r0) + 8, CFC2(18));  \
+		CTR_WriteU32LE((char *)(r0) + 12, CFC2(19)); \
+		CTR_WriteU32LE((char *)(r0) + 16, CFC2(20)); \
+		CTR_WriteU32LE((char *)(r0) + 20, CFC2(21)); \
+		CTR_WriteU32LE((char *)(r0) + 24, CFC2(22)); \
+		CTR_WriteU32LE((char *)(r0) + 28, CFC2(23)); \
 	}
 
 // cfc2 8-15
 #define gte_ReadLightMatrix(r0)                      \
 	{                                                \
-		*(uint32_t *)((char *)(r0)) = CFC2(8);       \
-		*(uint32_t *)((char *)(r0) + 4) = CFC2(9);   \
-		*(uint32_t *)((char *)(r0) + 8) = CFC2(10);  \
-		*(uint32_t *)((char *)(r0) + 12) = CFC2(11); \
-		*(uint32_t *)((char *)(r0) + 16) = CFC2(12); \
-		*(uint32_t *)((char *)(r0) + 20) = CFC2(13); \
-		*(uint32_t *)((char *)(r0) + 24) = CFC2(14); \
-		*(uint32_t *)((char *)(r0) + 28) = CFC2(15); \
+		CTR_WriteU32LE((char *)(r0), CFC2(8));       \
+		CTR_WriteU32LE((char *)(r0) + 4, CFC2(9));   \
+		CTR_WriteU32LE((char *)(r0) + 8, CFC2(10));  \
+		CTR_WriteU32LE((char *)(r0) + 12, CFC2(11)); \
+		CTR_WriteU32LE((char *)(r0) + 16, CFC2(12)); \
+		CTR_WriteU32LE((char *)(r0) + 20, CFC2(13)); \
+		CTR_WriteU32LE((char *)(r0) + 24, CFC2(14)); \
+		CTR_WriteU32LE((char *)(r0) + 28, CFC2(15)); \
 	}
 
 // swc2 31
-#define gte_stlzc(r0) *(uint16_t *)((char *)(r0)) = MFC2(31);
+#define gte_stlzc(r0) CTR_WriteU16LE((char *)(r0), MFC2(31));
 
 // cfc2 21,22,23
 #define gte_stfc(r0)                                \
 	{                                               \
-		*(uint32_t *)((char *)(r0) + 0) = CFC2(21); \
-		*(uint32_t *)((char *)(r0) + 4) = CFC2(22); \
-		*(uint32_t *)((char *)(r0) + 8) = CFC2(23); \
+		CTR_WriteU32LE((char *)(r0) + 0, CFC2(21)); \
+		CTR_WriteU32LE((char *)(r0) + 4, CFC2(22)); \
+		CTR_WriteU32LE((char *)(r0) + 8, CFC2(23)); \
 	}
 
 #endif

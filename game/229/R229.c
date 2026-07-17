@@ -1,33 +1,33 @@
 #include <common.h>
 
 CTR_STATIC_ASSERT(sizeof(struct OverlayRDATA_229) == 0x420);
-CTR_STATIC_ASSERT(sizeof(struct OverlayRDATA_229_BucketSetupRecord) == 0x64);
+CTR_STATIC_ASSERT(sizeof(struct DrawLevelOvrBucketSetupRecord) == 0x64);
 CTR_STATIC_ASSERT(sizeof(((struct OverlayRDATA_229 *)0)->scratchInitTable) == 0x60);
 CTR_STATIC_ASSERT(sizeof(((struct OverlayRDATA_229 *)0)->clipRecordJumpTable) == 0x60);
 
 struct OverlayRDATA_229 R229 = {
     .bucketSetupAddresses =
         {
-            0x800a9180,
-            0x800a911c,
-            0x800a90b8,
-            0x800a9054,
-            0x800a8ff0,
-            0x800a8f8c,
-            0x800a9248,
-            0x800a91e4,
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(5),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(4),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(3),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(2),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(1),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(0),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(7),
+            OVR229_RDATA_BUCKET_SETUP_ADDRESS(6),
         },
 
     .bucketHandlerAddresses =
         {
-            0x800a56ac,
-            0x800a481c,
-            0x800a386c,
-            0x800a29dc,
-            0x800a1c3c,
-            0x800a1178,
-            0x800a72b0,
-            0x800a665c,
+            OVR229_RETAIL_LABEL_SPLIT_GROUND_RENDERED_B_HANDLER,
+            OVR229_RETAIL_LABEL_SPLIT_GROUND_LIST_B_HANDLER,
+            OVR229_RETAIL_LABEL_SPLIT_GROUND_RENDERED_A_HANDLER,
+            OVR229_RETAIL_LABEL_SPLIT_GROUND_LIST_A_HANDLER,
+            OVR229_RETAIL_LABEL_WATER_RENDERED_HANDLER,
+            OVR229_RETAIL_LABEL_WATER_BSP_LIST_HANDLER,
+            OVR229_RETAIL_LABEL_QUAD_4X4_RENDERED_HANDLER,
+            OVR229_RETAIL_LABEL_WIDE_DYNAMIC_HANDLER,
         },
 
     .scratchInitTable =
@@ -39,7 +39,8 @@ struct OverlayRDATA_229 R229 = {
     .bucketSetups =
         {
             {
-                {{0xe, 0x800a8fa8, 0x14c}, {0x2, 0x800a8fe4, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(0), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(0), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a1680,
@@ -65,7 +66,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a900c, 0x14c}, {0x2, 0x800a9048, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(1), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(1), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a2178,
@@ -91,7 +93,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a9070, 0x14c}, {0x2, 0x800a90ac, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(2), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(2), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a2f68,
@@ -117,7 +120,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a90d4, 0x14c}, {0x2, 0x800a9110, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(3), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(3), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a3c70,
@@ -143,7 +147,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a9138, 0x14c}, {0x2, 0x800a9174, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(4), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(4), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a4da8,
@@ -169,7 +174,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a919c, 0x14c}, {0x2, 0x800a91d8, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(5), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(5), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a5ab0,
@@ -195,7 +201,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a9200, 0x14c}, {0x2, 0x800a923c, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(6), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(6), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a6a0c,
@@ -221,7 +228,8 @@ struct OverlayRDATA_229 R229 = {
                 },
             },
             {
-                {{0xe, 0x800a9264, 0x14c}, {0x2, 0x800a92a0, 0x188}},
+                {{DRAW_LEVEL_OVR_COPIED_SETUP0_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY0_ADDRESS(7), DRAW_LEVEL_OVR_COPIED_SETUP0_SCRATCH_OFFSET},
+                 {DRAW_LEVEL_OVR_COPIED_SETUP1_LAST_WORD_INDEX, OVR229_RDATA_BUCKET_COPY1_ADDRESS(7), DRAW_LEVEL_OVR_COPIED_SETUP1_SCRATCH_OFFSET}},
                 0x0,
                 {
                     0x800a76b4,

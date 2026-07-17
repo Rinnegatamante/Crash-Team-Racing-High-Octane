@@ -11,28 +11,28 @@ void LOAD_Callback_Overlay_Generic(struct LoadQueueSlot *lqs)
 void LOAD_Callback_Overlay_230(void)
 {
 	sdata->load_inProgress = 0;
-	sdata->gGT->overlayIndex_Threads = 0;
+	sdata->gGT->overlayIndex_Threads = OVERLAY_INDEX_MAIN_MENU;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031a08-0x80031a20.
 void LOAD_Callback_Overlay_231(void)
 {
 	sdata->load_inProgress = 0;
-	sdata->gGT->overlayIndex_Threads = 1;
+	sdata->gGT->overlayIndex_Threads = OVERLAY_INDEX_RACING_OR_BATTLE;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031a20-0x80031a38.
 void LOAD_Callback_Overlay_232(void)
 {
 	sdata->load_inProgress = 0;
-	sdata->gGT->overlayIndex_Threads = 2;
+	sdata->gGT->overlayIndex_Threads = OVERLAY_INDEX_ADV_HUB;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031a38-0x80031a50.
 void LOAD_Callback_Overlay_233(void)
 {
 	sdata->load_inProgress = 0;
-	sdata->gGT->overlayIndex_Threads = 3;
+	sdata->gGT->overlayIndex_Threads = OVERLAY_INDEX_PODIUMS;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031a50-0x80031a64.
@@ -63,24 +63,17 @@ void LOAD_Callback_LEV(struct LoadQueueSlot *lqs)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80031aa4-0x80031b00.
 void LOAD_Callback_PatchMem(struct LoadQueueSlot *lqs)
 {
-	char *patchPtr;
-	char *patchStart;
-	int patchSize;
-	int patchNum;
-
 	// CTR doesn't load one lev DRAM for AdvHub,
 	// it loads one ReadFile for LEV in a sub-mempack,
 	// it loads one ReadFile for PtrMap with AllocHighMem
 
-	// that's why patchPtr is here
-	patchPtr = lqs->ptrDestination;
-	patchStart = &patchPtr[4];
-	patchSize = *(int *)&patchPtr[0];
-	patchNum = patchSize >> 2;
+	// that's why the patch map is handled here
+	struct DramPointerMap *patchMap = lqs->ptrDestination;
+	int patchNum = patchMap->numBytes >> DRAM_POINTER_MAP_WORD_SHIFT;
 
 	sdata->load_inProgress = 0;
 
-	LOAD_RunPtrMap((char *)sdata->ptrLevelFile, (int *)patchStart, patchNum);
+	LOAD_RunPtrMap((char *)sdata->ptrLevelFile, DRAM_GETOFFSETS(patchMap), patchNum);
 
 	MEMPACK_SwapPacks(0);
 	MEMPACK_ClearHighMem();

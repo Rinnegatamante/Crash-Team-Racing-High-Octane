@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_LNG_H
+#define CTR_NATIVE_NAMESPACE_LNG_H
+
 // Generated from assets/bigfile/lang/en.lng. Values are retail LNG string indices.
 enum LngStringId
 {
@@ -618,3 +621,5 @@ enum LngStringId
 	LNG_ADVANCED = 0x24a,                                       // Advanced
 	LNG_TURBOS = 0x24b,                                         // Turbos
 };
+
+#endif

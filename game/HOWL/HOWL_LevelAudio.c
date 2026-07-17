@@ -103,9 +103,9 @@ void Level_SoundLoopSet(int *soundIDCount, u32 soundID, u32 volume)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002ea44-0x8002eab8
-void Level_SoundLoopFade(int *fade, u32 soundID, int desiredVolume, int fadeStep)
+void Level_SoundLoopFade(struct SoundFadeInput *fade, u32 soundID, int desiredVolume, int fadeStep)
 {
-	int currentVolume = fade[2];
+	int currentVolume = fade->currentVolume;
 	b32 clamped;
 
 	if (currentVolume == desiredVolume)
@@ -113,11 +113,11 @@ void Level_SoundLoopFade(int *fade, u32 soundID, int desiredVolume, int fadeStep
 		return;
 	}
 
-	fade[1] = desiredVolume;
+	fade->desiredVolume = desiredVolume;
 
 	if (currentVolume < desiredVolume)
 	{
-		fade[2] = currentVolume + fadeStep;
+		fade->currentVolume = currentVolume + fadeStep;
 		clamped = desiredVolume < currentVolume + fadeStep;
 	}
 	else
@@ -127,17 +127,17 @@ void Level_SoundLoopFade(int *fade, u32 soundID, int desiredVolume, int fadeStep
 			goto updateSound;
 		}
 
-		fade[2] = currentVolume - fadeStep;
+		fade->currentVolume = currentVolume - fadeStep;
 		clamped = currentVolume - fadeStep < desiredVolume;
 	}
 
 	if (clamped)
 	{
-		fade[2] = desiredVolume;
+		fade->currentVolume = desiredVolume;
 	}
 
 updateSound:
-	Level_SoundLoopSet(&fade[3], soundID, fade[2]);
+	Level_SoundLoopSet(&fade->soundID_soundCount, soundID, fade->currentVolume);
 }
 
 static u32 Level_RandomFX_NextAudioRNG(void)
@@ -175,9 +175,8 @@ void Level_AmbientSound(void)
 	struct Level *level = gGT->level1;
 	u32 levelID = gGT->levelID;
 	int closestDistance[2];
-	int closestIndex[2];
 
-	if ((levelID >= 0x19) || ((u8)gGT->numPlyrCurrGame >= 3))
+	if ((levelID >= 0x19) || (gGT->numPlyrCurrGame >= 3))
 	{
 		return;
 	}
@@ -187,7 +186,7 @@ void Level_AmbientSound(void)
 		b32 playDrops = false;
 		b32 playLoop = false;
 
-		for (int i = 0; i < (u8)gGT->numPlyrCurrGame; i++)
+		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 		{
 			struct Driver *driver = gGT->drivers[i];
 			u8 terrain = driver->currentTerrain;
@@ -209,7 +208,7 @@ void Level_AmbientSound(void)
 			Level_RandomFX(&sdata->SoundFadeInput[0].unk, 0x86, 6, 0x5a, 0xff);
 		}
 
-		Level_SoundLoopFade((int *)&sdata->SoundFadeInput[1], 0x87, playLoop ? 0xff : 0, 8);
+		Level_SoundLoopFade(&sdata->SoundFadeInput[1], 0x87, playLoop ? 0xff : 0, 8);
 		return;
 	}
 
@@ -218,7 +217,7 @@ void Level_AmbientSound(void)
 		b32 playFirstLoop = false;
 		b32 playSecondLoop = false;
 
-		for (int i = 0; i < (u8)gGT->numPlyrCurrGame; i++)
+		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 		{
 			s16 sound = gGT->drivers[i]->terrainMeta2->sound;
 
@@ -236,15 +235,14 @@ void Level_AmbientSound(void)
 			}
 		}
 
-		Level_SoundLoopFade((int *)&sdata->SoundFadeInput[0], 0x88, playFirstLoop ? 0xff : 0, 8);
-		Level_SoundLoopFade((int *)&sdata->SoundFadeInput[1], 0x8b, playSecondLoop ? 0xff : 0, 4);
+		Level_SoundLoopFade(&sdata->SoundFadeInput[0], 0x88, playFirstLoop ? 0xff : 0, 8);
+		Level_SoundLoopFade(&sdata->SoundFadeInput[1], 0x8b, playSecondLoop ? 0xff : 0, 4);
 		return;
 	}
 
 	for (int i = 0; i < 2; i++)
 	{
 		closestDistance[i] = 0x7fffffff;
-		closestIndex[i] = -1;
 	}
 
 	for (int soundSlot = 0; soundSlot < 2; soundSlot++)
@@ -270,14 +268,13 @@ void Level_AmbientSound(void)
 			{
 				SVec3 *coord = &spawn->positions[coordIndex];
 
-				for (int playerIndex = 0; playerIndex < (u8)gGT->numPlyrCurrGame; playerIndex++)
+				for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
 				{
 					int distance = GTE_GetSquaredDistance(gGT->pushBuffer[playerIndex].pos.v, coord->v);
 
 					if (distance < closestDistance[soundSlot])
 					{
 						closestDistance[soundSlot] = distance;
-						closestIndex[soundSlot] = coordIndex;
 					}
 				}
 			}
@@ -373,7 +370,7 @@ void PlaySound3D(u32 soundID, struct Instance *inst)
 	u32 closestDistance = 9000;
 	int closestCamera = 0;
 
-	for (int i = 0; i < (u8)gGT->numPlyrCurrGame; i++)
+	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 	{
 		dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
 		dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);
@@ -437,7 +434,7 @@ void PlaySound3D_Flags(u32 *flags, u32 soundID, struct Instance *inst)
 		return;
 	}
 
-	for (int i = 0; i < (u8)gGT->numPlyrCurrGame; i++)
+	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 	{
 		dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
 		dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);

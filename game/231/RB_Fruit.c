@@ -37,6 +37,7 @@ void RB_Fruit_ThTick(struct Thread *fruitTh)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b70a8-0x800b722c.
 int RB_Fruit_ThCollide(struct Thread *fruitTh, struct Thread *driverTh, void *funcThCollide, struct ScratchpadStruct *sps)
 {
+	(void)funcThCollide;
 	struct PushBuffer *pb;
 	s16 posScreen[2];
 	struct Driver *driver;
@@ -68,7 +69,7 @@ int RB_Fruit_ThCollide(struct Thread *fruitTh, struct Thread *driverTh, void *fu
 
 	fruitObj->driver = driver;
 
-	*(int *)&fruitInst->scale.x = 0;
+	CTR_WriteU32LE(&fruitInst->scale.x, 0);
 	fruitInst->scale.z = 0;
 	fruitInst->thread = NULL;
 
@@ -89,7 +90,6 @@ void RB_Fruit_LInB(struct Instance *inst)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b7260-0x800b7338.
 int RB_Fruit_LInC(struct Instance *fruitInst, struct Thread *driverTh, struct ScratchpadStruct *sps)
 {
-	typedef int (*FruitCollideFunc)(struct Thread *, struct Thread *, void *, struct ScratchpadStruct *);
 	struct Thread *fruitTh;
 
 	fruitTh = fruitInst->thread;
@@ -111,7 +111,7 @@ int RB_Fruit_LInC(struct Instance *fruitInst, struct Thread *driverTh, struct Sc
 		}
 
 		fruitTh->inst = fruitInst;
-		fruitTh->funcThCollide = (void (*)(struct Thread *))RB_Fruit_ThCollide;
+		fruitTh->funcThCollide = (void *)RB_Fruit_ThCollide;
 		fruitTh = fruitInst->thread;
 	}
 
@@ -125,5 +125,5 @@ int RB_Fruit_LInC(struct Instance *fruitInst, struct Thread *driverTh, struct Sc
 		return 0;
 	}
 
-	return ((FruitCollideFunc)fruitTh->funcThCollide)(fruitTh, driverTh, fruitTh->funcThCollide, sps);
+	return ((ThreadScratchCollideFunc)fruitTh->funcThCollide)(fruitTh, driverTh, fruitTh->funcThCollide, sps);
 }

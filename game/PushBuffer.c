@@ -177,12 +177,9 @@ void PushBuffer_SetDrawEnv_DecalMP(void *ot, struct DB *backBuffer, RECT *viewpo
 #endif
 
 	// Copy DrawEnv from gGT->backBuffer
-	int *dst = (int *)&newDrawEnv;
-	int *src = (int *)&backBuffer->drawEnv;
-
 	for (u32 i = 0; i < sizeof(DRAWENV) / 4; i++)
 	{
-		dst[i] = src[i];
+		CTR_WriteU32LE((u8 *)&newDrawEnv + i * 4, CTR_ReadU32LE((u8 *)&backBuffer->drawEnv + i * 4));
 	}
 
 	// Now modify DrawEnv...
@@ -243,12 +240,9 @@ void PushBuffer_SetDrawEnv_Normal(void *ot, struct PushBuffer *pb, struct DB *ba
 {
 	DRAWENV newDrawEnv;
 
-	int *dst = (int *)&newDrawEnv;
-	int *src = (int *)&backBuffer->drawEnv;
-
 	for (u32 i = 0; i < sizeof(DRAWENV) / 4; i++)
 	{
-		dst[i] = src[i];
+		CTR_WriteU32LE((u8 *)&newDrawEnv + i * 4, CTR_ReadU32LE((u8 *)&backBuffer->drawEnv + i * 4));
 	}
 
 	// always?
@@ -343,18 +337,18 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 #endif
 
 	// CameraMatrix
-	uVar3 = *(int *)&matrixDST->m[0][0];
-	uVar4 = *(int *)&matrixDST->m[0][2];
-	uVar5 = *(int *)&matrixDST->m[1][1];
-	uVar6 = *(int *)&matrixDST->m[2][0];
-	sVar7 = *(s16 *)&matrixDST->m[2][2];
+	uVar3 = CTR_ReadU32LE(&matrixDST->m[0][0]);
+	uVar4 = CTR_ReadU32LE(&matrixDST->m[0][2]);
+	uVar5 = CTR_ReadU32LE(&matrixDST->m[1][1]);
+	uVar6 = CTR_ReadU32LE(&matrixDST->m[2][0]);
+	sVar7 = matrixDST->m[2][2];
 
 	// CameraMatrix, for shadows, particles, and audio
-	*(int *)((int)&pb->matrix_Camera + 0x0) = uVar3;
-	*(int *)((int)&pb->matrix_Camera + 0x4) = uVar4;
-	*(int *)((int)&pb->matrix_Camera + 0x8) = uVar5;
-	*(int *)((int)&pb->matrix_Camera + 0xC) = uVar6;
-	*(s16 *)((int)&pb->matrix_Camera + 0x10) = sVar7;
+	CTR_WriteU32LE(&pb->matrix_Camera.m[0][0], uVar3);
+	CTR_WriteU32LE(&pb->matrix_Camera.m[0][2], uVar4);
+	CTR_WriteU32LE(&pb->matrix_Camera.m[1][1], uVar5);
+	CTR_WriteU32LE(&pb->matrix_Camera.m[2][0], uVar6);
+	pb->matrix_Camera.m[2][2] = sVar7;
 
 	// transpose the camera matrix
 	view0 = (uVar3 & 0xffff) | (uVar4 & 0xffff0000);

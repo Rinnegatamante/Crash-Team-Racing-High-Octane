@@ -7,7 +7,7 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 	s16 font_buttonPixWidth;
 	s16 font_puncPixWidth;
 	int pixLength;
-	char c;
+	u8 c;
 #if BUILD == JpnRetail
 	u32 isRacingWheel;
 #endif
@@ -75,7 +75,9 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 			pixLength += font_charPixWidth;
 		}
 
+#if BUILD >= JpnTrial
 	NextIteration:
+#endif
 		character++;
 		len--;
 	}
@@ -92,7 +94,7 @@ int DecalFont_GetLineWidth(char *str, s16 fontType)
 
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800224fc-0x80022878 for the retail path.
-void DecalFont_DrawLineStrlen(u8 *str, s16 len, int posX, s16 posY, s16 fontType, int flags)
+void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontType, int flags)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
@@ -120,9 +122,9 @@ void DecalFont_DrawLineStrlen(u8 *str, s16 len, int posX, s16 posY, s16 fontType
 
 #endif
 
-	for (*str != 0; *str != 0 && len != 0; str++, len--)
+	for (; *str != 0 && len != 0; str++, len--)
 	{
-		u8 *strcopy = str;
+		u8 *strcopy = (u8 *)str;
 		u16 iconID = 0xff;
 		s16 charWidth = data.font_charPixWidth[fontType];
 		s16 pixWidthExtra = 0;
@@ -136,7 +138,7 @@ void DecalFont_DrawLineStrlen(u8 *str, s16 len, int posX, s16 posY, s16 fontType
 
 #endif
 
-		int *ptrColor = data.ptrColor[flags];
+		u32 *ptrColor = data.ptrColor[flags];
 
 #if BUILD >= JpnTrial
 
@@ -145,8 +147,8 @@ void DecalFont_DrawLineStrlen(u8 *str, s16 len, int posX, s16 posY, s16 fontType
 			// if the current character in the string is a tilde, delete the next two characters and color the rest of the word depending on the characters
 			// being deleted used with numbers according to the color ID, e.g. ~01 gives the blue-ish gray color seen in the race lap count
 
-			u8 *strnext = str + 1;
-			u8 *strnextnext = str + 2;
+			u8 *strnext = (u8 *)str + 1;
+			u8 *strnextnext = (u8 *)str + 2;
 			str += 2;
 			len -= 2;
 			flags = (*strnextnext + (*strnext - 0x30) * 10) - 0x30;

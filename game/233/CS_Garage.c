@@ -1,7 +1,51 @@
 #include <common.h>
 
+enum GarageInputMask
+{
+	GARAGE_INPUT_HORIZONTAL = BTN_LEFT | BTN_RIGHT,
+	GARAGE_INPUT_MENU = BTN_TRIANGLE | BTN_CROSS_one | BTN_CIRCLE | BTN_SQUARE_one,
+	GARAGE_INPUT_CONFIRM = BTN_CROSS_one | BTN_CIRCLE,
+	GARAGE_INPUT_BACK = BTN_TRIANGLE | BTN_SQUARE_one,
+};
+
+enum
+{
+	GARAGE_STAT_BAR_RATE = 3,
+	GARAGE_STAT_BAR_SEGMENT_COUNT = 6,
+	GARAGE_STAT_BAR_SEGMENT_WIDTH = 13,
+	GARAGE_STAT_BAR_ROW_STEP = 15,
+	GARAGE_STAT_BAR_POLY_G4_CODE = 0x38,
+	GARAGE_STAT_BAR_POLY_G4_COLOR_CODE = GARAGE_STAT_BAR_POLY_G4_CODE << 24,
+	GARAGE_STAT_NAME_SPEED_Y = 30,
+	GARAGE_STAT_NAME_ACCEL_Y = 0x2d,
+	GARAGE_STAT_NAME_TURN_Y = 60,
+	GARAGE_CLASS_NAME_Y = 15,
+	GARAGE_STAT_BAR_START_Y = 33,
+	GARAGE_STAT_BAR_END_Y = 40,
+	GARAGE_STAT_BAR_SHADOW_Y = 34,
+	GARAGE_STAT_BAR_HEIGHT = 7,
+	GARAGE_STAT_BAR_SHADOW_HEIGHT = 5,
+	GARAGE_STAT_BOX_Y = 11,
+	GARAGE_STAT_BOX_HEIGHT = 68,
+	GARAGE_STAT_BOX_PADDING_X = 6,
+	GARAGE_OSK_DELAY_FRAMES = 60,
+	GARAGE_CAMERA_FRAME_STEP = 30,
+	GARAGE_CAMERA_WRAP_RIGHT_FRAME = 240,
+	GARAGE_CAMERA_WRAP_LEFT_FRAME = 210,
+	GARAGE_CHARACTER_NAME_X = 0x100,
+	GARAGE_CHARACTER_NAME_Y = 0xb4,
+	GARAGE_CHARACTER_ARROW_Y = 187,
+	GARAGE_CHARACTER_ARROW_LEFT_BASE_X = 236,
+	GARAGE_CHARACTER_ARROW_RIGHT_BASE_X = 274,
+	GARAGE_CHARACTER_ARROW_ICON_INDEX = 0x38,
+	GARAGE_CHARACTER_ARROW_SCALE = 0x1000,
+	GARAGE_CHARACTER_ARROW_ROT_LEFT = 0x800,
+};
+
+CTR_STATIC_ASSERT(GARAGE_STAT_BAR_POLY_G4_COLOR_CODE == 0x38000000);
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b7784-0x800b7834
-void CS_Garage_ZoomOut(char zoomState)
+void CS_Garage_ZoomOut(s16 zoomState)
 {
 	if (zoomState != 0)
 	{
@@ -33,19 +77,19 @@ void CS_Garage_ZoomOut(char zoomState)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b7834-0x800b854c
-void CS_Garage_MenuProc(struct RectMenu *param_1)
+void CS_Garage_MenuProc(struct RectMenu *menu)
 {
+	(void)menu;
 	s16 garageFrames;
-	s16 *barLen;
+	s16 *statBarLength;
 	u16 classNamePosX;
-	int i;
 	u32 statNamePosX;
 	u32 statBarPosX;
 
 	u32 currSelectIndex = sdata->advCharSelectIndex_curr;
 	struct GameTracker *gGT = sdata->gGT;
 	struct PrimMem *primMem = &gGT->backBuffer->primMem;
-	s16 currCharacterID = gGarage.unusedArr_garageChars[currSelectIndex];
+	s16 currCharacterID = gGarage.garageCharacterIDs[currSelectIndex];
 	struct MetaDataCHAR *MDC = &data.MetaDataCharacters[currCharacterID];
 	int nameIndex = MDC->name_LNG_long;
 	RECT r;
@@ -53,7 +97,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	Color black = MakeColor(0, 0, 0);
 
 	// CameraDC, freecam mode
-	gGT->cameraDC[0].cameraMode = 3;
+	gGT->cameraDC[0].cameraMode = CAMERA_MODE_FREECAM;
 
 
 	// subtract transition timer by one frame
@@ -62,7 +106,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	// if mid-transition, skip some code
 	if (gGarage.numFramesCurr_GarageMove != 0)
 	{
-		goto SKIP_CONTROLS;
+		goto update_garage_camera;
 	}
 
 	// At this point, there must not be a transition
@@ -72,32 +116,26 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	gGarage.unusedFrameCount++;
 
 	// animate growth of all three stat bars
-	for (i = 0; i < 3; i++)
+	for (int i = 0; i < 3; i++)
 	{
-		barLen = &gGarage.barLen[i];
-		s16 stat = gGarage.barStat[MDC->engineID * 3 + i];
+		statBarLength = &gGarage.statBarLengths[i];
+		s16 stat = gGarage.statBarTargetLengths[MDC->engineID * 3 + i];
 
-
-#define BAR_RATE 3
-
-		if (*barLen < stat)
+		if (*statBarLength < stat)
 		{
-			*barLen = *barLen + BAR_RATE;
+			*statBarLength = *statBarLength + GARAGE_STAT_BAR_RATE;
 		}
-		if (stat < *barLen)
+		if (stat < *statBarLength)
 		{
-			*barLen = stat;
+			*statBarLength = stat;
 		}
 	}
 
-	if (
-	    // Tiny Tiger
-	    (nameIndex == 46) ||
+	if ((nameIndex == LNG_TINY_TIGER) ||
 
 	    (statNamePosX = 383,
 
-	     // Pura
-	     nameIndex == 51))
+	     nameIndex == LNG_PURA_FULL))
 	{
 		statNamePosX = 129;
 		classNamePosX = 128;
@@ -109,48 +147,48 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 		statBarPosX = 393;
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_SPEED], statNamePosX, 30, FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
-	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], statNamePosX, 0x2d, 1, 0x4021);
-	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], statNamePosX, 60, FONT_BIG, JUSTIFY_RIGHT | BLUE);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_SPEED], statNamePosX, GARAGE_STAT_NAME_SPEED_Y, FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], statNamePosX, GARAGE_STAT_NAME_ACCEL_Y, FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], statNamePosX, GARAGE_STAT_NAME_TURN_Y, FONT_BIG, JUSTIFY_RIGHT | BLUE);
 
 	int engineID = MDC->engineID;
 
 	// 0x248 - Beginner
 	// EngineID == 3
-	i = 0;
+	int classStringIndex = 0;
 
 	// 0x24A - Advanced
 	if (engineID == SPEED)
 	{
-		i = 2;
+		classStringIndex = 2;
 	}
 
 	// 0x249 - Intermediate
 	if (engineID < SPEED)
 	{
-		i = 1;
+		classStringIndex = 1;
 	}
 
 	// 7 pixels tall
-	u16 statBarStart_Y = 33;
-	u16 statBarEnd_Y = 40;
+	u16 statBarStart_Y = GARAGE_STAT_BAR_START_Y;
+	u16 statBarEnd_Y = GARAGE_STAT_BAR_END_Y;
 
-	u16 statBarShadows_Y = 34;
+	u16 statBarShadows_Y = GARAGE_STAT_BAR_SHADOW_Y;
 
 	// Draw class name
-	DecalFont_DrawLine(sdata->lngStrings[gGarage.unusedArr_lngIndex[i]], classNamePosX, 15, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
+	DecalFont_DrawLine(sdata->lngStrings[gGarage.classStringIDs[classStringIndex]], classNamePosX, GARAGE_CLASS_NAME_Y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
 	// bar length (animated)
 
-	for (i = 0; i < 3; i++)
+	for (int i = 0; i < 3; i++)
 	{
-		barLen = &gGarage.barLen[i];
+		statBarLength = &gGarage.statBarLengths[i];
 
 		// bar outline
 		r.x = statBarPosX;
 		r.y = statBarStart_Y;
-		r.w = *barLen;
-		r.h = 7;
+		r.w = *statBarLength;
+		r.h = GARAGE_STAT_BAR_HEIGHT;
 
 		// outline color white at 0x800b7780
 		CTR_Box_DrawWireBox(&r, &white, gGT->pushBuffer_UI.ptrOT, primMem);
@@ -158,25 +196,25 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 		// bar shadows
 		r.x = statBarPosX + 1;
 		r.y = statBarShadows_Y;
-		r.w = *barLen - 2;
-		r.h = 5;
+		r.w = *statBarLength - 2;
+		r.h = GARAGE_STAT_BAR_SHADOW_HEIGHT;
 
 		// outline color black (shadows)
 		CTR_Box_DrawWireBox(&r, &black, gGT->pushBuffer_UI.ptrOT, primMem);
 
-		int segmentLen = 13;
+		int segmentLen = GARAGE_STAT_BAR_SEGMENT_WIDTH;
 		int segmentStart = 0;
 		int segmentEnd = segmentLen;
 
-		for (int segmentIndex = 0; segmentIndex < 6; segmentIndex++)
+		for (int segmentIndex = 0; segmentIndex < GARAGE_STAT_BAR_SEGMENT_COUNT; segmentIndex++)
 		{
 			// color data of bars (blue green yellow red)
-			u32 *barColor = &gGarage.barColors[segmentIndex];
+			u32 *barColor = &gGarage.statBarSegmentColors[segmentIndex];
 			s16 currSegmentLen = (s16)segmentLen;
 
-			if (*barLen <= segmentEnd)
+			if (*statBarLength <= segmentEnd)
 			{
-				currSegmentLen = *barLen - segmentStart;
+				currSegmentLen = *statBarLength - segmentStart;
 			}
 
 			if ((int)currSegmentLen << 0x10 < 0)
@@ -184,7 +222,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 				currSegmentLen = 0;
 			}
 
-			if (segmentStart + currSegmentLen <= *barLen)
+			if (segmentStart + currSegmentLen <= *statBarLength)
 			{
 				// primMem curr
 				POLY_G4 *p = primMem->cursor;
@@ -198,10 +236,10 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 				primMem->cursor = p + 1;
 
 				// color data
-				*(int *)&p->r0 = barColor[0] | 0x38000000;
-				*(int *)&p->r1 = barColor[1] | 0x38000000;
-				*(int *)&p->r2 = barColor[0] | 0x38000000;
-				*(int *)&p->r3 = barColor[1] | 0x38000000;
+				CtrGpu_WriteColorCode(&p->r0, barColor[0] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
+				CtrGpu_WriteColorCode(&p->r1, barColor[1] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
+				CtrGpu_WriteColorCode(&p->r2, barColor[0] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
+				CtrGpu_WriteColorCode(&p->r3, barColor[1] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
 
 				s16 segmentX = statBarPosX + segmentStart;
 
@@ -221,30 +259,25 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 				p->x3 = segmentX + currSegmentLen;
 				p->y3 = statBarEnd_Y;
 
-				// pointer to OT memory
-				void *ot = gGT->pushBuffer_UI.ptrOT;
-
-				*(int *)p = CtrGpu_PackOTTag(*(uint32_t *)ot, 0x8000000);
-				*(int *)ot = (int)CtrGpu_PrimToOTLink24(p);
+				addPolyG4(gGT->pushBuffer_UI.ptrOT, p);
 			}
 
 			segmentStart += segmentLen;
 			segmentEnd += segmentLen;
 		}
 
-		// 15 pixels lower Y axis
-		statBarStart_Y += 15;
-		statBarEnd_Y += 15;
-		statBarShadows_Y += 15;
+		statBarStart_Y += GARAGE_STAT_BAR_ROW_STEP;
+		statBarEnd_Y += GARAGE_STAT_BAR_ROW_STEP;
+		statBarShadows_Y += GARAGE_STAT_BAR_ROW_STEP;
 	}
 
-	s16 classMaxLen = DecalFont_GetLineWidth(sdata->lngStrings[LNG_INTERMEDIATE], 1);
+	s16 classMaxLen = DecalFont_GetLineWidth(sdata->lngStrings[LNG_INTERMEDIATE], FONT_BIG);
 
 	// Stats box
-	r.x = (classNamePosX - (classMaxLen >> 1)) - 6;
-	r.y = 11;
-	r.w = classMaxLen + 12;
-	r.h = 68;
+	r.x = (classNamePosX - (classMaxLen >> 1)) - GARAGE_STAT_BOX_PADDING_X;
+	r.y = GARAGE_STAT_BOX_Y;
+	r.w = classMaxLen + GARAGE_STAT_BOX_PADDING_X * 2;
+	r.h = GARAGE_STAT_BOX_HEIGHT;
 
 	// Draw 2D Menu rectangle background
 	RECTMENU_DrawInnerRect(&r, 4, gGT->backBuffer->otMem.uiOT);
@@ -252,9 +285,9 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	char *name = sdata->lngStrings[nameIndex];
 
 	// Draw character name
-	DecalFont_DrawLine(name, 0x100, 0xb4, 1, 0xffff8000);
+	DecalFont_DrawLine(name, GARAGE_CHARACTER_NAME_X, GARAGE_CHARACTER_NAME_Y, FONT_BIG, 0xffff8000);
 
-	char arrowColor = ORANGE;
+	int arrowColor = ORANGE;
 
 	// blink arrows
 	if ((sdata->frameCounter & 4) == 0)
@@ -263,48 +296,42 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	}
 
 	// Color data
-	int *arrowColors = data.ptrColor[arrowColor];
+	u32 *arrowColors = data.ptrColor[(s32)arrowColor];
 
-	int nameLen = DecalFont_GetLineWidth(name, 1) >> 1;
+	int nameLen = DecalFont_GetLineWidth(name, FONT_BIG) >> 1;
 
-	int arrowPos[2] = {236 - nameLen, nameLen + 274};
-	int arrowRot[2] = {0x800, 0};
+	int arrowPos[2] = {GARAGE_CHARACTER_ARROW_LEFT_BASE_X - nameLen, nameLen + GARAGE_CHARACTER_ARROW_RIGHT_BASE_X};
+	int arrowRot[2] = {GARAGE_CHARACTER_ARROW_ROT_LEFT, 0};
 
 	struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[4]);
 
-	for (i = 0; i < 2; i++)
+	for (int i = 0; i < 2; i++)
 	{
-		DecalHUD_Arrow2D(iconPtrArray[0x38], arrowPos[i], 187,
+		DecalHUD_Arrow2D(iconPtrArray[GARAGE_CHARACTER_ARROW_ICON_INDEX], arrowPos[i], GARAGE_CHARACTER_ARROW_Y,
 
 		                 primMem, gGT->pushBuffer_UI.ptrOT,
 
 		                 arrowColors[0], arrowColors[1], arrowColors[2], arrowColors[3],
 
-		                 0, 0x1000, arrowRot[i]);
+		                 0, GARAGE_CHARACTER_ARROW_SCALE, arrowRot[i]);
 	}
 
 	garageFrames = gGarage.numFramesCurr_GarageMove;
 
-	if (((gGT->renderFlags & 0x1000) != 0) ||
-
-	    (
-	        // If you dont press Triangle, Cross, Circle, or Square
-	        ((sdata->AnyPlayerTap & 0x40070) == 0) &&
-
-	        // If you dont press D-pad
-	        ((sdata->AnyPlayerHold & 0xc) == 0)))
+	if (((gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0) ||
+	    (((sdata->AnyPlayerTap & GARAGE_INPUT_MENU) == 0) && ((sdata->AnyPlayerHold & GARAGE_INPUT_HORIZONTAL) == 0)))
 	{
-		goto SKIP_CONTROLS;
+		goto update_garage_camera;
 	}
 
 	// If you dont press D-pad
-	if ((sdata->AnyPlayerHold & 0xc) == 0)
+	if ((sdata->AnyPlayerHold & GARAGE_INPUT_HORIZONTAL) == 0)
 	{
 		// If you do not press Cross or Circle
-		if ((sdata->AnyPlayerTap & 0x50) == 0)
+		if ((sdata->AnyPlayerTap & GARAGE_INPUT_CONFIRM) == 0)
 		{
 			// If you press Triangle or Square
-			if ((sdata->AnyPlayerTap & 0x40020) != 0)
+			if ((sdata->AnyPlayerTap & GARAGE_INPUT_BACK) != 0)
 			{
 				// Play Sound
 				OtherFX_Play(2, 1);
@@ -328,7 +355,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 					Garage_Leave();
 
 					// load main menu LEV
-					MainRaceTrack_RequestLoad(0x27);
+					MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
 				}
 			}
 		}
@@ -357,7 +384,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 					// set desiredMenu to OSK (on-screen keyboard)
 					sdata->ptrDesiredMenu = &data.menuSubmitName;
 
-					data.characterIDs[0] = gGarage.unusedArr_garageChars[currSelectIndex];
+					data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
 					sdata->advProgress.characterID = data.characterIDs[0];
 
 					SubmitName_RestoreName(0);
@@ -371,19 +398,19 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	else
 	{
 		// erase animated bars
-		for (i = 2; i > -1; i--)
+		for (int i = 2; i > -1; i--)
 		{
-			barLen = &gGarage.barLen[i];
-			*barLen = 0;
+			statBarLength = &gGarage.statBarLengths[i];
+			*statBarLength = 0;
 		}
 		// Play Sound
 		OtherFX_Play(0, 1);
 
 		// If you dont press Left
-		if ((sdata->AnyPlayerHold & 4) == 0)
+		if ((sdata->AnyPlayerHold & BTN_LEFT) == 0)
 		{
 			// If you dont press Right
-			if ((sdata->AnyPlayerHold & 8) != 0)
+			if ((sdata->AnyPlayerHold & BTN_RIGHT) != 0)
 			{
 				currSelectIndex++;
 				goto LAB_800b8084;
@@ -423,7 +450,7 @@ void CS_Garage_MenuProc(struct RectMenu *param_1)
 	RECTMENU_ClearInput();
 
 	garageFrames = gGarage.numFramesCurr_GarageMove;
-SKIP_CONTROLS:
+update_garage_camera:
 	gGarage.numFramesCurr_GarageMove = garageFrames;
 
 	// if frames remaing for zoom camera
@@ -438,12 +465,12 @@ SKIP_CONTROLS:
 	{
 		if (
 		    // frames remaining for animation
-		    (59 < gGarage.delayOneSecond) || ((gGT->gameMode2 & GARAGE_OSK) != 0))
+		    (GARAGE_OSK_DELAY_FRAMES <= gGarage.delayOneSecond) || ((gGT->gameMode2 & GARAGE_OSK) != 0))
 		{
 			// set desiredMenu to OSK (on-screen keyboard)
 			sdata->ptrDesiredMenu = &data.menuSubmitName;
 
-			data.characterIDs[0] = gGarage.unusedArr_garageChars[currSelectIndex];
+			data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
 			sdata->advProgress.characterID = data.characterIDs[0];
 
 			SubmitName_RestoreName(0);
@@ -480,32 +507,32 @@ SKIP_CONTROLS:
 	// Pura->Crash
 	if ((currSelectIndex == 0) && (prevSelectIndex == 7))
 	{
-		garageFrames = 240 - gGarage.numFramesCurr_GarageMove;
+		garageFrames = GARAGE_CAMERA_WRAP_RIGHT_FRAME - gGarage.numFramesCurr_GarageMove;
 	}
 	// Crash->Pura
 	else if ((currSelectIndex == 7) && (prevSelectIndex == 0))
 	{
-		garageFrames = gGarage.numFramesCurr_GarageMove + 210;
+		garageFrames = gGarage.numFramesCurr_GarageMove + GARAGE_CAMERA_WRAP_LEFT_FRAME;
 	}
 	// Move Right
 	else if (prevSelectIndex < currSelectIndex)
 	{
-		garageFrames = currSelectIndex * 30 - gGarage.numFramesCurr_GarageMove;
+		garageFrames = currSelectIndex * GARAGE_CAMERA_FRAME_STEP - gGarage.numFramesCurr_GarageMove;
 	}
 	// Move Left
 	else
 	{
-		garageFrames = currSelectIndex * 30 + gGarage.numFramesCurr_GarageMove;
+		garageFrames = currSelectIndex * GARAGE_CAMERA_FRAME_STEP + gGarage.numFramesCurr_GarageMove;
 	}
 
 	// animation frame index,
 	// pointer to position,
 	// pointer to rotation
 
-	s16 getPath;
+	s16 pathFlags;
 	SVec3 camPos;
 	SVec3 camRot;
-	CAM_Path_Move((int)garageFrames, camPos.v, camRot.v, &getPath);
+	CAM_Path_Move((int)garageFrames, camPos.v, camRot.v, &pathFlags);
 
 	// set position and rotation to pushBuffer
 	gGT->pushBuffer[0].pos = camPos;

@@ -290,14 +290,11 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003b6d0-0x8003b934; CTR_NATIVE gates TT ghost model publication.
 void MainInit_Drivers(struct GameTracker *gGT)
 {
-	char i;
-	char numPlyrCurrGame = gGT->numPlyrCurrGame;
+	u8 numPlyrCurrGame = gGT->numPlyrCurrGame;
 	u8 numDrivers;
-	u32 uVar3;
 	int gameMode = gGT->gameMode1;
-	struct Driver *d;
 
-	for (i = 0; i < 8; i++)
+	for (int i = 0; i < 8; i++)
 	{
 		gGT->drivers[i] = NULL;
 	}
@@ -319,7 +316,7 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	// Spawn all players,
 	// This MUST be in reverse order,
 	// because of threadBucket linked list order
-	for (i = numPlyrCurrGame - 1; i >= 0; i--)
+	for (int i = numPlyrCurrGame - 1; i >= 0; i--)
 	{
 		gGT->drivers[i] = VehBirth_Player(i);
 	}
@@ -366,7 +363,7 @@ void MainInit_Drivers(struct GameTracker *gGT)
 		}
 
 		// Spawn AIs
-		for (i = numPlyrCurrGame; i < numDrivers; i++)
+		for (int i = numPlyrCurrGame; i < numDrivers; i++)
 		{
 			// spawn an AI at this character index
 			BOTS_Driver_Init(i);
@@ -386,7 +383,7 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	if ((gameMode & MAIN_MENU) != 0)
 	{
 		// fill up 4 players
-		for (i = numPlyrCurrGame; i < 4; i++)
+		for (int i = numPlyrCurrGame; i < 4; i++)
 		{
 			gGT->drivers[i] = VehBirth_Player(i);
 		}
@@ -416,7 +413,6 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 {
 	int i;
 	int numPlyr;
-	u8 *puVar3;
 	struct Driver *d;
 	struct Level *lev1;
 	struct Instance *inst;
@@ -437,11 +433,11 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	gGT->pushBuffer[0].distanceToScreen_PREV = 0x100;
 	gGT->pushBuffer[0].distanceToScreen_CURR = 0x100;
 
-	// reset root thread for each bucket
-	for (int i = 0; i < NUM_BUCKETS; i++)
-	{
-		gGT->threadBuckets[i].thread = 0;
-	}
+	memset(gGT->threadBuckets, 0, sizeof(gGT->threadBuckets));
+	gGT->threadBuckets[STATIC].boolCantPause = 1;
+	gGT->threadBuckets[WARPPAD].boolCantPause = 1;
+	gGT->threadBuckets[CAMERA].boolCantPause = 1;
+	gGT->threadBuckets[HUD].boolCantPause = 1;
 
 	// particles
 	gGT->particleList_ordinary = NULL;
@@ -450,8 +446,8 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 
 	// deadc0ed, FUN_8006c684
 	// RNG stuff
-	gGT->deadcoed_struct.unk1 = 0x30215400;
-	gGT->deadcoed_struct.unk2 = 0x493583fe;
+	gGT->deadcoed_struct.state0 = 0x30215400;
+	gGT->deadcoed_struct.state1 = 0x493583fe;
 
 	for (i = 0; i < 12; i++)
 	{
@@ -501,7 +497,7 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	PushBuffer_SetPsyqGeom(pb);
 	PushBuffer_SetMatrixVP(pb);
 
-	if ((gGT->hudFlags & 2) != 0)
+	if ((gGT->hudFlags & HUD_FLAG_INIT_UI_INSTANCES) != 0)
 	{
 		UI_INSTANCE_InitAll();
 	}
@@ -606,7 +602,7 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	MainInit_RainBuffer(gGT);
 
 	// animates water, 1P mode
-	AnimateWater1P(gGT->timer, lev1->numWaterVertices, lev1->ptr_water, lev1->ptr_tex_waterEnvMap, lev1->unk5);
+	AnimateWater1P(gGT->timer, lev1->numWaterVertices, lev1->ptr_water, lev1->ptr_tex_waterEnvMap, lev1->visOVertSrc);
 
 	gGT->pushBuffer_UI.fadeFromBlack_desiredResult = 0x1000;
 	gGT->pushBuffer_UI.fade_step = 0x200;
@@ -620,9 +616,9 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	gGT->stars.distance = lev1->stars.distance;
 
 	// confetti
-	gGT->confetti.numParticles_curr = 0;
+	gGT->confetti.numParticles_currWord = 0;
 	gGT->confetti.numParticles_max = 0;
-	gGT->confetti.unk2 = 0;
+	gGT->confetti.vanishRate = 0;
 	gGT->confetti.velY = -10;
 
 	for (i = 0; i < 4; i++)
@@ -637,7 +633,7 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	if ((gGT->gameMode1 & GAME_CUTSCENE) != 0)
 	{
 		// freecam mode
-		gGT->cameraDC[0].cameraMode = 3;
+		gGT->cameraDC[0].cameraMode = CAMERA_MODE_FREECAM;
 
 		// disable all HUD flags
 		gGT->hudFlags = 0;
@@ -695,11 +691,11 @@ void MainInit_VRAMClear()
 	commands.d = 0;
 	commands.e = 0x3ff;
 	commands.f = 0x1ff;
-	DrawOTag((u32 *)&commands);
+	DrawOTag(&commands);
 
 	commands.d = 0x1ff;
 	commands.f = 1;
-	DrawOTag((u32 *)&commands);
+	DrawOTag(&commands);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c310-0x8003c41c; native wraps
@@ -731,7 +727,7 @@ void MainInit_VRAMDisplay()
 
 			move.tag |= 0xffffff;
 
-			DrawOTag((u32 *)&move);
+			DrawOTag(&move);
 			DrawSync(0);
 		}
 	}

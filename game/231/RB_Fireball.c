@@ -71,7 +71,7 @@ struct ParticleEmitter emSet_Fireball[10] = {[0] =
 
                                              [4] = {.flags = 9,
 
-                                                    // rotX ??
+                                                    // rotY
                                                     .initOffset = 4,
 
                                                     .InitTypes.AxisInit = {.baseValue = {.startVal = 1, .velocity = 0, .accel = 0},
@@ -193,7 +193,7 @@ void RB_Fireball_ThTick(struct Thread *t)
 			particle->axis[1].startVal += fireInst->matrix.t[1] * 0x100;
 			particle->axis[2].startVal += fireInst->matrix.t[2] * 0x100;
 
-			particle->unk1A = 0x1e00;
+			particle->renderDepthLimit = 0x1e00;
 
 			// reuse "velY" variable for particles
 			velY *= -0x180;
@@ -287,7 +287,7 @@ void RB_Fireball_LInB(struct Instance *inst)
 	}
 	inst->thread = t;
 	t->inst = inst;
-	t->funcThCollide = (void (*)(struct Thread *))RB_Fireball_ThCollide;
+	t->funcThCollide = (void *)RB_Fireball_ThCollide;
 
 	inst->scale.x = 0x4000;
 	inst->scale.y = 0x4000;
@@ -299,7 +299,7 @@ void RB_Fireball_LInB(struct Instance *inst)
 	fireObj = ((struct Fireball *)t->object);
 	fireObj->cycleTimer = 0;
 	fireObj->cooldown = 0;
-	fireObj->unused[0] = 0;
+	fireObj->rot_unused.x = 0;
 	fireObj->velY = 96;
 	fireObj->direction = 0;
 

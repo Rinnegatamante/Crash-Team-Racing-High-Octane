@@ -1,10 +1,22 @@
 #include <common.h>
 
+enum DebugFontConstants
+{
+	DEBUG_FONT_ICON_INDEX = 0x42,
+	DEBUG_FONT_DIGIT_TILE_SIZE = 7,
+	DEBUG_FONT_DIGIT_ZERO_ATLAS_OFFSET = 5,
+	DEBUG_FONT_PRIM_WORD_COUNT = 9,
+};
+
+CTR_STATIC_ASSERT(DEBUG_FONT_ICON_INDEX == 0x42);
+CTR_STATIC_ASSERT(DEBUG_FONT_DIGIT_TILE_SIZE == 7);
+CTR_STATIC_ASSERT(DEBUG_FONT_DIGIT_ZERO_ATLAS_OFFSET == 5);
+CTR_STATIC_ASSERT(DEBUG_FONT_PRIM_WORD_COUNT == 9);
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800222e0-0x80022318.
 void DebugFont_Init(struct GameTracker *gGT)
 {
-	struct Icon *debugFontIcon = gGT->ptrIcons[0x42];
+	struct Icon *debugFontIcon = gGT->ptrIcons[DEBUG_FONT_ICON_INDEX];
 
 	if (debugFontIcon == 0)
 	{
@@ -27,44 +39,37 @@ void DebugFont_DrawNumbers(int index, int screenPosX, int screenPosY)
 {
 	POLY_FT4 *p;
 	u32 *ot;
-	u32 uVar4;
-	u32 uVar5;
-	u32 uVar6;
 	u32 topU;
 	u32 bottomU;
 	u32 topV;
 	u32 bottomV;
 	struct GameTracker *gGT = sdata->gGT;
 
-	uVar6 = screenPosX + 7;
-	uVar5 = (screenPosY + 0) << 0x10;
-	uVar4 = (screenPosY + 7) << 0x10;
-
 	p = (POLY_FT4 *)gGT->backBuffer->primMem.cursor;
 	ot = (u32 *)gGT->pushBuffer_UI.ptrOT;
 	gGT->backBuffer->primMem.cursor = p + 1;
 
-	*(int *)&p->r0 = 0x2e000000;
-	*(int *)&p->x0 = screenPosX | uVar5;
-	*(int *)&p->x3 = uVar6 | uVar4;
-	*(int *)&p->x1 = uVar6 | uVar5;
-	*(int *)&p->x2 = screenPosX | uVar4;
+	CtrGpu_WriteColorCode(&p->r0, 0x2e000000);
+	CtrGpu_WritePackedXY(&p->x0, CTR_PackS16Pair(screenPosX, screenPosY));
+	CtrGpu_WritePackedXY(&p->x3, CTR_PackS16Pair(screenPosX + DEBUG_FONT_DIGIT_TILE_SIZE, screenPosY + DEBUG_FONT_DIGIT_TILE_SIZE));
+	CtrGpu_WritePackedXY(&p->x1, CTR_PackS16Pair(screenPosX + DEBUG_FONT_DIGIT_TILE_SIZE, screenPosY));
+	CtrGpu_WritePackedXY(&p->x2, CTR_PackS16Pair(screenPosX, screenPosY + DEBUG_FONT_DIGIT_TILE_SIZE));
 
 	// Each character is 7x7 pixels,
 	// '0' is 6th character on 2nd row
-	topU = sdata->debugFont.u + (index + 5) * 7;
-	bottomU = topU + 7;
-	topV = sdata->debugFont.v + 7;
-	bottomV = topV + 7;
+	topU = sdata->debugFont.u + (index + DEBUG_FONT_DIGIT_ZERO_ATLAS_OFFSET) * DEBUG_FONT_DIGIT_TILE_SIZE;
+	bottomU = topU + DEBUG_FONT_DIGIT_TILE_SIZE;
+	topV = sdata->debugFont.v + DEBUG_FONT_DIGIT_TILE_SIZE;
+	bottomV = topV + DEBUG_FONT_DIGIT_TILE_SIZE;
 
-	*(int *)&p->u0 = topU | (topV << 8);
-	*(int *)&p->u1 = bottomU | (topV << 8);
-	*(int *)&p->u2 = topU | (bottomV << 8);
-	*(int *)&p->u3 = bottomU | (bottomV << 8);
+	CtrGpu_WritePackedUVWord(&p->u0, topU | (topV << 8));
+	CtrGpu_WritePackedUVWord(&p->u1, bottomU | (topV << 8));
+	CtrGpu_WritePackedUVWord(&p->u2, topU | (bottomV << 8));
+	CtrGpu_WritePackedUVWord(&p->u3, bottomU | (bottomV << 8));
 
 	p->clut = sdata->debugFont.clut;
 	p->tpage = sdata->debugFont.tpage;
 
-	*(int *)p = CtrGpu_PackOTTag(*ot, 0x9000000);
+	p->tag = CtrGpu_PackOTTag(*ot, DEBUG_FONT_PRIM_WORD_COUNT << 0x18);
 	*ot = CtrGpu_PrimToOTLink24(p);
 }

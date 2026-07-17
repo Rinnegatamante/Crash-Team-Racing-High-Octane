@@ -12,7 +12,7 @@
 #include <platform/native_gpu.h>
 #include <platform/native_perf.h>
 #include <gpu.h>
-#include "../platform.h"
+#include <platform.h>
 
 #include <string.h>
 
@@ -44,7 +44,10 @@ int DrawSync(int mode)
 	{
 		DrawAllSplits();
 	}
-	NativeRenderer_ReadFramebufferDataToVRAM();
+	// NOTE(penta3): Real PS1 DrawSync only waits for the GPU; it never copies the
+	// framebuffer back into VRAM. We do the same: no per-frame readback here. The
+	// on-demand consumers that actually sample the framebuffer pull it when needed
+	// (StoreImage/ElimBG pause grab, MoveImage, save-state capture).
 
 	if (drawsync_callback != NULL)
 	{
@@ -54,17 +57,16 @@ int DrawSync(int mode)
 	return 0;
 }
 
-int LoadImage(RECT16 *rect, uint32_t *p)
+int LoadImage(RECT16 *rect, void *p)
 {
 	NativeRenderer_CopyVRAM((unsigned short *)p, 0, 0, rect->w, rect->h, rect->x, rect->y);
 	return 0;
 }
 
-int LoadImage2(RECT16 *rect, uint32_t *p)
+int LoadImage2(RECT16 *rect, void *p)
 {
 	LoadImage(rect, p);
 	NativeRenderer_UpdateVRAM();
-	NativeRenderer_ReadFramebufferDataToVRAM();
 	return 0;
 }
 
@@ -267,7 +269,7 @@ uint32_t DrawSyncCallback(void (*func)(void))
 	return 0;
 }
 
-void DrawOTag(uint32_t *p)
+void DrawOTag(void *p)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_DRAW_OTAG);
 	do

@@ -15,3 +15,13 @@ void srand(unsigned int seed)
 {
 	psxRandSeed = (u32)seed;
 }
+
+u32 PSX_BIOS_GetRandSeed(void)
+{
+	return psxRandSeed;
+}
+
+void PSX_BIOS_SetRandSeed(u32 seed)
+{
+	psxRandSeed = seed;
+}

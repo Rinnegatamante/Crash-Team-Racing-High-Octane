@@ -2,6 +2,7 @@
 
 #include <macros.h>
 
+#include <platform/native_disc_image.h>
 #include <platform/native_path.h>
 
 #if defined(_WIN32)
@@ -20,6 +21,7 @@
 #define NATIVE_ASSETS_KART_HWL_PATH              "SOUNDS/KART.HWL"
 #define NATIVE_ASSETS_TEST_STR_PATH              "TEST.STR"
 #define NATIVE_ASSETS_XNF_PATH                   "XA/ENG.XNF"
+#define NATIVE_ASSETS_DISC_PATH                  "ctr-u.bin"
 
 #define NATIVE_ASSETS_XA_TYPE_COUNT              3
 #define NATIVE_ASSETS_XA_HEADER_SIZE             0x44
@@ -29,12 +31,6 @@
 #define NATIVE_ASSETS_XA_FIRST_SONG_INDEX_OFFSET 0x38
 #define NATIVE_ASSETS_XA_ENTRY_BYTES             4
 #define NATIVE_ASSETS_XA_MAX_FILE_NUMBER         256
-
-struct NativeAssetsByteBuffer
-{
-	u8 *data;
-	int size;
-};
 
 struct NativeAssetIndexEntry
 {
@@ -49,36 +45,6 @@ global_variable struct NativeAssetIndexEntry *s_nativeAssetIndex;
 global_variable int s_nativeAssetIndexCount;
 global_variable int s_nativeAssetIndexCapacity;
 global_variable int s_nativeAssetIndexBuilt;
-
-internal u8 NativeAssets_ToLowerAscii(u8 byte)
-{
-	if ((byte >= 'A') && (byte <= 'Z'))
-	{
-		byte = (u8)(byte + ('a' - 'A'));
-	}
-
-	return byte;
-}
-
-internal int NativeAssets_Str8EqualsIgnoreCase(NativeStr8 left, NativeStr8 right)
-{
-	size_t i;
-
-	if (left.len != right.len)
-	{
-		return 0;
-	}
-
-	for (i = 0; i < left.len; i++)
-	{
-		if (NativeAssets_ToLowerAscii(left.ptr[i]) != NativeAssets_ToLowerAscii(right.ptr[i]))
-		{
-			return 0;
-		}
-	}
-
-	return 1;
-}
 
 internal int NativeAssets_FileExistsHost(const char *path)
 {
@@ -161,7 +127,7 @@ internal int NativeAssets_FindHostChildCaseInsensitive(NativeStr8 parent, Native
 				break;
 			}
 
-			if ((match[0] == '\0') && NativeAssets_Str8EqualsIgnoreCase(entryName, child))
+			if ((match[0] == '\0') && NativeStr8_EqualsIgnoreCaseAscii(entryName, child))
 			{
 				if (!NativeStr8_CopyToCString(match, sizeof(match), entryName))
 				{
@@ -199,7 +165,7 @@ internal int NativeAssets_FindHostChildCaseInsensitive(NativeStr8 parent, Native
 			break;
 		}
 
-		if ((match[0] == '\0') && NativeAssets_Str8EqualsIgnoreCase(entryName, child))
+		if ((match[0] == '\0') && NativeStr8_EqualsIgnoreCaseAscii(entryName, child))
 		{
 			if (!NativeStr8_CopyToCString(match, sizeof(match), entryName))
 			{
@@ -313,7 +279,7 @@ internal int NativeAssets_NormalizeRelativeKey(NativeStr8 relativePath, char *ds
 	for (i = 0; i < relativePath.len; i++)
 	{
 		u8 byte = relativePath.ptr[i];
-		dst[i] = (char)(NativePath_IsSeparator(byte) ? '/' : NativeAssets_ToLowerAscii(byte));
+		dst[i] = (char)(NativePath_IsSeparator(byte) ? '/' : NativeStr8_ToLowerAscii(byte));
 	}
 
 	dst[relativePath.len] = '\0';
@@ -519,6 +485,21 @@ internal int NativeAssets_BaseHasRequiredFile(NativeStr8 baseDir)
 		return 0;
 	}
 
+	if (NativeAssets_FileExistsHost(path))
+	{
+		return 1;
+	}
+
+	if (NativeAssets_FindHostChildCaseInsensitive(NativeStr8_FromCString(assetsDir), NATIVE_STR8_LIT(NATIVE_ASSETS_DISC_PATH), path, sizeof(path)))
+	{
+		return NativeAssets_FileExistsHost(path);
+	}
+
+	if (!NativePath_Join(path, sizeof(path), NativeStr8_FromCString(assetsDir), NATIVE_STR8_LIT(NATIVE_ASSETS_DISC_PATH)))
+	{
+		return 0;
+	}
+
 	return NativeAssets_FileExistsHost(path);
 }
 
@@ -545,6 +526,7 @@ internal int NativeAssets_SetBaseDir(NativeStr8 baseDir)
 		return 0;
 	}
 
+	NativeDiscImage_Init(s_nativeAssetsDir);
 	NativeAssets_ClearIndex();
 	s_nativeAssetsInitialized = 1;
 	return 1;
@@ -553,6 +535,7 @@ internal int NativeAssets_SetBaseDir(NativeStr8 baseDir)
 int NativeAssets_Init(const char *executableBasePath)
 {
 	char parentDir[NATIVE_ASSETS_PATH_MAX];
+	char grandparentDir[NATIVE_ASSETS_PATH_MAX];
 	NativeStr8 exeDir;
 
 	if ((executableBasePath == NULL) || (executableBasePath[0] == '\0'))
@@ -574,6 +557,16 @@ int NativeAssets_Init(const char *executableBasePath)
 		if (NativeAssets_BaseHasRequiredFile(parent))
 		{
 			return NativeAssets_SetBaseDir(parent);
+		}
+
+		if (NativePath_Parent(grandparentDir, sizeof(grandparentDir), parent))
+		{
+			NativeStr8 grandparent = NativeStr8_FromCString(grandparentDir);
+
+			if (NativeAssets_BaseHasRequiredFile(grandparent))
+			{
+				return NativeAssets_SetBaseDir(grandparent);
+			}
 		}
 	}
 
@@ -635,7 +628,7 @@ int NativeAssets_ResolvePath(const char *relativePath, char *dst, size_t dstSize
 	return NativeAssets_ResolvePathStr8(NativeStr8_FromCString(relativePath), dst, dstSize);
 }
 
-FILE *NativeAssets_OpenStr8(NativeStr8 relativePath, const char *mode)
+FILE *NativeAssets_OpenHostStr8(NativeStr8 relativePath, const char *mode)
 {
 	char path[NATIVE_ASSETS_PATH_MAX];
 	FILE *file;
@@ -664,9 +657,14 @@ FILE *NativeAssets_OpenStr8(NativeStr8 relativePath, const char *mode)
 	return fopen(path, mode);
 }
 
-FILE *NativeAssets_Open(const char *relativePath, const char *mode)
+FILE *NativeAssets_OpenHost(const char *relativePath, const char *mode)
 {
-	return NativeAssets_OpenStr8(NativeStr8_FromCString(relativePath), mode);
+	return NativeAssets_OpenHostStr8(NativeStr8_FromCString(relativePath), mode);
+}
+
+FILE *NativeAssets_OpenHostBigfile(const char *mode)
+{
+	return NativeAssets_OpenHostStr8(NATIVE_STR8_LIT(NATIVE_ASSETS_BIGFILE_PATH), mode);
 }
 
 internal int NativeAssets_ReadExact(FILE *file, void *dst, size_t size)
@@ -679,7 +677,7 @@ internal u32 NativeAssets_ReadLE32(const u8 *data)
 	return ((u32)data[0]) | ((u32)data[1] << 8) | ((u32)data[2] << 16) | ((u32)data[3] << 24);
 }
 
-internal int NativeAssets_ReadFileBytes(const char *path, struct NativeAssetsByteBuffer *bytes)
+internal int NativeAssets_ReadHostBytes(const char *path, struct NativeAssetsByteBuffer *bytes)
 {
 	FILE *file;
 	long size;
@@ -687,7 +685,7 @@ internal int NativeAssets_ReadFileBytes(const char *path, struct NativeAssetsByt
 	bytes->data = NULL;
 	bytes->size = 0;
 
-	file = NativeAssets_Open(path, "rb");
+	file = NativeAssets_OpenHost(path, "rb");
 	if (file == NULL)
 	{
 		return 0;
@@ -732,7 +730,20 @@ internal int NativeAssets_ReadFileBytes(const char *path, struct NativeAssetsByt
 	return 1;
 }
 
-internal void NativeAssets_FreeByteBuffer(struct NativeAssetsByteBuffer *bytes)
+int NativeAssets_ReadBytes(const char *path, int readMode, struct NativeAssetsByteBuffer *bytes)
+{
+	bytes->data = NULL;
+	bytes->size = 0;
+
+	if (NativeAssets_ReadHostBytes(path, bytes))
+	{
+		return 1;
+	}
+
+	return NativeDiscImage_ReadFileBytes(path, readMode == NATIVE_ASSET_READ_RAW_CD_SECTORS, &bytes->data, &bytes->size);
+}
+
+void NativeAssets_FreeBytes(struct NativeAssetsByteBuffer *bytes)
 {
 	free(bytes->data);
 	bytes->data = NULL;
@@ -747,13 +758,15 @@ internal void NativeAssets_PrintHeader(void)
 
 internal void NativeAssets_PrintFooter(void)
 {
-	fprintf(stderr, "[CTR Native] Required files: %s, %s, %s, %s, plus XA files referenced by %s\n", NATIVE_ASSETS_BIGFILE_PATH, NATIVE_ASSETS_KART_HWL_PATH,
+	fprintf(stderr, "[CTR Native] Provide either raw NTSC-U disc image %s, or extracted files:\n", NATIVE_ASSETS_DISC_PATH);
+	fprintf(stderr, "[CTR Native]   %s, %s, %s, %s, plus XA files referenced by %s\n", NATIVE_ASSETS_BIGFILE_PATH, NATIVE_ASSETS_KART_HWL_PATH,
 	        NATIVE_ASSETS_TEST_STR_PATH, NATIVE_ASSETS_XNF_PATH, NATIVE_ASSETS_XNF_PATH);
 }
 
 internal int NativeAssets_CheckRequiredFile(const char *path)
 {
 	char assetPath[NATIVE_ASSETS_PATH_MAX];
+	struct NativeDiscImageFile discFile;
 
 	if (!NativeAssets_BuildPath(path, assetPath, sizeof(assetPath)))
 	{
@@ -762,6 +775,11 @@ internal int NativeAssets_CheckRequiredFile(const char *path)
 	}
 
 	if (NativeAssets_ResolvePath(path, assetPath, sizeof(assetPath)))
+	{
+		return 1;
+	}
+
+	if (NativeDiscImage_FindFile(path, &discFile))
 	{
 		return 1;
 	}
@@ -788,7 +806,7 @@ internal int NativeAssets_ValidateXA(void)
 
 	memset(required, 0, sizeof(required));
 
-	if (!NativeAssets_ReadFileBytes(NATIVE_ASSETS_XNF_PATH, &xnf))
+	if (!NativeAssets_ReadBytes(NATIVE_ASSETS_XNF_PATH, NATIVE_ASSET_READ_DATA_FILE, &xnf))
 	{
 		return 0;
 	}
@@ -796,7 +814,7 @@ internal int NativeAssets_ValidateXA(void)
 	if ((xnf.size < NATIVE_ASSETS_XA_HEADER_SIZE) || (NativeAssets_ReadLE32(&xnf.data[0]) != 0x464e4958) || (NativeAssets_ReadLE32(&xnf.data[4]) != 102) ||
 	    (NativeAssets_ReadLE32(&xnf.data[8]) != NATIVE_ASSETS_XA_TYPE_COUNT))
 	{
-		NativeAssets_FreeByteBuffer(&xnf);
+		NativeAssets_FreeBytes(&xnf);
 		fprintf(stderr, "[CTR Native] invalid XA manifest: %s\n", NATIVE_ASSETS_XNF_PATH);
 		return 0;
 	}
@@ -808,7 +826,7 @@ internal int NativeAssets_ValidateXA(void)
 
 	if ((entryEnd < entryOffset) || (entryEnd > (u32)xnf.size))
 	{
-		NativeAssets_FreeByteBuffer(&xnf);
+		NativeAssets_FreeBytes(&xnf);
 		fprintf(stderr, "[CTR Native] invalid XA entry table: %s\n", NATIVE_ASSETS_XNF_PATH);
 		return 0;
 	}
@@ -821,7 +839,7 @@ internal int NativeAssets_ValidateXA(void)
 
 		if ((firstSongIndex > numTracksTotal) || (numSongs > numTracksTotal) || (firstSongIndex + numSongs > numTracksTotal))
 		{
-			NativeAssets_FreeByteBuffer(&xnf);
+			NativeAssets_FreeBytes(&xnf);
 			fprintf(stderr, "[CTR Native] invalid XA song range in %s\n", NATIVE_ASSETS_XNF_PATH);
 			return 0;
 		}
@@ -833,7 +851,7 @@ internal int NativeAssets_ValidateXA(void)
 		}
 	}
 
-	NativeAssets_FreeByteBuffer(&xnf);
+	NativeAssets_FreeBytes(&xnf);
 
 	for (categoryID = 0; categoryID < NATIVE_ASSETS_XA_TYPE_COUNT; categoryID++)
 	{
@@ -843,6 +861,7 @@ internal int NativeAssets_ValidateXA(void)
 		{
 			char relativePath[256];
 			char path[NATIVE_ASSETS_PATH_MAX];
+			struct NativeDiscImageFile discFile;
 			int written;
 
 			if (!required[categoryID][fileNumber])
@@ -858,7 +877,7 @@ internal int NativeAssets_ValidateXA(void)
 				continue;
 			}
 
-			if (!NativeAssets_ResolvePath(relativePath, path, sizeof(path)))
+			if (!NativeAssets_ResolvePath(relativePath, path, sizeof(path)) && !NativeDiscImage_FindFile(relativePath, &discFile))
 			{
 				fprintf(stderr, "[CTR Native] missing XA asset: %s\n", path);
 				missing++;

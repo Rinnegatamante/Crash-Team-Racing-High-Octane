@@ -682,7 +682,7 @@
 
 
 // RefreshCard
-800469f0 RefreshCard_BoolGhostForLEV
+800469f0 RefreshCard_CountGhostProfilesForLEV
 
 // only called from 800472d0
 80046a74 RefreshCard_Unknown1 // unknown 80046a74
@@ -1691,7 +1691,7 @@
 800b0b98 AH_Map_LoadSave_Prim
 800b0ce0 AH_Map_LoadSave_Full
 800b0f18 AH_Map_HubArrow
-800b1150 AH_Map_HubArrowOutter
+800b1150 AH_Map_HubArrowOuter
 800b14f4 AH_Map_HubItems
 800b1a18 AH_Map_Warppads
 800b1c90 AH_Map_Main

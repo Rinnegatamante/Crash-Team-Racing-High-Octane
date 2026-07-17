@@ -124,7 +124,7 @@ void RB_Minecart_ThTick(struct Thread *t)
 		}
 	}
 
-	// what is this?
+	// per-path depth bias
 	minecartInst->depthBiasNormal = minecartArr[minecartObj->posIndex];
 	minecartInst->depthBiasSecondary = minecartArr[minecartObj->posIndex];
 
@@ -140,7 +140,7 @@ void RB_Minecart_ThTick(struct Thread *t)
 	// converted to TEST in rebuildPS1
 	ConvertRotToMatrix(&minecartInst->matrix, &minecartObj->rotCurr);
 
-	PlaySound3D_Flags(&minecartObj->audioPtr,
+	PlaySound3D_Flags(&minecartObj->soundIDCount,
 	                  0x72, // minecart sound
 	                  minecartInst);
 
@@ -177,7 +177,7 @@ void RB_Minecart_LInB(struct Instance *inst)
 	t->inst = inst;
 
 	// memset is faster than erasing the following
-	// betweenPoints_currFrame, rotDesired[2], audioPtr,
+	// betweenPoints_currFrame, rotDesired[2], soundIDCount,
 	// rotCurr[0], rotCurr[1], rotCurr[2]
 
 	minecartObj = ((struct Minecart *)t->object);

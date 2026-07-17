@@ -35,7 +35,7 @@ void OtherFX_RecycleNew(u32 *soundID_Count, u32 newSoundID, u32 modifyFlags)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002e724-0x8002e760
-void OtherFX_RecycleMute(int *soundID_Count)
+void OtherFX_RecycleMute(u32 *soundID_Count)
 {
 	if (*soundID_Count != 0)
 	{

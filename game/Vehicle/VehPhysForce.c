@@ -25,9 +25,94 @@ void VehPhysForce_ConvertSpeedToVec(struct Driver *driver)
 
 enum
 {
-	VEH_PHYS_FORCE_ACTION_PREVENT_ACCEL = 0x8,
 	VEH_PHYS_FORCE_QUAD_LOW_GRAVITY = 0x2,
+	VEH_PHYS_FORCE_LOW_GRAVITY_DIVISOR = 100,
+	VEH_PHYS_FORCE_MUD_TERMINAL_SPEED = 0x100,
+	VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD = 0x300,
+	VEH_PHYS_FORCE_TERRAIN_SCALE_NEUTRAL = 0x100,
+	VEH_PHYS_FORCE_TERRAIN_SIDE_LOCK_TIMER = -0x140,
+	VEH_PHYS_FORCE_TERRAIN_RUMBLE_FRAMES = 4,
+	VEH_PHYS_FORCE_TERRAIN_RUMBLE_FORCE = 0x7f,
+	VEH_PHYS_FORCE_ROLLBACK_WINDOW_TIMER = 0x280,
+	VEH_PHYS_FORCE_MATRIX_BLEND_FULL = 0x100,
+	VEH_PHYS_FORCE_KART_SCALE_BASE = 0xccc,
+	VEH_PHYS_FORCE_MASK_GRAB_SCALE_XZ_FACTOR = 0x28,
+	VEH_PHYS_FORCE_MIN_SQUASH_XZ_SCALE = 0x400,
+	VEH_PHYS_FORCE_TARGET_SQUISH_DEFAULT = -800,
+	VEH_PHYS_FORCE_SQUISH_DEADBAND = 0x960,
+	VEH_PHYS_FORCE_AIR_SQUISH_MIN = -800,
+	VEH_PHYS_FORCE_LANDING_SQUISH_MIN = -0x640,
+	VEH_PHYS_FORCE_SQUISH_MAX = 800,
+	VEH_PHYS_FORCE_HAZARD_BLINK_MASK = 0x80,
+	VEH_PHYS_FORCE_FALL_STRETCH_HEIGHT_MAX = 0xa00,
+	VEH_PHYS_FORCE_FALL_STRETCH_MIN = 0x280,
+	VEH_PHYS_FORCE_FALL_STRETCH_MAX = 0x320,
+	VEH_PHYS_FORCE_TNT_SCALE_Y_THRESHOLD = 2500,
+	VEH_PHYS_FORCE_TNT_SCALE_Y_BASE = 0x800,
+	VEH_PHYS_FORCE_SQUISH_INTERP_SPEED = 300,
+	VEH_PHYS_FORCE_SQUISH_SCALE_INTERP_SPEED = 0xa0,
+	VEH_PHYS_FORCE_SQUISH_SCALE_XZ_FACTOR = 0xa0,
+	VEH_PHYS_FORCE_SQUISH_RESTORE_SFX = 0x5b,
+	VEH_PHYS_FORCE_SQUISH_OFFSET_NORMAL_SCALE = 0x13,
+	VEH_PHYS_FORCE_WAKE_PARTICLE_ICON_GROUP = 9,
+	VEH_PHYS_FORCE_WAKE_WATERLINE_Y = 0,
+	VEH_PHYS_FORCE_WAKE_VISIBLE_MIN_Y = -0x4f,
+	VEH_PHYS_FORCE_WAKE_INITIAL_SCALE = 0x1000,
+	VEH_PHYS_FORCE_WAKE_PARTICLE_SPEED_MIN = 0xc00,
+	VEH_PHYS_FORCE_WAKE_PARTICLE_PREV_Y_MIN = -0x200,
+	VEH_PHYS_FORCE_WAKE_BURST_PARTICLE_COUNT = 10,
+	VEH_PHYS_FORCE_TURBO_PAD_RESERVES = 0x3c0,
+	VEH_PHYS_FORCE_SUPER_TURBO_PAD_RESERVES = 0x78,
+	VEH_PHYS_FORCE_TURBO_PAD_FIRE_LEVEL = 0x100,
+	VEH_PHYS_FORCE_SUPER_TURBO_PAD_FIRE_LEVEL = 0x800,
+	VEH_PHYS_FORCE_COLLISION_BEST_DIST_INIT = 0x7fffffff,
+	VEH_PHYS_FORCE_SURFACE_PUSHBACK_Y_BIAS = 4,
+	VEH_PHYS_FORCE_SURFACE_PUSHBACK_SHIFT = 6,
 };
+
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_QUAD_LOW_GRAVITY == 0x2);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_LOW_GRAVITY_DIVISOR == 100);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_MUD_TERMINAL_SPEED == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD == 0x300);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TERRAIN_SCALE_NEUTRAL == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TERRAIN_SIDE_LOCK_TIMER == -0x140);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TERRAIN_RUMBLE_FRAMES == 4);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TERRAIN_RUMBLE_FORCE == 0x7f);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_ROLLBACK_WINDOW_TIMER == 0x280);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_MATRIX_BLEND_FULL == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_KART_SCALE_BASE == 0xccc);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_MASK_GRAB_SCALE_XZ_FACTOR == 0x28);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_MIN_SQUASH_XZ_SCALE == 0x400);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TARGET_SQUISH_DEFAULT == -800);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_DEADBAND == 0x960);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_AIR_SQUISH_MIN == -800);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_LANDING_SQUISH_MIN == -0x640);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_MAX == 800);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_HAZARD_BLINK_MASK == 0x80);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_FALL_STRETCH_HEIGHT_MAX == 0xa00);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_FALL_STRETCH_MIN == 0x280);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_FALL_STRETCH_MAX == 0x320);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TNT_SCALE_Y_THRESHOLD == 2500);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TNT_SCALE_Y_BASE == 0x800);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_INTERP_SPEED == 300);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_SCALE_INTERP_SPEED == 0xa0);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_SCALE_XZ_FACTOR == 0xa0);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_RESTORE_SFX == 0x5b);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SQUISH_OFFSET_NORMAL_SCALE == 0x13);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_PARTICLE_ICON_GROUP == 9);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_WATERLINE_Y == 0);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_VISIBLE_MIN_Y == -0x4f);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_INITIAL_SCALE == 0x1000);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_PARTICLE_SPEED_MIN == 0xc00);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_PARTICLE_PREV_Y_MIN == -0x200);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_WAKE_BURST_PARTICLE_COUNT == 10);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TURBO_PAD_RESERVES == 0x3c0);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SUPER_TURBO_PAD_RESERVES == 0x78);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_TURBO_PAD_FIRE_LEVEL == 0x100);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SUPER_TURBO_PAD_FIRE_LEVEL == 0x800);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_COLLISION_BEST_DIST_INIT == 0x7fffffff);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SURFACE_PUSHBACK_Y_BIAS == 4);
+CTR_STATIC_ASSERT(VEH_PHYS_FORCE_SURFACE_PUSHBACK_SHIFT == 6);
 
 static int VehPhysForce_OnGravity_Abs(int value)
 {
@@ -102,7 +187,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 	if ((underDriver != NULL) && ((underDriver->quadFlags & VEH_PHYS_FORCE_QUAD_LOW_GRAVITY) != 0))
 	{
 		int scaledGravity = CTR_MipsAddLo(CTR_MipsSll(gravityY, 2), gravityY);
-		gravityY = CTR_MipsAddLo(CTR_MipsSll(scaledGravity, 3), gravityY) / 100;
+		gravityY = CTR_MipsAddLo(CTR_MipsSll(scaledGravity, 3), gravityY) / VEH_PHYS_FORCE_LOW_GRAVITY_DIVISOR;
 	}
 
 	gravityY = CTR_MipsSra(CTR_MipsMulLo(gravityY, elapsedTimeMS), 5);
@@ -116,8 +201,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 	u32 actionsFlagSet = driver->actionsFlagSet;
 	int speedApprox = driver->speedApprox;
 	int baseSpeed = driver->baseSpeed;
-	if ((actionsFlagSet & VEH_PHYS_FORCE_ACTION_PREVENT_ACCEL) || ((baseSpeed > 0) && (speedApprox < 0)) ||
-	    ((driver->baseSpeed < 0) && (driver->speedApprox > 0)))
+	if ((actionsFlagSet & ACTION_ACCEL_PREVENTION) || ((baseSpeed > 0) && (speedApprox < 0)) || ((driver->baseSpeed < 0) && (driver->speedApprox > 0)))
 	{
 		localGravity.x = 0;
 		localGravity.z = 0;
@@ -171,10 +255,13 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 
 	TerrainFlags terrainFlags = driver->terrainMeta1->flags;
 	int terminalVelocity = driver->const_TerminalVelocity;
-	if ((localY < 0) && ((terrainFlags & TERRAIN_FLAG_MUD_PHYSICS) != 0) && (originalLocalY < -0x100))
+	if ((localY < 0) && ((terrainFlags & TERRAIN_FLAG_MUD_PHYSICS) != 0))
 	{
-		terminalVelocity = 0x100;
-		originalLocalY = -0x100;
+		terminalVelocity = VEH_PHYS_FORCE_MUD_TERMINAL_SPEED;
+		if (originalLocalY < -VEH_PHYS_FORCE_MUD_TERMINAL_SPEED)
+		{
+			originalLocalY = -VEH_PHYS_FORCE_MUD_TERMINAL_SPEED;
+		}
 	}
 
 	int clampedLocalY = localY;
@@ -205,12 +292,12 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 		localZ = 0;
 	}
 	else if (((driver->actionsFlagSetPrevFrame & ACTION_TOUCH_GROUND) != 0) || (driver->kartState == KS_BLASTED) ||
-	         ((driver->terrainScaledBaseSpeed < driver->speedApprox) && (driver->terrainMeta2->speedMultiplier < 0x100)))
+	         ((driver->terrainScaledBaseSpeed < driver->speedApprox) && (driver->terrainMeta2->speedMultiplier < VEH_PHYS_FORCE_TERRAIN_SCALE_NEUTRAL)))
 	{
 		int perpendicularFriction;
 		int forwardFriction;
 
-		if ((actionsFlagSet & VEH_PHYS_FORCE_ACTION_PREVENT_ACCEL) == 0)
+		if ((actionsFlagSet & ACTION_ACCEL_PREVENTION) == 0)
 		{
 			if (baseSpeed == 0)
 			{
@@ -226,7 +313,8 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 			else
 			{
 				int absSpeedApprox = VehPhysForce_OnGravity_Abs(speedApprox);
-				if ((absSpeedApprox < 0x301) || (((baseSpeed < 1) || (speedApprox >= 0)) && ((baseSpeed >= 0) || (speedApprox < 1))))
+				if ((absSpeedApprox < (VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD + 1)) ||
+				    (((baseSpeed < 1) || (speedApprox >= 0)) && ((baseSpeed >= 0) || (speedApprox < 1))))
 				{
 					if (driver->kartState == KS_DRIFTING)
 					{
@@ -238,7 +326,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 						perpendicularFriction = driver->const_PedalFriction_Perpendicular;
 						forwardFriction = driver->const_PedalFriction_Forward;
 
-						if (absSpeedApprox > 0x300)
+						if (absSpeedApprox > VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD)
 						{
 							int absBaseSpeed = VehPhysForce_OnGravity_Abs(baseSpeed);
 							if (absSpeedApprox < CTR_MipsSra(absBaseSpeed, 1))
@@ -253,7 +341,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 					perpendicularFriction = driver->const_PedalFriction_Perpendicular;
 					forwardFriction = driver->const_BrakeFriction;
 
-					if (absSpeedApprox > 0x300)
+					if (absSpeedApprox > VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD)
 					{
 						actionsFlagSet |= ACTION_BACK_SKID;
 					}
@@ -263,7 +351,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 		else
 		{
 			int absSpeedApprox = VehPhysForce_OnGravity_Abs(speedApprox);
-			if (absSpeedApprox > 0x300)
+			if (absSpeedApprox > VEH_PHYS_FORCE_SKID_SPEED_THRESHOLD)
 			{
 				actionsFlagSet |= ACTION_BACK_SKID;
 			}
@@ -294,7 +382,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 		forwardFriction = CTR_MipsSra(CTR_MipsMulLo(forwardFriction, elapsedTimeMS), 5);
 
 		int terrainFrictionScale = driver->terrainMeta1->groundFrictionScale;
-		if (terrainFrictionScale != 0x100)
+		if (terrainFrictionScale != VEH_PHYS_FORCE_TERRAIN_SCALE_NEUTRAL)
 		{
 			perpendicularFriction = CTR_MipsSra(CTR_MipsMulLo(terrainFrictionScale, perpendicularFriction), 8);
 			forwardFriction = CTR_MipsSra(CTR_MipsMulLo(terrainFrictionScale, forwardFriction), 8);
@@ -304,7 +392,7 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 		if (terrainTimer < 0)
 		{
 			int absLocalX = localX;
-			if (terrainTimer == -0x140)
+			if (terrainTimer == VEH_PHYS_FORCE_TERRAIN_SIDE_LOCK_TIMER)
 			{
 				absLocalX = VehPhysForce_OnGravity_Abs(localX);
 				perpendicularFriction = CTR_MipsSra(absLocalX, 1);
@@ -324,8 +412,8 @@ void VehPhysForce_OnGravity(struct Driver *driver, Vec3 *velocity)
 			if (absLocalX > 0)
 			{
 				actionsFlagSet |= ACTION_BACK_SKID | ACTION_FRONT_SKID;
-				GAMEPAD_ShockForce1(driver, 4, 0x7f);
-				GAMEPAD_ShockFreq(driver, 4, 0);
+				GAMEPAD_ShockForce1(driver, VEH_PHYS_FORCE_TERRAIN_RUMBLE_FRAMES, VEH_PHYS_FORCE_TERRAIN_RUMBLE_FORCE);
+				GAMEPAD_ShockFreq(driver, VEH_PHYS_FORCE_TERRAIN_RUMBLE_FRAMES, 0);
 			}
 
 			terrainTimer = CTR_MipsAddLo(terrainTimer, elapsedTimeMS);
@@ -463,7 +551,7 @@ START_ROLLBACK:
 	{
 		driver->vShiftCount = (s16)CTR_MipsAddLo((u16)driver->vShiftCount, 1);
 	}
-	driver->vShiftWindowTimer = 0x280;
+	driver->vShiftWindowTimer = VEH_PHYS_FORCE_ROLLBACK_WINDOW_TIMER;
 }
 
 static Vec3 VehPhysForce_OnApplyForces_RotateVector(const MATRIX *m, s16 vx, s16 vy, s16 vz)
@@ -538,17 +626,18 @@ void VehPhysForce_CollideDrivers(struct Thread *thread, struct Driver *driver)
 
 	if ((stepFlagSet & COLL_STEP_TRIGGER_SUPER_TURBO_PAD) != 0)
 	{
-		VehFire_Increment(driver, 0x78, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD, 0x800);
+		VehFire_Increment(driver, VEH_PHYS_FORCE_SUPER_TURBO_PAD_RESERVES, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD, VEH_PHYS_FORCE_SUPER_TURBO_PAD_FIRE_LEVEL);
 	}
 	else if ((stepFlagSet & COLL_STEP_TRIGGER_TURBO_PAD) != 0)
 	{
 		if ((sdata->gGT->gameMode2 & CHEAT_TURBOPAD) == 0)
 		{
-			VehFire_Increment(driver, 0x3c0, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD, 0x100);
+			VehFire_Increment(driver, VEH_PHYS_FORCE_TURBO_PAD_RESERVES, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD, VEH_PHYS_FORCE_TURBO_PAD_FIRE_LEVEL);
 		}
 		else
 		{
-			VehFire_Increment(driver, 0x78, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD, 0x800);
+			VehFire_Increment(driver, VEH_PHYS_FORCE_SUPER_TURBO_PAD_RESERVES, TURBO_PAD | FREEZE_RESERVES_ON_TURBO_PAD,
+			                  VEH_PHYS_FORCE_SUPER_TURBO_PAD_FIRE_LEVEL);
 		}
 	}
 
@@ -566,10 +655,10 @@ void VehPhysForce_CollideDrivers(struct Thread *thread, struct Driver *driver)
 	{
 		struct DriverCollisionSearch search;
 
-		CTR_SET_VEC3(search.bucket.pos.v, (s16)CTR_MipsSra(driver->posCurr.x, 8), (s16)CTR_MipsSra(driver->posCurr.y, 8),
-		             (s16)CTR_MipsSra(driver->posCurr.z, 8));
+		CTR_SET_VEC3(search.bucket.pos.v, (s16)CTR_MipsSra(driver->posCurr.x, FRACTIONAL_BITS_8), (s16)CTR_MipsSra(driver->posCurr.y, FRACTIONAL_BITS_8),
+		             (s16)CTR_MipsSra(driver->posCurr.z, FRACTIONAL_BITS_8));
 		search.bucket.th = NULL;
-		search.bucket.bestDistSq = 0x7fffffff;
+		search.bucket.bestDistSq = VEH_PHYS_FORCE_COLLISION_BEST_DIST_INIT;
 
 		PROC_CollidePointWithBucket(thread->siblingThread, &search.bucket);
 		PROC_CollidePointWithBucket(sdata->gGT->threadBuckets[ROBOT].thread, &search.bucket);
@@ -587,18 +676,19 @@ void VehPhysForce_CollideDrivers(struct Thread *thread, struct Driver *driver)
 
 	if ((driver->collisionFlags & DRIVER_COLL_FLAG_SURFACE_PUSHBACK) != 0)
 	{
-		int diffX = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.x, 8), driver->spsHitPos.x);
-		int diffZ = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.z, 8), driver->spsHitPos.z);
-		int floorDiffY = CTR_MipsAddLo(CTR_MipsSubLo(CTR_MipsSra(driver->quadBlockHeight, 8), driver->spsHitPos.y), 4);
+		int diffX = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.x, FRACTIONAL_BITS_8), driver->spsHitPos.x);
+		int diffZ = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.z, FRACTIONAL_BITS_8), driver->spsHitPos.z);
+		int floorDiffY =
+		    CTR_MipsAddLo(CTR_MipsSubLo(CTR_MipsSra(driver->quadBlockHeight, FRACTIONAL_BITS_8), driver->spsHitPos.y), VEH_PHYS_FORCE_SURFACE_PUSHBACK_Y_BIAS);
 
 		if (CTR_MipsAddLo(CTR_MipsAddLo(CTR_MipsMulLo(driver->spsNormalVec.x, diffX), CTR_MipsMulLo(driver->spsNormalVec.y, floorDiffY)),
 		                  CTR_MipsMulLo(driver->spsNormalVec.z, diffZ)) < 0)
 		{
-			int diffY = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.y, 8), driver->spsHitPos.y);
+			int diffY = CTR_MipsSubLo(CTR_MipsSra(driver->posCurr.y, FRACTIONAL_BITS_8), driver->spsHitPos.y);
 
-			driver->velocity.x = CTR_MipsAddLo(driver->velocity.x, CTR_MipsSll(diffX, 6));
-			driver->velocity.y = CTR_MipsAddLo(driver->velocity.y, CTR_MipsSll(diffY, 6));
-			driver->velocity.z = CTR_MipsAddLo(driver->velocity.z, CTR_MipsSll(diffZ, 6));
+			driver->velocity.x = CTR_MipsAddLo(driver->velocity.x, CTR_MipsSll(diffX, VEH_PHYS_FORCE_SURFACE_PUSHBACK_SHIFT));
+			driver->velocity.y = CTR_MipsAddLo(driver->velocity.y, CTR_MipsSll(diffY, VEH_PHYS_FORCE_SURFACE_PUSHBACK_SHIFT));
+			driver->velocity.z = CTR_MipsAddLo(driver->velocity.z, CTR_MipsSll(diffZ, VEH_PHYS_FORCE_SURFACE_PUSHBACK_SHIFT));
 		}
 	}
 }
@@ -644,15 +734,15 @@ static struct MatrixND *VehPhysForce_TranslateMatrix_GetBakedEntry(u8 matrixArra
 static u8 VehPhysForce_TranslateMatrix_RemapIndex(u8 matrixIndex, int fromArray, int toArray)
 {
 	int fromLast = CTR_MipsSubLo(data.bakedGteMath[fromArray].numEntries, 1);
-	int blend = CTR_MipsSubLo(0x100, CTR_MipsDiv(CTR_MipsSll(matrixIndex, 8), fromLast));
+	int blend = CTR_MipsSubLo(VEH_PHYS_FORCE_MATRIX_BLEND_FULL, CTR_MipsDiv(CTR_MipsSll(matrixIndex, 8), fromLast));
 
 	if (blend < 0)
 	{
 		blend = 0;
 	}
-	if (blend > 0x100)
+	if (blend > VEH_PHYS_FORCE_MATRIX_BLEND_FULL)
 	{
-		blend = 0x100;
+		blend = VEH_PHYS_FORCE_MATRIX_BLEND_FULL;
 	}
 
 	return (u8)CTR_MipsSra(CTR_MipsMulLo(blend, CTR_MipsSubLo(data.bakedGteMath[toArray].numEntries, 1)), 8);
@@ -660,7 +750,7 @@ static u8 VehPhysForce_TranslateMatrix_RemapIndex(u8 matrixIndex, int fromArray,
 
 static void VehPhysForce_TranslateMatrix_ResetMatrixAnim(struct Driver *d)
 {
-	d->matrixArray = 0;
+	d->matrixArray = BAKED_GTE_MATRIX_NONE;
 	d->matrixIndex = 0;
 }
 
@@ -675,12 +765,13 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 	{
 		int scaleXZ;
 
-		inst->scale.y = (s16)CTR_MipsAddLo((u16)d->jumpSquishStretch, 0xccc);
+		inst->scale.y = (s16)CTR_MipsAddLo((u16)d->jumpSquishStretch, VEH_PHYS_FORCE_KART_SCALE_BASE);
 
-		scaleXZ = CTR_MipsSubLo(0xccc, VehPhysForce_TranslateMatrix_Div256TowardZero(CTR_MipsMulLo(d->jumpSquishStretch, 0x28)));
-		if (scaleXZ < 0x400)
+		scaleXZ = CTR_MipsSubLo(VEH_PHYS_FORCE_KART_SCALE_BASE,
+		                        VehPhysForce_TranslateMatrix_Div256TowardZero(CTR_MipsMulLo(d->jumpSquishStretch, VEH_PHYS_FORCE_MASK_GRAB_SCALE_XZ_FACTOR)));
+		if (scaleXZ < VEH_PHYS_FORCE_MIN_SQUASH_XZ_SCALE)
 		{
-			scaleXZ = 0x400;
+			scaleXZ = VEH_PHYS_FORCE_MIN_SQUASH_XZ_SCALE;
 		}
 
 		inst->scale.x = scaleXZ;
@@ -689,46 +780,47 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 	}
 
 	int jumpHeightCurr = d->jumpHeightCurr;
-	int targetSquish = -800;
+	int targetSquish = VEH_PHYS_FORCE_TARGET_SQUISH_DEFAULT;
 
 	if ((d->actionsFlagSet & ACTION_JUMP_STARTED) == 0)
 	{
 		int smoothed = CTR_MipsSra(CTR_MipsAddLo(CTR_MipsMulLo(d->jumpSquishStretch2, 9), CTR_MipsMulLo(jumpHeightCurr, 7)), 4);
 		int delta = CTR_MipsSll(CTR_MipsSubLo(d->jumpSquishStretch2, smoothed), 2);
 
-		if (VehPhysForce_TranslateMatrix_Abs(delta) < 0x960)
+		if (VehPhysForce_TranslateMatrix_Abs(delta) < VEH_PHYS_FORCE_SQUISH_DEADBAND)
 		{
 			delta = 0;
 		}
 
 		if (((d->actionsFlagSet | d->actionsFlagSetPrevFrame) & ACTION_STARTED_TOUCH_GROUND) == 0)
 		{
-			if (delta < -800)
+			if (delta < VEH_PHYS_FORCE_AIR_SQUISH_MIN)
 			{
-				delta = -800;
+				delta = VEH_PHYS_FORCE_AIR_SQUISH_MIN;
 			}
 		}
-		else if (delta < -0x640)
+		else if (delta < VEH_PHYS_FORCE_LANDING_SQUISH_MIN)
 		{
-			delta = -0x640;
+			delta = VEH_PHYS_FORCE_LANDING_SQUISH_MIN;
 		}
 
-		if (delta > 800)
+		if (delta > VEH_PHYS_FORCE_SQUISH_MAX)
 		{
-			delta = 800;
+			delta = VEH_PHYS_FORCE_SQUISH_MAX;
 		}
 
 		targetSquish = delta;
 	}
 
-	if ((d->hazardTimer > 0) && ((d->hazardTimer & 0x80) == 0) && (targetSquish > -800))
+	if ((d->hazardTimer > 0) && ((d->hazardTimer & VEH_PHYS_FORCE_HAZARD_BLINK_MASK) == 0) && (targetSquish > VEH_PHYS_FORCE_TARGET_SQUISH_DEFAULT))
 	{
-		targetSquish = -800;
+		targetSquish = VEH_PHYS_FORCE_TARGET_SQUISH_DEFAULT;
 	}
 
 	if (((d->actionsFlagSet & ACTION_TOUCH_GROUND) == 0) && (jumpHeightCurr < 0))
 	{
-		int mapped = VehCalc_MapToRange(CTR_MipsNegLo(jumpHeightCurr), 0, 0xa00, 0x280, 0x320);
+		int mapped = VehCalc_MapToRange(CTR_MipsNegLo(jumpHeightCurr), 0, VEH_PHYS_FORCE_FALL_STRETCH_HEIGHT_MAX, VEH_PHYS_FORCE_FALL_STRETCH_MIN,
+		                                VEH_PHYS_FORCE_FALL_STRETCH_MAX);
 
 		if (targetSquish < mapped)
 		{
@@ -738,9 +830,9 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 		d->jumpSquishStretch2 = jumpHeightCurr;
 	}
 
-	if ((d->instTntRecv != NULL) && (d->instTntRecv->scale.y < 2500))
+	if ((d->instTntRecv != NULL) && (d->instTntRecv->scale.y < VEH_PHYS_FORCE_TNT_SCALE_Y_THRESHOLD))
 	{
-		targetSquish = CTR_MipsAddLo(targetSquish, CTR_MipsSll(CTR_MipsSubLo(d->instTntRecv->scale.y, 0x800), 1));
+		targetSquish = CTR_MipsAddLo(targetSquish, CTR_MipsSll(CTR_MipsSubLo(d->instTntRecv->scale.y, VEH_PHYS_FORCE_TNT_SCALE_Y_BASE), 1));
 	}
 
 	if (VehPhysForce_TranslateMatrix_Abs(d->jumpSquishStretch) < VehPhysForce_TranslateMatrix_Abs(targetSquish))
@@ -748,7 +840,7 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 		d->jumpSquishStretch = targetSquish;
 	}
 
-	d->jumpSquishStretch = VehCalc_InterpBySpeed(d->jumpSquishStretch, 300, 0);
+	d->jumpSquishStretch = VehCalc_InterpBySpeed(d->jumpSquishStretch, VEH_PHYS_FORCE_SQUISH_INTERP_SPEED, 0);
 	d->jumpSquishStretch2 = (s16)CTR_MipsSra(CTR_MipsAddLo(CTR_MipsMulLo(d->jumpSquishStretch2, 9), CTR_MipsMulLo(jumpHeightCurr, 7)), 4);
 
 	if (d->squishTimer != 0)
@@ -757,43 +849,45 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 	}
 	else if (inst->scale.y == 0)
 	{
-		if (d->instSelf->thread->modelIndex == 0x18)
+		if (d->instSelf->thread->modelIndex == DYNAMIC_PLAYER)
 		{
-			OtherFX_Play_Echo(0x5b, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+			OtherFX_Play_Echo(VEH_PHYS_FORCE_SQUISH_RESTORE_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
 		}
 
-		inst->scale.y = (s16)CTR_MipsAddLo((u16)d->jumpSquishStretch, 0xccc);
-		d->matrixArray = 5;
+		inst->scale.y = (s16)CTR_MipsAddLo((u16)d->jumpSquishStretch, VEH_PHYS_FORCE_KART_SCALE_BASE);
+		d->matrixArray = BAKED_GTE_MATRIX_SQUISH_RECOVER;
 		d->matrixIndex = 0;
 	}
 	else
 	{
-		inst->scale.y = VehCalc_InterpBySpeed(inst->scale.y, 0xa0, CTR_MipsAddLo(d->jumpSquishStretch, 0xccc));
+		inst->scale.y =
+		    VehCalc_InterpBySpeed(inst->scale.y, VEH_PHYS_FORCE_SQUISH_SCALE_INTERP_SPEED, CTR_MipsAddLo(d->jumpSquishStretch, VEH_PHYS_FORCE_KART_SCALE_BASE));
 	}
 
-	int scaleXZ = CTR_MipsSubLo(0xccc, VehPhysForce_TranslateMatrix_Div256TowardZero(CTR_MipsMulLo(d->jumpSquishStretch, 0xa0)));
-	inst->scale.x = VehCalc_InterpBySpeed(inst->scale.x, 0xa0, scaleXZ);
-	inst->scale.z = VehCalc_InterpBySpeed(inst->scale.z, 0xa0, scaleXZ);
+	int scaleXZ = CTR_MipsSubLo(VEH_PHYS_FORCE_KART_SCALE_BASE,
+	                            VehPhysForce_TranslateMatrix_Div256TowardZero(CTR_MipsMulLo(d->jumpSquishStretch, VEH_PHYS_FORCE_SQUISH_SCALE_XZ_FACTOR)));
+	inst->scale.x = VehCalc_InterpBySpeed(inst->scale.x, VEH_PHYS_FORCE_SQUISH_SCALE_INTERP_SPEED, scaleXZ);
+	inst->scale.z = VehCalc_InterpBySpeed(inst->scale.z, VEH_PHYS_FORCE_SQUISH_SCALE_INTERP_SPEED, scaleXZ);
 }
 
 static void VehPhysForce_TranslateMatrix_UpdateMatrixAnimation(struct Driver *d)
 {
 	if ((d->reserves == 0) || (d->fireSpeed < d->const_Speed_ClassStat) || ((d->actionsFlagSet & ACTION_TURBO_INPUT_LATCH) != 0))
 	{
-		if (d->matrixArray == 2)
+		if (d->matrixArray == BAKED_GTE_MATRIX_WHEELIE_HOLD)
 		{
-			d->matrixArray = 3;
+			d->matrixArray = BAKED_GTE_MATRIX_WHEELIE_RECOVER;
 			d->matrixIndex = 0;
 		}
-		else if (d->matrixArray == 1)
+		else if (d->matrixArray == BAKED_GTE_MATRIX_WHEELIE_START)
 		{
-			d->matrixIndex = VehPhysForce_TranslateMatrix_RemapIndex(d->matrixIndex, 1, 3);
-			d->matrixArray = 3;
+			d->matrixIndex = VehPhysForce_TranslateMatrix_RemapIndex(d->matrixIndex, BAKED_GTE_MATRIX_WHEELIE_START, BAKED_GTE_MATRIX_WHEELIE_RECOVER);
+			d->matrixArray = BAKED_GTE_MATRIX_WHEELIE_RECOVER;
 		}
-		else if (d->matrixArray == 3)
+		else if (d->matrixArray == BAKED_GTE_MATRIX_WHEELIE_RECOVER)
 		{
 			d->matrixIndex++;
-			if (d->matrixIndex >= data.bakedGteMath[3].numEntries)
+			if (d->matrixIndex >= data.bakedGteMath[BAKED_GTE_MATRIX_WHEELIE_RECOVER].numEntries)
 			{
 				VehPhysForce_TranslateMatrix_ResetMatrixAnim(d);
 			}
@@ -801,31 +895,31 @@ static void VehPhysForce_TranslateMatrix_UpdateMatrixAnimation(struct Driver *d)
 	}
 	else
 	{
-		if (d->matrixArray == 1)
+		if (d->matrixArray == BAKED_GTE_MATRIX_WHEELIE_START)
 		{
 			d->matrixIndex++;
-			if (d->matrixIndex >= data.bakedGteMath[1].numEntries)
+			if (d->matrixIndex >= data.bakedGteMath[BAKED_GTE_MATRIX_WHEELIE_START].numEntries)
 			{
-				d->matrixArray = 2;
+				d->matrixArray = BAKED_GTE_MATRIX_WHEELIE_HOLD;
 				d->matrixIndex = 0;
 			}
 		}
-		else if (d->matrixArray == 3)
+		else if (d->matrixArray == BAKED_GTE_MATRIX_WHEELIE_RECOVER)
 		{
-			d->matrixIndex = VehPhysForce_TranslateMatrix_RemapIndex(d->matrixIndex, 3, 1);
-			d->matrixArray = 1;
+			d->matrixIndex = VehPhysForce_TranslateMatrix_RemapIndex(d->matrixIndex, BAKED_GTE_MATRIX_WHEELIE_RECOVER, BAKED_GTE_MATRIX_WHEELIE_START);
+			d->matrixArray = BAKED_GTE_MATRIX_WHEELIE_START;
 		}
-		else if (d->matrixArray == 0)
+		else if (d->matrixArray == BAKED_GTE_MATRIX_NONE)
 		{
-			d->matrixArray = 1;
+			d->matrixArray = BAKED_GTE_MATRIX_WHEELIE_START;
 			d->matrixIndex = 0;
 		}
 	}
 
-	if (d->matrixArray == 5)
+	if (d->matrixArray == BAKED_GTE_MATRIX_SQUISH_RECOVER)
 	{
 		d->matrixIndex++;
-		if (d->matrixIndex >= data.bakedGteMath[5].numEntries)
+		if (d->matrixIndex >= data.bakedGteMath[BAKED_GTE_MATRIX_SQUISH_RECOVER].numEntries)
 		{
 			VehPhysForce_TranslateMatrix_ResetMatrixAnim(d);
 		}
@@ -849,7 +943,7 @@ static void VehPhysForce_TranslateMatrix_UpdateInstanceMatrix(struct Instance *i
 {
 	int screenOffsetY = CTR_MipsSra(CTR_MipsMulLo((s8)d->Screen_OffsetY, 3), 3);
 
-	if (d->matrixArray == 0)
+	if (d->matrixArray == BAKED_GTE_MATRIX_NONE)
 	{
 		VehPhysForce_TranslateMatrix_CopyFacingMatrix(inst, d);
 
@@ -863,7 +957,8 @@ static void VehPhysForce_TranslateMatrix_UpdateInstanceMatrix(struct Instance *i
 		s16 *entryVec = (s16 *)entry;
 		Vec3 rotated;
 
-		MatrixRotate(&inst->matrix, &d->matrixFacingDir, (MATRIX *)(void *)((u8 *)entry + MATRIX_ND_BAKED_MATRIX_OFFSET));
+		MatrixNDOverlapMatrix *matrix = MatrixND_GetOverlapMatrix(entry);
+		MatrixRotate(&inst->matrix, &d->matrixFacingDir, (MATRIX *)matrix);
 
 		rotated = VehPhysForce_TranslateMatrix_RotateVector(&d->matrixFacingDir, entryVec[0], entryVec[1], entryVec[2]);
 
@@ -874,9 +969,12 @@ static void VehPhysForce_TranslateMatrix_UpdateInstanceMatrix(struct Instance *i
 
 	if (d->squishTimer != 0)
 	{
-		inst->matrix.t[0] = CTR_MipsAddLo(inst->matrix.t[0], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.x, 0x13), 12));
-		inst->matrix.t[1] = CTR_MipsAddLo(inst->matrix.t[1], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.y, 0x13), 12));
-		inst->matrix.t[2] = CTR_MipsAddLo(inst->matrix.t[2], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.z, 0x13), 12));
+		inst->matrix.t[0] =
+		    CTR_MipsAddLo(inst->matrix.t[0], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.x, VEH_PHYS_FORCE_SQUISH_OFFSET_NORMAL_SCALE), 12));
+		inst->matrix.t[1] =
+		    CTR_MipsAddLo(inst->matrix.t[1], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.y, VEH_PHYS_FORCE_SQUISH_OFFSET_NORMAL_SCALE), 12));
+		inst->matrix.t[2] =
+		    CTR_MipsAddLo(inst->matrix.t[2], CTR_MipsSra(CTR_MipsMulLo(d->AxisAngle2_normalVec.z, VEH_PHYS_FORCE_SQUISH_OFFSET_NORMAL_SCALE), 12));
 	}
 }
 
@@ -900,7 +998,7 @@ static void VehPhysForce_TranslateMatrix_HideWake(struct Instance *inst, struct 
 
 static void VehPhysForce_TranslateMatrix_SpawnWakeParticle(struct Driver *d)
 {
-	struct Particle *p = Particle_Init(0, sdata->gGT->iconGroup[9], &data.emSet_Falling[0]);
+	struct Particle *p = Particle_Init(0, sdata->gGT->iconGroup[VEH_PHYS_FORCE_WAKE_PARTICLE_ICON_GROUP], &data.emSet_Falling[0]);
 
 	if (p != NULL)
 	{
@@ -921,7 +1019,7 @@ static void VehPhysForce_TranslateMatrix_SetWakeRotation(struct Instance *wake, 
 	wake->matrix.m[0][1] = (s16)((u32)cos >> 16);
 	wake->matrix.m[0][2] = (s16)sin;
 	wake->matrix.m[1][0] = (s16)((u32)sin >> 16);
-	wake->matrix.m[1][1] = 0x1000;
+	wake->matrix.m[1][1] = VEH_PHYS_FORCE_WAKE_INITIAL_SCALE;
 	wake->matrix.m[1][2] = 0;
 	wake->matrix.m[2][0] = (s16)negSin;
 	wake->matrix.m[2][1] = (s16)((u32)negSin >> 16);
@@ -932,13 +1030,13 @@ static void VehPhysForce_TranslateMatrix_UpdateWake(struct Instance *inst, struc
 {
 	struct Instance *wake;
 
-	if (inst->matrix.t[1] >= 0)
+	if (inst->matrix.t[1] >= VEH_PHYS_FORCE_WAKE_WATERLINE_Y)
 	{
 		VehPhysForce_TranslateMatrix_HideWake(inst, d);
 		return;
 	}
 
-	if ((inst->matrix.t[1] < -0x4f) || ((inst->flags & SPLIT_LINE) == 0))
+	if ((inst->matrix.t[1] < VEH_PHYS_FORCE_WAKE_VISIBLE_MIN_Y) || ((inst->flags & SPLIT_LINE) == 0))
 	{
 		VehPhysForce_TranslateMatrix_HideWake(inst, d);
 		return;
@@ -955,22 +1053,23 @@ static void VehPhysForce_TranslateMatrix_UpdateWake(struct Instance *inst, struc
 	wake->depthBiasSecondary = (u8)CTR_MipsSubLo(inst->depthBiasSecondary, 1);
 
 	wake->matrix.t[0] = inst->matrix.t[0];
-	wake->matrix.t[1] = 0;
+	wake->matrix.t[1] = VEH_PHYS_FORCE_WAKE_WATERLINE_Y;
 	wake->matrix.t[2] = inst->matrix.t[2];
 
 	VehPhysForce_TranslateMatrix_SetWakeRotation(wake, d);
 
 	if (d->wakeScale == 0)
 	{
-		d->wakeScale = 0x1000;
+		d->wakeScale = VEH_PHYS_FORCE_WAKE_INITIAL_SCALE;
 
 		if (sdata->gGT->numPlyrCurrGame < 2)
 		{
-			if ((VehPhysForce_TranslateMatrix_Abs(d->speed) > 0xc00) && (d->posPrev.y > -0x200))
+			if ((VehPhysForce_TranslateMatrix_Abs(d->speed) > VEH_PHYS_FORCE_WAKE_PARTICLE_SPEED_MIN) &&
+			    (d->posPrev.y > VEH_PHYS_FORCE_WAKE_PARTICLE_PREV_Y_MIN))
 			{
 				int i;
 
-				for (i = 10; i > 0; i--)
+				for (i = VEH_PHYS_FORCE_WAKE_BURST_PARTICLE_COUNT; i > 0; i--)
 				{
 					VehPhysForce_TranslateMatrix_SpawnWakeParticle(d);
 				}
@@ -979,7 +1078,7 @@ static void VehPhysForce_TranslateMatrix_UpdateWake(struct Instance *inst, struc
 	}
 	else if (sdata->gGT->numPlyrCurrGame < 2)
 	{
-		if (VehPhysForce_TranslateMatrix_Abs(d->speed) > 0xc00)
+		if (VehPhysForce_TranslateMatrix_Abs(d->speed) > VEH_PHYS_FORCE_WAKE_PARTICLE_SPEED_MIN)
 		{
 			VehPhysForce_TranslateMatrix_SpawnWakeParticle(d);
 		}
@@ -1001,12 +1100,6 @@ void VehPhysForce_TranslateMatrix(struct Thread *thread, struct Driver *driver)
 	VehPhysForce_TranslateMatrix_UpdateWake(inst, driver);
 }
 
-struct VehPhysForceTrigPair
-{
-	s32 sin;
-	s32 cos;
-};
-
 static int VehPhysForce_CountLeadingSignBits(s32 value)
 {
 	u32 bits = (u32)value;
@@ -1021,18 +1114,18 @@ static int VehPhysForce_CountLeadingSignBits(s32 value)
 	return count;
 }
 
-static struct VehPhysForceTrigPair VehPhysForce_TrigAngleSinCos(int angle)
+static struct TrigPair VehPhysForce_TrigAngleSinCos(int angle)
 {
-	struct TrigTable trig = data.trigApprox[angle & 0x3ff];
+	struct TrigTable trig = data.trigApprox[ANG_MODULO_HALF_PI(angle)];
 	u32 packed = ((u32)(u16)trig.sin) | ((u32)(u16)trig.cos << 16);
-	struct VehPhysForceTrigPair pair;
+	struct TrigPair pair;
 
-	if ((angle & 0x400) == 0)
+	if (IS_ANG_FIRST_OR_THIRD_QUADRANT(angle))
 	{
 		pair.sin = (s16)packed;
 		pair.cos = (s16)(packed >> 16);
 
-		if ((angle & 0x800) != 0)
+		if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			pair.sin = CTR_MipsNegLo(pair.sin);
 			pair.cos = CTR_MipsNegLo(pair.cos);
@@ -1043,7 +1136,7 @@ static struct VehPhysForceTrigPair VehPhysForce_TrigAngleSinCos(int angle)
 		pair.sin = (s16)(packed >> 16);
 		pair.cos = (s16)packed;
 
-		if ((angle & 0x800) != 0)
+		if (IS_ANG_THIRD_OR_FOURTH_QUADRANT(angle))
 		{
 			pair.sin = CTR_MipsNegLo(pair.sin);
 		}
@@ -1062,7 +1155,7 @@ void VehPhysForce_RotAxisAngle(MATRIX *m, s16 *normVec, s16 angle)
 	s32 normalX = normVec[0];
 	s32 normalY = normVec[1];
 	s32 normalZ = normVec[2];
-	struct VehPhysForceTrigPair trig = VehPhysForce_TrigAngleSinCos(angle);
+	struct TrigPair trig = VehPhysForce_TrigAngleSinCos(angle);
 	s32 normalXSq = CTR_MipsMulLo(normalX, normalX);
 	s32 normalZSq = CTR_MipsMulLo(normalZ, normalZ);
 	s32 crossXZ = CTR_MipsMulLo(normalX, CTR_MipsNegLo(normalZ));

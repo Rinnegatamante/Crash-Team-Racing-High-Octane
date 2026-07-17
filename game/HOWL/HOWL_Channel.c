@@ -61,9 +61,7 @@ int Channel_FindSound(int soundID)
 	{
 		backupNext = curr->next;
 
-		if (
-		    // type == OtherFX
-		    (curr->type == 1) &&
+		if ((curr->type == HOWL_CHANNEL_TYPE_OTHER_FX) &&
 
 		    // matching low 16-bit sound ID
 		    ((curr->soundID & 0xffff) == (soundID & 0xffff)))
@@ -78,9 +76,8 @@ int Channel_FindSound(int soundID)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002b608-0x8002b7d0
-struct ChannelStats *Channel_AllocSlot_AntiSpam(s16 soundID, char boolUseAntiSpam, int flags, struct ChannelAttr *attr)
+struct ChannelStats *Channel_AllocSlot_AntiSpam(s16 soundID, u8 boolUseAntiSpam, int flags, struct ChannelAttr *attr)
 {
-	struct ChannelAttr *newAttr;
 	struct ChannelStats *curr, *backupNext;
 
 	// with AntiSpam, a new sound started within
@@ -95,14 +92,12 @@ struct ChannelStats *Channel_AllocSlot_AntiSpam(s16 soundID, char boolUseAntiSpa
 		{
 			backupNext = curr->next;
 
-			if (
-			    // type == OtherFX
-			    (curr->type == 1) &&
+			if ((curr->type == HOWL_CHANNEL_TYPE_OTHER_FX) &&
 
 			    // matching ID
 			    ((curr->soundID & 0xffff) == ((u16)soundID)))
 			{
-				int duration = sdata->gGT->frameTimer_MainFrame_ResetDB - curr->startFrame;
+				u32 duration = (u32)sdata->gGT->frameTimer_MainFrame_ResetDB - (u32)curr->startFrame;
 
 				// if started within 10 frames, cancel old and start new,
 				// otherwise you'll allocate too many sounds and overflow
@@ -121,8 +116,8 @@ void Channel_DestroySelf(struct ChannelStats *stats)
 {
 	// set channel to OFF, and remove PLAYING bit
 	u32 *flagPtr = &sdata->ChannelUpdateFlags[stats->channelID];
-	*flagPtr |= 1;
-	*flagPtr &= ~(2);
+	*flagPtr |= HOWL_CHANNEL_UPDATE_OFF;
+	*flagPtr &= ~HOWL_CHANNEL_UPDATE_KEY_ON;
 
 	stats->flags &= ~(1);
 
@@ -151,7 +146,7 @@ struct ChannelStats *Channel_AllocSlot(int flags, struct ChannelAttr *attr)
 	LIST_AddBack(&sdata->channelTaken, (struct Item *)stats);
 
 	// start playing
-	sdata->ChannelUpdateFlags[stats->channelID] |= (flags | 2);
+	sdata->ChannelUpdateFlags[stats->channelID] |= (flags | HOWL_CHANNEL_UPDATE_KEY_ON);
 
 	// make new ChanenlAttr
 	newAttr = &sdata->channelAttrNew[stats->channelID];
@@ -190,32 +185,32 @@ struct ChannelStats *Channel_SearchFX_EditAttr(int type, int soundID, int update
 			editAttr = &sdata->channelAttrNew[curr->channelID];
 
 			// change in spu addr
-			if ((updateFlags & 0x4) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_SPU_ADDR) != 0)
 			{
 				editAttr->spuStartAddr = attr->spuStartAddr;
 			}
 
 			// change in ADSR
-			if ((updateFlags & 0x8) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_ADSR) != 0)
 			{
 				editAttr->ad = attr->ad;
 				editAttr->sr = attr->sr;
 			}
 
 			// change in pitch
-			if ((updateFlags & 0x10) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_PITCH) != 0)
 			{
 				editAttr->pitch = attr->pitch;
 			}
 
 			// change in reverb
-			if ((updateFlags & 0x20) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_REVERB) != 0)
 			{
 				editAttr->reverb = attr->reverb;
 			}
 
 			// change in volume
-			if ((updateFlags & 0x40) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_VOLUME) != 0)
 			{
 				// OG game treats this as one int
 				editAttr->audioL = attr->audioL;
@@ -271,7 +266,7 @@ struct ChannelStats *Channel_SearchFX_Destroy(int type, int soundID, int flags)
 // param_1 0: keep menu fx, 1: destroy all fx
 // param_2 0: destroy music, 1: keep music
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002ba90-0x8002bbac
-void Channel_DestroyAll_LowLevel(int opt1, b32 boolKeepMusic, char type)
+void Channel_DestroyAll_LowLevel(int opt1, b32 boolKeepMusic, u8 type)
 {
 	struct ChannelStats *curr, *backupNext;
 
@@ -292,7 +287,7 @@ void Channel_DestroyAll_LowLevel(int opt1, b32 boolKeepMusic, char type)
 
 			    (
 			        // if not otherFX, erase
-			        (curr->type != 1) ||
+			        (curr->type != HOWL_CHANNEL_TYPE_OTHER_FX) ||
 
 			        // if otherFX and not menu sounds,
 			        // cause those should ring out
@@ -497,13 +492,13 @@ void Channel_UpdateChannels()
 		u32 updateFlags = *ptrFlag;
 
 		// if need to turn off
-		if ((updateFlags & 1) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_OFF) != 0)
 		{
 			voiceBitOff |= 1 << vNum;
 
-			if ((updateFlags & 2) != 0)
+			if ((updateFlags & HOWL_CHANNEL_UPDATE_KEY_ON) != 0)
 			{
-				*ptrFlag &= ~(1);
+				*ptrFlag &= ~HOWL_CHANNEL_UPDATE_OFF;
 			}
 
 			else
@@ -524,13 +519,13 @@ void Channel_UpdateChannels()
 		u32 updateFlags = *ptrFlag;
 
 		// if need to turn on
-		if ((updateFlags & 2) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_KEY_ON) != 0)
 		{
 			voiceBitOn |= 1 << vNum;
 		}
 
 		// start address needs to change
-		if ((updateFlags & 4) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_SPU_ADDR) != 0)
 		{
 			void *startAddr = new->spuStartAddr;
 
@@ -543,11 +538,11 @@ void Channel_UpdateChannels()
 		}
 
 		// ADSR needs to change
-		if ((updateFlags & 8) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_ADSR) != 0)
 		{
-			int adsr = *(int *)&new->ad;
+			int adsr = (int)CTR_ReadU32LE(&new->ad);
 
-			if (adsr != *(int *)&cur->ad)
+			if (adsr != (int)CTR_ReadU32LE(&cur->ad))
 			{
 				int ad = new->ad;
 				int sr = new->sr;
@@ -605,7 +600,7 @@ void Channel_UpdateChannels()
 		}
 
 		// pitch needs to change
-		if ((updateFlags & 0x10) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_PITCH) != 0)
 		{
 			int pitch = new->pitch;
 
@@ -617,7 +612,7 @@ void Channel_UpdateChannels()
 		}
 
 		// reverb needs to change
-		if ((updateFlags & 0x20) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_REVERB) != 0)
 		{
 			int reverb = new->reverb;
 
@@ -629,11 +624,11 @@ void Channel_UpdateChannels()
 		}
 
 		// volume needs to change
-		if ((updateFlags & 0x40) != 0)
+		if ((updateFlags & HOWL_CHANNEL_UPDATE_VOLUME) != 0)
 		{
-			int audioLR = *(int *)&new->audioL;
+			int audioLR = (int)CTR_ReadU32LE(&new->audioL);
 
-			if (audioLR != *(int *)&cur->audioL)
+			if (audioLR != (int)CTR_ReadU32LE(&cur->audioL))
 			{
 				int audioL = new->audioL;
 				int audioR = new->audioR;

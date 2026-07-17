@@ -12,8 +12,7 @@ void cseq_opcode01_noteoff(struct SongSeq *seq)
 	{
 		backupNext = curr->next;
 
-		// type != MUSIC
-		if (curr->type != 2)
+		if (curr->type != HOWL_CHANNEL_TYPE_MUSIC)
 		{
 			continue;
 		}
@@ -30,10 +29,10 @@ void cseq_opcode01_noteoff(struct SongSeq *seq)
 			continue;
 		}
 
-		// enable OFF(1) flag, disable ON(2) flag
+		// enable OFF flag, disable ON flag
 		flagPtr = &sdata->ChannelUpdateFlags[curr->channelID];
-		*flagPtr |= 1;
-		*flagPtr &= ~(2);
+		*flagPtr |= HOWL_CHANNEL_UPDATE_OFF;
+		*flagPtr &= ~HOWL_CHANNEL_UPDATE_KEY_ON;
 
 		curr->flags &= (u8)~1;
 
@@ -46,6 +45,7 @@ void cseq_opcode01_noteoff(struct SongSeq *seq)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80029f1c-0x80029f24
 void cseq_opcode02_empty(struct SongSeq *seq)
 {
+	(void)seq;
 	// left empty by ND
 }
 
@@ -70,6 +70,7 @@ void cseq_opcode03(struct SongSeq *seq)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80029f78-0x80029f80
 void cseq_opcode04_empty(struct SongSeq *seq)
 {
+	(void)seq;
 	// left empty by ND
 }
 
@@ -103,7 +104,7 @@ void howl_InitChannelAttr_Music(struct SongSeq *seq, struct ChannelAttr *attr, i
 	{
 		struct SampleDrums *shortSample = &sdata->ptrCseqShortSamples[index];
 
-		if (seq->distort == 0x80)
+		if (seq->distort == HOWL_SFX_DISTORTION_NONE)
 		{
 			pitch = shortSample->pitch;
 		}
@@ -133,7 +134,6 @@ void howl_InitChannelAttr_Music(struct SongSeq *seq, struct ChannelAttr *attr, i
 void cseq_opcode_from06and07(struct SongSeq *seq)
 {
 	struct ChannelStats *curr, *backupNext;
-	u8 *currNote = seq->currNote;
 	int soundID = seq->soundID;
 	int songIndex = seq->songPoolIndex;
 
@@ -143,8 +143,7 @@ void cseq_opcode_from06and07(struct SongSeq *seq)
 	{
 		backupNext = curr->next;
 
-		// type != MUSIC
-		if (curr->type != 2)
+		if (curr->type != HOWL_CHANNEL_TYPE_MUSIC)
 		{
 			continue;
 		}
@@ -158,7 +157,7 @@ void cseq_opcode_from06and07(struct SongSeq *seq)
 		Channel_SetVolume(&sdata->channelAttrNew[curr->channelID], CTR_MipsSra(CTR_MipsMulLo(sampleVol, curr->vol), 18), seq->LR);
 
 		// update volume
-		sdata->ChannelUpdateFlags[curr->channelID] |= 0x40;
+		sdata->ChannelUpdateFlags[curr->channelID] |= HOWL_CHANNEL_UPDATE_VOLUME;
 	}
 }
 
@@ -187,7 +186,7 @@ void cseq_opcode05_noteon(struct SongSeq *seq)
 
 	howl_InitChannelAttr_Music(seq, &attr, currNote[1], currNote[2]);
 
-	stats = Channel_AllocSlot(0x7c, &attr);
+	stats = Channel_AllocSlot(HOWL_CHANNEL_UPDATE_ALL_ATTRS, &attr);
 
 	if (stats == 0)
 	{
@@ -196,8 +195,7 @@ void cseq_opcode05_noteon(struct SongSeq *seq)
 
 	stats->flags |= 0xe;
 
-	// type = MUSIC
-	stats->type = 2;
+	stats->type = HOWL_CHANNEL_TYPE_MUSIC;
 	stats->unk2 = 0;
 
 	// dang, what?
@@ -244,8 +242,7 @@ void cseq_opcode08(struct SongSeq *seq)
 	{
 		backupNext = curr->next;
 
-		// type != MUSIC
-		if (curr->type != 2)
+		if (curr->type != HOWL_CHANNEL_TYPE_MUSIC)
 		{
 			continue;
 		}
@@ -260,7 +257,7 @@ void cseq_opcode08(struct SongSeq *seq)
 		sdata->channelAttrNew[curr->channelID].reverb = currNote[1];
 
 		// update Reverb (reverberation = echo)
-		sdata->ChannelUpdateFlags[curr->channelID] |= 0x20;
+		sdata->ChannelUpdateFlags[curr->channelID] |= HOWL_CHANNEL_UPDATE_REVERB;
 	}
 }
 
@@ -285,8 +282,7 @@ void cseq_opcode0a(struct SongSeq *seq)
 	{
 		backupNext = curr->next;
 
-		// type != MUSIC
-		if (curr->type != 2)
+		if (curr->type != HOWL_CHANNEL_TYPE_MUSIC)
 		{
 			continue;
 		}
@@ -312,7 +308,7 @@ void cseq_opcode0a(struct SongSeq *seq)
 		{
 			struct SampleDrums *shortSample = &sdata->ptrCseqShortSamples[index];
 
-			if (seq->distort == 0x80)
+			if (seq->distort == HOWL_SFX_DISTORTION_NONE)
 			{
 				pitch = shortSample->pitch;
 			}
@@ -327,6 +323,6 @@ void cseq_opcode0a(struct SongSeq *seq)
 		sdata->channelAttrNew[curr->channelID].pitch = pitch;
 
 		// update pitch
-		sdata->ChannelUpdateFlags[curr->channelID] |= 0x10;
+		sdata->ChannelUpdateFlags[curr->channelID] |= HOWL_CHANNEL_UPDATE_PITCH;
 	}
 }

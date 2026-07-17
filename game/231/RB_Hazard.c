@@ -24,11 +24,9 @@ int RB_Hazard_HurtDriver(struct Driver *driverVictim, int damageType, struct Dri
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 231 0x800ac220-0x800ac350.
-struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char boolCanSkipParent, int hitRadius, struct Instance *mineDriverInst)
+struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, s16 parentSafetyFrames, int hitRadius, struct Instance *mineDriverInst)
 {
 	int j;
-	struct Driver *driver;
-	struct Instance *driverInst;
 
 	u32 dist[3];
 	int modelID;
@@ -38,7 +36,7 @@ struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char 
 
 	for (int i = 0; i < 8; i++)
 	{
-		driver = sdata->gGT->drivers[i];
+		struct Driver *driver = sdata->gGT->drivers[i];
 
 		if (driver == 0)
 		{
@@ -48,7 +46,7 @@ struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char 
 		{
 			continue;
 		}
-		driverInst = driver->instSelf;
+		struct Instance *driverInst = driver->instSelf;
 
 		for (j = 0; j < 3; j++)
 		{
@@ -61,7 +59,6 @@ struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char 
 		// 2D collision (barrel, warpball)
 		distCheck = dist[0] + dist[2];
 
-		// to be more optimal, just do weaponInst->thread->funcThTick == GenericMine_ThTick
 		if (((u32)modelID - STATIC_BEAKER_RED < 2) || // red or green potion
 		    (modelID == PU_EXPLOSIVE_CRATE) ||        // Nitro
 		    (modelID == STATIC_CRATE_TNT)             // TNT
@@ -74,7 +71,7 @@ struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char 
 		// 2D collision, or 3D sphere
 		if (distCheck < (u32)hitRadius)
 		{
-			if ((boolCanSkipParent != 0) && (driverInst == mineDriverInst))
+			if ((parentSafetyFrames != 0) && (driverInst == mineDriverInst))
 			{
 				continue;
 			}
@@ -92,11 +89,10 @@ struct Instance *RB_Hazard_CollideWithDrivers(struct Instance *weaponInst, char 
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 231 0x800ac350-0x800ac3f8.
-struct Instance *RB_Hazard_CollideWithBucket(struct Instance *weaponInst, struct Thread *weaponTh, struct Thread *bucket, char boolCanSkipParent, int hitRadius,
+struct Instance *RB_Hazard_CollideWithBucket(struct Instance *weaponInst, struct Thread *weaponTh, struct Thread *bucket, s16 parentSafetyFrames, int hitRadius,
                                              struct Instance *mineDriverInst)
 {
 	int i;
-	struct Instance *threadInst;
 
 	s32 distComponent;
 	u32 distCheck;
@@ -106,7 +102,7 @@ struct Instance *RB_Hazard_CollideWithBucket(struct Instance *weaponInst, struct
 	for (; bucket != 0; bucket = bucket->siblingThread)
 	{
 		distCheck = 0;
-		threadInst = bucket->inst;
+		struct Instance *threadInst = bucket->inst;
 
 		for (i = 0; i < 3; i++)
 		{
@@ -116,7 +112,7 @@ struct Instance *RB_Hazard_CollideWithBucket(struct Instance *weaponInst, struct
 
 		if (distCheck < (u32)hitRadius)
 		{
-			if ((boolCanSkipParent != 0) && (threadInst == mineDriverInst))
+			if ((parentSafetyFrames != 0) && (threadInst == mineDriverInst))
 			{
 				continue;
 			}
@@ -130,27 +126,22 @@ struct Instance *RB_Hazard_CollideWithBucket(struct Instance *weaponInst, struct
 
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ac3f8-0x800ac42c.
-void RB_Hazard_ThCollide_Generic_Alt(struct Thread **param_1)
+void RB_Hazard_ThCollide_Generic_Alt(struct Thread **threadSlot)
 {
-	RB_Hazard_ThCollide_Generic(param_1[0]);
+	RB_Hazard_ThCollide_Generic(threadSlot[0]);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ac42c-0x800ac4b8.
 // NOTE(aalhendi): Native ThCollide ABI is void; retail returns v0=1.
 void RB_Hazard_ThCollide_Missile(struct Thread *thread)
 {
-	struct TrackerWeapon *tw;
-	struct Driver *driver;
-	struct Instance *inst;
+	struct Instance *inst = thread->inst;
+	struct TrackerWeapon *tw = inst->thread->object;
 
-	inst = thread->inst;
-	tw = inst->thread->object;
-
-	// could I also just do thread->modelID?
 	if (inst->model->id == DYNAMIC_ROCKET)
 	{
 		// get driver
-		driver = tw->driverTarget;
+		struct Driver *driver = tw->driverTarget;
 
 		// if driver is valid
 		if (driver != 0)
@@ -163,7 +154,7 @@ void RB_Hazard_ThCollide_Missile(struct Thread *thread)
 		PlaySound3D(0x4c, inst);
 
 		// stop audio of moving
-		OtherFX_RecycleMute(&tw->audioPtr);
+		OtherFX_RecycleMute(&tw->soundIDCount);
 
 		// kill thread
 		thread->flags |= THREAD_FLAG_DEAD;
@@ -172,41 +163,28 @@ void RB_Hazard_ThCollide_Missile(struct Thread *thread)
 	return;
 }
 
-// I think this function should return void?
-
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ac4b8-0x800ac5e8.
 void RB_Hazard_ThCollide_Generic(struct Thread *thread)
 {
-	struct Instance *inst;
-	struct MineWeapon *mw;
-
-	struct Instance *crateInst;
-	struct Thread *crateThread;
-	struct Crate *crateObj;
-
-	int modelID;
+	struct Instance *inst = thread->inst;
+	struct MineWeapon *mw = thread->object;
 	int soundID;
 
-	inst = thread->inst;
-	mw = thread->object;
-
-	crateInst = mw->crateInst;
-
+	struct Instance *crateInst = mw->crateInst;
 	if (crateInst != 0)
 	{
-		// be careful, dont overwrite local variable
-		// "thread", or else you'll kill the wrong thread
-		// at the end of the function
-
-		crateObj = (struct Crate *)crateInst->thread->object;
-
-		if (crateObj != 0)
+		struct Thread *crateThread = crateInst->thread;
+		if (crateThread != NULL)
 		{
-			crateObj->boolPauseCooldown = 0;
+			struct Crate *crateObj = crateThread->object;
+			if (crateObj != NULL)
+			{
+				crateObj->boolPauseCooldown = 0;
+			}
 		}
 	}
 
-	modelID = inst->model->id;
+	int modelID = inst->model->id;
 
 	// if red beaker or green beaker
 	if ((u32)(modelID - STATIC_BEAKER_RED) < 2)
@@ -269,31 +247,27 @@ void RB_Hazard_ThCollide_Generic(struct Thread *thread)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ad9ac-0x800ada90.
 u16 RB_Hazard_CollLevInst(struct ScratchpadStruct *sps, struct Thread *th)
 {
-	u16 flag;
-	s16 model;
-	struct Instance *inst;
 	struct InstDef *instdef;
-	struct MetaDataMODEL *meta;
 
 	// Check if the hitbox flag has the collision bit set and if InstDef is not NULL
 	if ((sps->bspHitbox->flag & 0x80) && (instdef = sps->bspHitbox->data.hitbox.instDef) != NULL)
 	{
-		inst = instdef->ptrInstance;
+		struct Instance *inst = instdef->ptrInstance;
 		if (inst == NULL)
 		{
 			return 1;
 		}
 
-		model = inst->model->id;
+		s16 model = inst->model->id;
 
 		// Get the metadata for the model
-		meta = COLL_LevModelMeta(model);
+		struct MetaDataMODEL *meta = COLL_LevModelMeta(model);
 
 		// Check if LInC is not nullptr
 		if ((meta != NULL) && (meta->LInC != NULL))
 		{
 			// Execute LInC, create a thread for this instance, and let it run thread->funcThCollide upon collision
-			flag = meta->LInC(inst, th, sps);
+			u16 flag = meta->LInC(inst, th, sps);
 
 			// if not PU_WUMPA_FRUIT
 			if (model != 2)

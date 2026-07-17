@@ -26,7 +26,6 @@ void RB_Teeth_BSP_Callback(struct ScratchpadStruct *sps, void *hitObject)
 	struct Thread *teethTh;
 	struct Instance *weaponInst;
 	struct Instance *teethInst;
-	int iVar5;
 
 	model = weaponThread->modelIndex;
 
@@ -44,30 +43,28 @@ void RB_Teeth_BSP_Callback(struct ScratchpadStruct *sps, void *hitObject)
 
 	if ((weaponInst != NULL) && (teethInst != NULL))
 	{
-		iVar5 = ((int)sps->Input1.pos.x - weaponInst->matrix.t[0]) * (int)teethInst->matrix.m[0][2] +
-		        ((int)sps->Input1.pos.z - weaponInst->matrix.t[2]) * (int)teethInst->matrix.m[2][2];
+		int doorSideDistance = ((int)sps->Input1.pos.x - weaponInst->matrix.t[0]) * (int)teethInst->matrix.m[0][2] +
+		                       ((int)sps->Input1.pos.z - weaponInst->matrix.t[2]) * (int)teethInst->matrix.m[2][2];
 
 		// catch negative value
-		if (iVar5 < 0)
+		if (doorSideDistance < 0)
 		{
-			iVar5 = -iVar5;
+			doorSideDistance = -doorSideDistance;
 		}
 
-		if (0x100 < iVar5 >> 0xc)
+		if (0x100 < doorSideDistance >> 0xc)
 		{
 			return;
 		}
 	}
 
-	// door is open
-	((struct Teeth *)teethTh->object)->direction = 1;
+	((struct Teeth *)teethTh->object)->direction = TEETH_DIRECTION_OPENING;
 
 	return;
 }
 
 void RB_Teeth_ThTick(struct Thread *t)
 {
-	int iVar1;
 	u32 flags;
 	struct Teeth *teeth;
 	struct Instance *inst;
@@ -79,7 +76,7 @@ void RB_Teeth_ThTick(struct Thread *t)
 	struct ScratchpadStruct *sps = CTR_SCRATCHPAD_PTR(struct ScratchpadStruct, 0x108);
 
 	// if door is not moving
-	if (teeth->direction == 0)
+	if (teeth->direction == TEETH_DIRECTION_IDLE)
 	{
 		// if timer is zero
 		if (teeth->timeOpen == 0)
@@ -88,13 +85,13 @@ void RB_Teeth_ThTick(struct Thread *t)
 		}
 
 		// reduce timer by milliseconds
-		iVar1 = teeth->timeOpen - gGT->elapsedTimeMS;
+		int remainingOpenTime = teeth->timeOpen - gGT->elapsedTimeMS;
 
 		// set new timer
-		teeth->timeOpen = iVar1;
+		teeth->timeOpen = remainingOpenTime;
 
 		// if timer is up
-		if (iVar1 < 1)
+		if (remainingOpenTime < 1)
 		{
 			// play sound
 			// teeth closing
@@ -104,7 +101,7 @@ void RB_Teeth_ThTick(struct Thread *t)
 			teeth->timeOpen = 0;
 
 			// door is closing
-			teeth->direction = -1;
+			teeth->direction = TEETH_DIRECTION_CLOSING;
 
 			goto LAB_800b9fe8;
 		}
@@ -116,10 +113,10 @@ void RB_Teeth_ThTick(struct Thread *t)
 		// modify animation index by direction
 		inst->animFrame = inst->animFrame + teeth->direction;
 
-		iVar1 = VehFrameInst_GetNumAnimFrames(inst, 0);
+		int numAnimFrames = VehFrameInst_GetNumAnimFrames(inst, 0);
 
 		// if animation is not on last frame
-		if ((int)inst->animFrame < iVar1)
+		if ((int)inst->animFrame < numAnimFrames)
 		{
 			// if animation when backwards past beginning
 			if ((int)inst->animFrame < 0)
@@ -128,7 +125,7 @@ void RB_Teeth_ThTick(struct Thread *t)
 				inst->animFrame = 0;
 
 				// door is not moving
-				teeth->direction = 0;
+				teeth->direction = TEETH_DIRECTION_IDLE;
 
 				// timer is zero
 				teeth->timeOpen = 0;
@@ -142,10 +139,10 @@ void RB_Teeth_ThTick(struct Thread *t)
 		else
 		{
 			// set animation to last frame
-			inst->animFrame = (s16)iVar1 + -1;
+			inst->animFrame = (s16)numAnimFrames + -1;
 
 			// door is not moving (fully open)
-			teeth->direction = 0;
+			teeth->direction = TEETH_DIRECTION_IDLE;
 
 			// timer, 2 seconds
 			teeth->timeOpen = 0x780;
@@ -154,7 +151,7 @@ void RB_Teeth_ThTick(struct Thread *t)
 		if (teeth->timeOpen == 0)
 		{
 		LAB_800b9ff8:
-			if (-1 < teeth->direction)
+			if (TEETH_DIRECTION_CLOSING < teeth->direction)
 			{
 				goto LAB_800ba084;
 			}
@@ -204,7 +201,6 @@ LAB_800ba084:
 
 int RB_Teeth_LInC(struct Instance *teethInst, struct Thread *t, struct ScratchpadStruct *sps)
 {
-	int iVar1;
 	struct Thread *teethTh;
 	struct Teeth *teeth;
 	struct Driver *d;
@@ -241,7 +237,7 @@ int RB_Teeth_LInC(struct Instance *teethInst, struct Thread *t, struct Scratchpa
 		teethTh->inst = teethInst;
 
 		// door not moving
-		teeth->direction = 0;
+		teeth->direction = TEETH_DIRECTION_IDLE;
 
 		// timer is zero
 		teeth->timeOpen = 0;
@@ -267,14 +263,14 @@ int RB_Teeth_LInC(struct Instance *teethInst, struct Thread *t, struct Scratchpa
 	// time to close
 	if (teeth->timeOpen == 0)
 	{
-		iVar1 = ((int)sps->Input1.pos.x - teethInst->matrix.t[0]) * (int)teethInst->matrix.m[0][2] +
-		        ((int)sps->Input1.pos.z - teethInst->matrix.t[2]) * (int)teethInst->matrix.m[2][2];
+		int doorSideDistance = ((int)sps->Input1.pos.x - teethInst->matrix.t[0]) * (int)teethInst->matrix.m[0][2] +
+		                       ((int)sps->Input1.pos.z - teethInst->matrix.t[2]) * (int)teethInst->matrix.m[2][2];
 
-		if (iVar1 < 0)
+		if (doorSideDistance < 0)
 		{
-			iVar1 = -iVar1;
+			doorSideDistance = -doorSideDistance;
 		}
-		if (iVar1 >> 0xc < 0x81)
+		if (doorSideDistance >> 0xc < 0x81)
 		{
 			return 1;
 		}
@@ -297,7 +293,7 @@ void RB_Teeth_OpenDoor(struct Instance *inst)
 		teethTh->inst = inst;
 		((struct Teeth *)teethTh->object)->timeOpen = 0;
 	}
-	PlaySound3D(0x75, inst);                          // play sound, teeth opening
-	((struct Teeth *)teethTh->object)->direction = 1; // door is open
-	sdata->doorAccessFlags |= 1;                      // enable access through a door (disable collision)
+	PlaySound3D(0x75, inst); // play sound, teeth opening
+	((struct Teeth *)teethTh->object)->direction = TEETH_DIRECTION_OPENING;
+	sdata->doorAccessFlags |= 1; // enable access through a door (disable collision)
 }

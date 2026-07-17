@@ -104,18 +104,28 @@ struct TrigTable
 	s16 cos;
 };
 
+struct TrigPair
+{
+	s32 sin;
+	s32 cos;
+};
+
 #define ANG_TWO_PI                         0x1000           // 360
 #define ANG_PI                             (ANG_TWO_PI / 2) // 180
 #define ANG_HALF_PI                        (ANG_PI / 2)     // 90
+#define ANG_QUADRANT_MASK                  (ANG_HALF_PI - 1)
+#define ANG_QUADRANT_BIT                   ANG_HALF_PI
+#define ANG_SIGN_BIT                       ANG_PI
+#define ANG_QUADRANT_BITS                  (ANG_QUADRANT_BIT | ANG_SIGN_BIT)
 
 #define ANG_MODULO_TWO_PI(x)               ((x) & (ANG_TWO_PI - 1))  // ang % 360
 #define ANG_MODULO_PI(x)                   ((x) & (ANG_PI - 1))      // ang % 180
-#define ANG_MODULO_HALF_PI(x)              ((x) & (ANG_HALF_PI - 1)) // ang % 90
+#define ANG_MODULO_HALF_PI(x)              ((x) & ANG_QUADRANT_MASK) // ang % 90
 
 #define ANG(x)                             ANG_MODULO_TWO_PI(((s16)((((float)x) * ANG_TWO_PI) / 360))) // works for any float, pos or neg
 
-#define IS_ANG_FIRST_OR_THIRD_QUADRANT(x)  (((x) & ANG_HALF_PI) == 0) // [0, 90[ \/ [180, 270[
-#define IS_ANG_THIRD_OR_FOURTH_QUADRANT(x) ((x) & ANG_PI)             // [180, 360[
+#define IS_ANG_FIRST_OR_THIRD_QUADRANT(x)  (((x) & ANG_QUADRANT_BIT) == 0) // [0, 90[ \/ [180, 270[
+#define IS_ANG_THIRD_OR_FOURTH_QUADRANT(x) ((x) & ANG_SIGN_BIT)            // [180, 360[
 
 // fixed point //
 
@@ -193,7 +203,7 @@ static inline s32 CTR_MipsDiv(s32 dividend, s32 divisor)
 
 	if ((divisor == 0) || ((divisor == -1) && (dividend == minS32)))
 	{
-		__builtin_trap();
+		CTR_TRAP();
 	}
 
 	return dividend / divisor;
@@ -203,7 +213,7 @@ static inline u32 CTR_MipsDivU(u32 dividend, u32 divisor)
 {
 	if (divisor == 0)
 	{
-		__builtin_trap();
+		CTR_TRAP();
 	}
 
 	return dividend / divisor;

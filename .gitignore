@@ -1,4 +1,6 @@
 build/
+build-*/
+dist/
 assets/
 debug/
 *.exe

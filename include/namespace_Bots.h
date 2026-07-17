@@ -1,3 +1,6 @@
+#ifndef CTR_NATIVE_NAMESPACE_BOTS_H
+#define CTR_NATIVE_NAMESPACE_BOTS_H
+
 struct NavFrame
 {
 	// 0
@@ -85,3 +88,5 @@ struct NavHeader
 
 CTR_STATIC_ASSERT(sizeof(struct NavFrame) == 0x14);
 CTR_STATIC_ASSERT(sizeof(struct NavHeader) == 0x4c);
+
+#endif

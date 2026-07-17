@@ -89,6 +89,12 @@ static inline void CTR_GteLoadSVec4V0(const SVec4 *v)
 	MTC2(CTR_PackS16Pair(v->z, v->w), 1);
 }
 
+static inline void CTR_GteLoadSVec3SlotV0(const SVec3Slot *v)
+{
+	MTC2(CTR_PackS16Pair(v->x, v->y), 0);
+	MTC2(CTR_PackS16Pair(v->z, v->w), 1);
+}
+
 static inline void CTR_GteLoadS16TripletV0(const s16 *v)
 {
 	MTC2(CTR_PackS16Pair(v[0], v[1]), 0);
