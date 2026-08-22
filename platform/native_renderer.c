@@ -25,6 +25,10 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 #endif // def WIN32
 
+#ifdef __vita__
+#define VRAM_FORMAT          GL_RGBA
+#define VRAM_INTERNAL_FORMAT GL_RGBA
+#else
 #define VRAM_FORMAT          GL_RG
 // NOTE(penta3): VRAM holds packed 16-bit PSX pixels as two bytes (R=low,
 // G=high), uploaded as GL_RG + GL_UNSIGNED_BYTE. RG8 is the faithful storage:
@@ -32,13 +36,20 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 // NEAREST sampling RG8 returns byte/255 exactly, identical to what the shader
 // got from RG32F, so CLUT/texture-page reconstruction is unchanged.
 #define VRAM_INTERNAL_FORMAT GL_RG8
+#endif
+
+#define NATIVE_RENDER_TARGET_TYPE GL_UNSIGNED_BYTE
 
 extern SDL_Window *g_window;
 
 #define NATIVE_RENDERER_LOG(fmt, ...)   Platform_Log("[CTR Renderer] " fmt, __VA_ARGS__)
 #define NATIVE_RENDERER_ERROR(fmt, ...) Platform_LogError("[CTR Renderer] [%s] - " fmt, __func__, __VA_ARGS__)
 
-#define MAX_NUM_VERTEX_BUFFERS          (2)
+#ifdef __vita__
+#define MAX_NUM_VERTEX_BUFFERS (1)
+#else
+#define MAX_NUM_VERTEX_BUFFERS (2)
+#endif
 #define PSX_SCREEN_ASPECT               (240.0f / 320.0f) // PSX screen is mapped always to this aspect
 
 #if defined(CTR_INTERNAL)
@@ -71,6 +82,9 @@ global_variable RECT16 s_previousOffscreen = {0, 0, 0, 0};
 global_variable ShaderID s_previousShader = (ShaderID)-1;
 
 global_variable TextureID s_rgLutTexture = (TextureID)-1;
+#ifdef __vita__
+global_variable TextureID s_presentLutTexture = (TextureID)-1;
+#endif
 // NOTE(penta3): Single persistent VRAM texture, matching real PS1's single
 // 1MB VRAM. PS1 page-flips two windows *inside* one VRAM; it never keeps two
 // full copies. The old double buffer existed only to orphan the texture on the
@@ -96,6 +110,10 @@ struct NativeVramState
 
 global_variable struct NativeVramState s_vram;
 
+#ifdef __vita__
+global_variable u8 s_vitaVramTransferPixels[VRAM_WIDTH * VRAM_HEIGHT * 4];
+#endif
+
 struct NativeRenderTarget
 {
 	TextureID texture;
@@ -103,6 +121,8 @@ struct NativeRenderTarget
 	GLuint stencilBuffer;
 	s32 width;
 	s32 height;
+	s32 logicalWidth;
+	s32 logicalHeight;
 };
 
 global_variable struct NativeRenderTarget s_mainRenderTarget;
@@ -119,6 +139,54 @@ TextureID NativeRenderer_GetVRAMTexture(void)
 TextureID NativeRenderer_GetWhiteTexture(void)
 {
 	return s_whiteTexture;
+}
+
+TextureID NativeRenderer_CreateStreamingTexture(int width, int height)
+{
+	TextureID texture = 0;
+
+	if ((width <= 0) || (height <= 0))
+	{
+		return 0;
+	}
+
+	glGenTextures(1, &texture);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	s_lastBoundTexture = (TextureID)-1;
+	return texture;
+}
+
+void NativeRenderer_UpdateStreamingTexture(TextureID texture, int width, int height, const u8 *rgbaPixels)
+{
+	if ((texture == 0) || (width <= 0) || (height <= 0) || (rgbaPixels == NULL))
+	{
+		return;
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgbaPixels);
+	s_lastBoundTexture = (TextureID)-1;
+}
+
+void NativeRenderer_DestroyStreamingTexture(TextureID texture)
+{
+	if (texture == 0)
+	{
+		return;
+	}
+
+	if (s_lastBoundTexture == texture)
+	{
+		s_lastBoundTexture = (TextureID)-1;
+	}
+	glDeleteTextures(1, &texture);
 }
 
 int g_windowWidth = 0;
@@ -139,6 +207,7 @@ global_variable GLuint s_packShader = 0;
 global_variable GLint s_packFlipYLoc = -1;
 global_variable GLuint s_presentVramShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
+global_variable GLuint s_presentRgbaShader = 0;
 global_variable GLuint s_vramQuadVAO = 0;
 global_variable GLuint s_vramQuadVBO = 0;
 
@@ -157,15 +226,14 @@ internal void NativeRenderer_DestroyRenderTarget(struct NativeRenderTarget *targ
 internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *target, int width, int height);
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y);
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int logicalWidth, int logicalHeight);
+internal void NativeRenderer_DestroyPSXShaders(void);
 #if defined(CTR_INTERNAL)
 internal void NativeRenderer_ResolveGpuMeasurements(b32 waitForResults);
 #endif
 
-#ifndef __vita__
-global_variable GLuint s_glVertexArray[2];
-#endif
-global_variable GLuint s_glVertexBuffer[2];
+global_variable GLuint s_glVertexArray[MAX_NUM_VERTEX_BUFFERS];
+global_variable GLuint s_glVertexBuffer[MAX_NUM_VERTEX_BUFFERS];
 global_variable int s_curVertexBuffer = 0;
 global_variable int s_boundVertexBuffer = -1;
 
@@ -271,10 +339,8 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 
 void NativeRenderer_Shutdown(void)
 {
-#ifndef __vita__
-	glDeleteVertexArrays(2, s_glVertexArray);
-#endif
-	glDeleteBuffers(2, s_glVertexBuffer);
+	glDeleteVertexArrays(MAX_NUM_VERTEX_BUFFERS, s_glVertexArray);
+	glDeleteBuffers(MAX_NUM_VERTEX_BUFFERS, s_glVertexBuffer);
 
 	NativeRenderer_DestroyRenderTarget(&s_mainRenderTarget);
 	NativeRenderer_DestroyRenderTarget(&s_offscreenRenderTarget);
@@ -284,8 +350,13 @@ void NativeRenderer_Shutdown(void)
 
 	NativeRenderer_DestroyTexture(s_whiteTexture);
 	NativeRenderer_DestroyTexture(s_rgLutTexture);
+#ifdef __vita__
+	NativeRenderer_DestroyTexture(s_presentLutTexture);
+#endif
+	NativeRenderer_DestroyPSXShaders();
 	glDeleteProgram(s_packShader);
 	glDeleteProgram(s_presentVramShader);
+	glDeleteProgram(s_presentRgbaShader);
 	glDeleteVertexArrays(1, &s_vramQuadVAO);
 	glDeleteBuffers(1, &s_vramQuadVBO);
 }
@@ -353,7 +424,8 @@ void NativeRenderer_BeginScene(void)
 	NativeRenderer_UpdateVRAM();
 	if (!activeDrawEnv.isbg)
 	{
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y);
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y,
+		                                        s_mainRenderTarget.logicalWidth, s_mainRenderTarget.logicalHeight);
 	}
 	else
 	{
@@ -413,9 +485,7 @@ void NativeRenderer_EndScene(void)
 		NativeRenderer_SetWireframe(0);
 	}
 
-#ifndef __vita__
 	glBindVertexArray(0);
-#endif
 }
 
 //----------------------------------------------------------------------------------------
@@ -500,7 +570,7 @@ internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target)
 	glBindTexture(GL_TEXTURE_2D, target->texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, NATIVE_RENDER_TARGET_TYPE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glGenRenderbuffers(1, &target->stencilBuffer);
@@ -517,6 +587,8 @@ internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target)
 		NATIVE_RENDERER_ERROR("%s\n", "failed to create RGBA/stencil render target");
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	target->logicalWidth = 0;
+	target->logicalHeight = 0;
 }
 
 internal void NativeRenderer_DestroyRenderTarget(struct NativeRenderTarget *target)
@@ -545,7 +617,7 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 	}
 
 	glBindTexture(GL_TEXTURE_2D, target->texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, NATIVE_RENDER_TARGET_TYPE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glBindRenderbuffer(GL_RENDERBUFFER, target->stencilBuffer);
@@ -559,15 +631,27 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 
 internal void NativeRenderer_BindMainRenderTarget(void)
 {
-	int width = activeDispEnv.disp.w;
-	int height = activeDispEnv.disp.h;
-	if ((width <= 0) || (height <= 0))
+	int logicalWidth = activeDispEnv.disp.w;
+	int logicalHeight = activeDispEnv.disp.h;
+	if ((logicalWidth <= 0) || (logicalHeight <= 0))
 	{
-		width = activeDrawEnv.clip.w;
-		height = activeDrawEnv.clip.h;
+		logicalWidth = activeDrawEnv.clip.w;
+		logicalHeight = activeDrawEnv.clip.h;
 	}
 
-	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, width, height);
+	int physicalWidth = logicalWidth;
+	int physicalHeight = logicalHeight;
+#ifdef __vita__
+	if ((g_windowWidth > 0) && (g_windowHeight > 0))
+	{
+		physicalWidth = g_windowWidth;
+		physicalHeight = g_windowHeight;
+	}
+#endif
+
+	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, physicalWidth, physicalHeight);
+	s_mainRenderTarget.logicalWidth = logicalWidth;
+	s_mainRenderTarget.logicalHeight = logicalHeight;
 	glBindFramebuffer(GL_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
 }
 
@@ -581,12 +665,13 @@ internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height)
 	NativeRenderer_DrawTriangles(0, 2);
 }
 
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y)
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int logicalWidth, int logicalHeight)
 {
 	const ShaderID previousShader = s_previousShader;
 	const TextureID previousTexture = s_lastBoundTexture;
 	const BlendMode previousBlendMode = s_previousBlendMode;
 	const int previousScissorState = s_previousScissorState;
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
 
 	NativeRenderer_UpdateVRAM();
 	glBindFramebuffer(GL_FRAMEBUFFER, target->framebuffer);
@@ -594,9 +679,12 @@ internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget 
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glViewport(0, 0, target->width, target->height);
-	NativeRenderer_DrawVRAMRegion(x, y, target->width, target->height);
+	NativeRenderer_DrawVRAMRegion(x, y, logicalWidth, logicalHeight);
 	glClear(GL_STENCIL_BUFFER_BIT);
-	glEnable(GL_STENCIL_TEST);
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
 
 	if (s_boundVertexBuffer >= 0)
 	{
@@ -687,16 +775,32 @@ typedef struct
 	GLint texelSizeLoc;
 	GLint texLoc;
 	GLint lutLoc;
+#ifndef __vita__
 	GLint psxSemiTransPassLoc;
+#endif
 	GLint psxDrawMaskSetLoc;
 	GLint psxTextureOutputStpLoc;
 } GTEShader;
 
+#ifdef __vita__
+enum NativePsxShaderVariant
+{
+	NATIVE_PSX_SHADER_OPAQUE,
+	NATIVE_PSX_SHADER_OPAQUE_AVERAGE,
+	NATIVE_PSX_SHADER_OPAQUE_QUARTER,
+	NATIVE_PSX_SHADER_NON_STP,
+	NATIVE_PSX_SHADER_STP,
+	NATIVE_PSX_SHADER_STP_AVERAGE,
+	NATIVE_PSX_SHADER_STP_QUARTER,
+	NATIVE_PSX_SHADER_VARIANT_COUNT
+};
+#endif
+
 internal int NativeRenderer_Shader_CheckShaderStatus(GLuint shader);
 internal int NativeRenderer_Shader_CheckProgramStatus(GLuint program);
-internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader);
+internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader, const char *fragmentDefines);
 internal void NativeRenderer_GenerateCommonTextures(void);
-internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source);
+internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source, const char *fragmentDefines);
 internal void NativeRenderer_InitialisePSXShaders(void);
 internal void NativeRenderer_InitRG8LUT(void);
 internal void NativeRenderer_Ortho2D(float left, float right, float bottom, float top, float znear, float zfar);
@@ -705,41 +809,70 @@ internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h);
 internal void NativeRenderer_ResolveVRAMRead(int x, int y, int w, int h);
 internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x, int y, int w, int h, b32 flipY);
 
+#ifdef __vita__
+global_variable GTEShader s_gteShaderVariants[4][NATIVE_PSX_SHADER_VARIANT_COUNT];
+#else
 global_variable GTEShader s_gteShader4;
 global_variable GTEShader s_gteShader8;
 global_variable GTEShader s_gteShader16;
 global_variable GTEShader s_gteShader32Rgba;
+#endif
 
 GLint u_projectionLoc;
 GLint u_bilinearFilterLoc;
 GLint u_texelSizeLoc;
+#ifndef __vita__
 GLint u_psxSemiTransPassLoc;
+#endif
 GLint u_psxDrawMaskSetLoc;
 GLint u_psxTextureOutputStpLoc;
 
-#define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                             \
-	"	// returns 16 bit colour\n"                                                \
-	"	vec2 samplePSX(vec2 tc) {\n"                                               \
-	"		vec2 uv = (tc * vec2(0.25, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n"       \
-	"		vec2 comp = VRAM(uv);\n"                                                  \
-	"		int index = int(fract(tc.x / 4.0 + 0.0001) * 4.0);\n"                     \
-	"		float v = _idx2(comp, index / 2) * (255.0 / 16.0);\n"                     \
-	"		float f = floor(v + 0.001);\n"                                            \
-	"		vec2 c = vec2((v - f) * 16.0, f);\n"                                      \
-	"		vec2 clut_pos = v_page_clut.zw;\n"                                        \
-	"		clut_pos.x += mix(c[0], c[1], mod(float(index), 2.0)) * c_VRAMTexel.x;\n" \
-	"		return VRAM(clut_pos);\n"                                                 \
+internal void NativeRenderer_DestroyPSXShaders(void)
+{
+#ifdef __vita__
+	for (int format = TF_4_BIT; format <= TF_32_BIT_RGBA; format++)
+	{
+		for (int variant = 0; variant < NATIVE_PSX_SHADER_VARIANT_COUNT; variant++)
+		{
+			if (s_gteShaderVariants[format][variant].shader != 0)
+			{
+				glDeleteProgram(s_gteShaderVariants[format][variant].shader);
+			}
+		}
+	}
+#else
+	glDeleteProgram(s_gteShader4.shader);
+	glDeleteProgram(s_gteShader8.shader);
+	glDeleteProgram(s_gteShader16.shader);
+	glDeleteProgram(s_gteShader32Rgba.shader);
+#endif
+}
+
+#define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                              \
+	"	// returns 16 bit colour\n"                                                                 \
+	"	vec2 samplePSX(vec2 tc) {\n"                                                        \
+	"		vec2 uv = (tc * vec2(0.25, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n"                \
+	"		vec2 comp = VRAM(uv);\n"                                                           \
+	"		float lane = mod(floor(tc.x + 0.0001), 4.0);\n"                                 \
+	"		float byteValue = floor(mix(comp.x, comp.y, step(1.5, lane)) * 255.0 + 0.5);\n" \
+	"		float lowNibble = mod(byteValue, 16.0);\n"                                        \
+	"		float highNibble = floor(byteValue * (1.0 / 16.0));\n"                         \
+	"		float paletteIndex = mix(lowNibble, highNibble, mod(lane, 2.0));\n"              \
+	"		vec2 clut_pos = v_page_clut.zw;\n"                                                 \
+	"		clut_pos.x += paletteIndex * c_VRAMTexel.x;\n"                                   \
+	"		return VRAM(clut_pos);\n"                                                          \
 	"	}\n"
 
-#define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                      \
-	"	// returns 16 bit colour\n"                                         \
-	"	vec2 samplePSX(vec2 tc) {\n"                                        \
-	"		vec2 uv = (tc * vec2(0.5, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n" \
-	"		vec2 comp = VRAM(uv);\n"                                           \
-	"		vec2 clut_pos = v_page_clut.zw;\n"                                 \
-	"		int index = int(mod(tc.x, 2.0));\n"                                \
-	"		clut_pos.x += _idx2(comp, index) * 255.0 * c_VRAMTexel.x;\n"       \
-	"		return VRAM(clut_pos);\n"                                          \
+#define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                              \
+	"	// returns 16 bit colour\n"                                                                 \
+	"	vec2 samplePSX(vec2 tc) {\n"                                                        \
+	"		vec2 uv = (tc * vec2(0.5, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n"                 \
+	"		vec2 comp = VRAM(uv);\n"                                                           \
+	"		float lane = mod(floor(tc.x + 0.0001), 2.0);\n"                                 \
+	"		float paletteIndex = mix(comp.x, comp.y, lane) * 255.0;\n"                       \
+	"		vec2 clut_pos = v_page_clut.zw;\n"                                                 \
+	"		clut_pos.x += paletteIndex * c_VRAMTexel.x;\n"                                   \
+	"		return VRAM(clut_pos);\n"                                                          \
 	"	}\n"
 
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                    \
@@ -753,16 +886,33 @@ GLint u_psxTextureOutputStpLoc;
 	"	uniform sampler2D s_texture;\n"                              \
 	"	vec2 VRAM(vec2 uv) { return texture2D(s_texture, uv).rg; }\n"
 
-#define GPU_STP_PASS_FUNC                                                                     \
-	"	float texelVisible(vec2 rg) { return float(rg.x + rg.y > 0.0); }\n"                     \
-	"	float stpWeight(vec2 rg) { return step(0.5, rg.y); }\n"                                 \
-	"	bool discardForSemiTransPass(float visible, float stpVisible, float nonStpVisible) {\n" \
-	"		if(visible < 0.5) { return true; }\n"                                                  \
-	"		if(psxSemiTransPass == 1 && nonStpVisible < 0.5) { return true; }\n"                   \
-	"		if(psxSemiTransPass == 2 && stpVisible < 0.5) { return true; }\n"                      \
-	"		return false;\n"                                                                       \
+#ifdef __vita__
+#define GPU_STP_PASS_FUNC                                                                                 \
+	"	float texelVisible(vec2 rg) { return step(0.5 / 255.0, rg.x + rg.y); }\n"                       \
+	"	float stpWeight(vec2 rg) { return step(0.5, rg.y); }\n"                                           \
+	"	bool discardForSemiTransPass(float visible, float stpClass) {\n"                             \
+	"		if (visible < 0.5) { return true; }\n"                                                        \
+	"#ifdef PSX_PASS_NON_STP\n		if (stpClass >= 0.5) { return true; }\n#endif\n"                         \
+	"#ifdef PSX_PASS_STP\n		if (stpClass < 0.5) { return true; }\n#endif\n"                             \
+	"		return false;\n"                                                                                 \
 	"	}\n"
+#define GPU_SEMI_TRANS_UNIFORM
+#else
+#define GPU_STP_PASS_FUNC                                                                                 \
+	"	float texelVisible(vec2 rg) { return float(rg.x + rg.y > 0.0); }\n"                               \
+	"	float stpWeight(vec2 rg) { return step(0.5, rg.y); }\n"                                           \
+	"	bool discardForSemiTransPass(float visible, float stpClass) {\n"                             \
+	"		if (visible < 0.5) { return true; }\n"                                                       \
+	"		if (psxSemiTransPass == 1 && stpClass >= 0.5) { return true; }\n"                         \
+	"		if (psxSemiTransPass == 2 && stpClass < 0.5) { return true; }\n"                          \
+	"		return false;\n"                                                                                 \
+	"	}\n"
+#define GPU_SEMI_TRANS_UNIFORM "\tuniform int psxSemiTransPass;\n"
+#endif
 
+#ifdef __vita__
+#define GPU_DITHERING "\tvec4 dither(vec4 color) { return color; }\n"
+#else
 #define GPU_DITHERING                                             \
 	"	const mat4 c_dither = mat4(\n"                              \
 	"		-4.0,  +0.0,  -3.0,  +1.0,\n"                              \
@@ -774,21 +924,38 @@ GLint u_psxTextureOutputStpLoc;
 	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w);\n" \
 	"		return color;\n"                                           \
 	"	}\n"
+#endif
 
-#define GPU_ARRAY_FUNC "	float _idx2(vec2 array, int idx) { return array[idx]; }\n"
+#define GPU_PSX_COLOR_DECODE                                                                                   \
+	"	const vec2 c_LUTTexel = vec2(1.0 / 256.0, 1.0 / 256.0);\n"                                      \
+	"	vec4 lut(vec2 rg) { return texture2D(s_rgLut, rg - c_LUTTexel * 0.0001); }\n"
+
+#ifdef __vita__
+// This is used to simulate GL_CONSTANT_COLOR blending since sceGxm has no equivalents for them
+#define GPU_PSX_BLEND_APPLY                                                                        \
+	"#ifdef PSX_BLEND_AVERAGE\n		gl_FragColor.a = (127.0 + gl_FragColor.a) / 255.0;\n#endif\n" \
+	"#ifdef PSX_BLEND_QUARTER\n		gl_FragColor.rgb *= 0.25;\n#endif\n"
+#else
+#define GPU_PSX_BLEND_APPLY
+#endif
+
+#ifdef __vita__
+#define GPU_TEXTURE_SAMPLE_MAIN "		vec4 color = nearestTextureSample(v_texcoord.xy);\n"
+#else
+#define GPU_TEXTURE_SAMPLE_MAIN \
+	"		vec4 color = (bilinearFilter > 0) ? bilinearTextureSample(v_texcoord.xy) : nearestTextureSample(v_texcoord.xy);\n"
+#endif
 
 #define GPU_FRAGMENT_SAMPLE_SHADER(bit)                                                                                                               \
 	GPU_FETCH_VRAM_FUNC                                                                                                                               \
-	GPU_ARRAY_FUNC                                                                                                                                    \
 	GPU_SAMPLE_TEXTURE_##bit##BIT_FUNC                                                                                                                \
 	    "	uniform sampler2D s_rgLut;\n"                                                                                                               \
-	    "	uniform int bilinearFilter;\n"                                                                                                              \
-	    "	uniform int psxSemiTransPass;\n"                                                                                                            \
-	    "	uniform int psxDrawMaskSet;\n"                                                                                                              \
-	    "	uniform int psxTextureOutputStp;\n"                                                                                                         \
+	    "#ifndef VITA_NEAREST_ONLY\n\tuniform int bilinearFilter;\n#endif\n"                                                                                 \
+	    GPU_SEMI_TRANS_UNIFORM                                                                                                                        \
+	    "	uniform float psxDrawMaskSet;\n"                                                                                                            \
+	    "	uniform float psxTextureOutputStp;\n"                                                                                                       \
 	    "	float sampledStp = 0.0;\n"                                                                                                                  \
-	    "	const vec2 c_LUTTexel = vec2(1.0 / 256.0, 1.0 / 256.0);\n"                                                                                  \
-	    "	vec4 lut(vec2 rg) { return texture2D(s_rgLut, rg - c_LUTTexel * 0.0001); }\n" GPU_STP_PASS_FUNC "	vec4 bilinearTextureSample(vec2 P) {\n" \
+	    GPU_PSX_COLOR_DECODE GPU_STP_PASS_FUNC "#ifndef VITA_NEAREST_ONLY\n\tvec4 bilinearTextureSample(vec2 P) {\n"                          \
 	    "		vec2 _frac = fract(P);\n"                                                                                                                   \
 	    "		vec2 pixel = floor(P);\n"                                                                                                                  \
 	    "		vec2 C11 = samplePSX(pixel);\n"                                                                                                            \
@@ -807,37 +974,39 @@ GLint u_psxTextureOutputStpLoc;
 	    "		float n21 = v21 - s21;\n"                                                                                                                  \
 	    "		float n12 = v12 - s12;\n"                                                                                                                  \
 	    "		float n22 = v22 - s22;\n"                                                                                                                  \
-	    "		float ax1 = mix(v11, v21, frac.x);\n"                                                                                                      \
-	    "		float ax2 = mix(v12, v22, frac.x);\n"                                                                                                      \
-	    "		float axm = mix(ax1, ax2, frac.y);\n"                                                                                                      \
-	    "		float sx1 = mix(s11, s21, frac.x);\n"                                                                                                      \
-	    "		float sx2 = mix(s12, s22, frac.x);\n"                                                                                                      \
-	    "		float stp = mix(sx1, sx2, frac.y);\n"                                                                                                      \
-	    "		float nx1 = mix(n11, n21, frac.x);\n"                                                                                                      \
-	    "		float nx2 = mix(n12, n22, frac.x);\n"                                                                                                      \
+	    "		float ax1 = mix(v11, v21, _frac.x);\n"                                                                                                      \
+	    "		float ax2 = mix(v12, v22, _frac.x);\n"                                                                                                      \
+	    "		float axm = mix(ax1, ax2, _frac.y);\n"                                                                                                      \
+	    "		float sx1 = mix(s11, s21, _frac.x);\n"                                                                                                      \
+	    "		float sx2 = mix(s12, s22, _frac.x);\n"                                                                                                      \
+	    "		float stp = mix(sx1, sx2, _frac.y);\n"                                                                                                      \
+	    "		float nx1 = mix(n11, n21, _frac.x);\n"                                                                                                      \
+	    "		float nx2 = mix(n12, n22, _frac.x);\n"                                                                                                      \
 	    "		float nonStp = mix(nx1, nx2, _frac.y);\n"                                                                                                   \
-	    "		vec2 rg = mix(mix(C11, C21, _frac.x), mix(C12, C22, frac.x), frac.y);\n"                                                                    \
-	    "		sampledStp = stp;\n"                                                                                                                       \
-	    "		if(discardForSemiTransPass(axm, stp, nonStp)) { discard; }\n"                                                                              \
+	    "		vec2 rg = mix(mix(C11, C21, _frac.x), mix(C12, C22, _frac.x), _frac.y);\n"                                                                    \
+	    "		float stpClass = step(nonStp, stp);\n"                                                                                                    \
+	    "		sampledStp = stpClass;\n"                                                                                                                  \
+	    "		if(discardForSemiTransPass(axm, stpClass)) { discard; }\n"                                                                                 \
 	    "		vec4 x1 = mix(lut(C11), lut(C21), _frac.x);\n"                                                                                              \
 	    "		vec4 x2 = mix(lut(C12), lut(C22), _frac.x);\n"                                                                                              \
 	    "		vec4 t = mix(x1, x2, _frac.y);\n"                                                                                                           \
 	    "		t.w = 1.0 - t.w;\n"                                                                                                                        \
 	    "		return t;\n"                                                                                                                               \
-	    "	}\n"                                                                                                                                        \
+	    "	}\n#endif\n"                                                                                                                                \
 	    "	vec4 nearestTextureSample(vec2 P) {\n"                                                                                                      \
 	    "		vec2 rg = samplePSX(P);\n"                                                                                                                 \
 	    "		float visible = texelVisible(rg);\n"                                                                                                       \
 	    "		sampledStp = visible * stpWeight(rg);\n"                                                                                                   \
-	    "		if(discardForSemiTransPass(visible, sampledStp, visible - sampledStp)) { discard; }\n"                                                     \
+	    "		if(discardForSemiTransPass(visible, sampledStp)) { discard; }\n"                                                                         \
 	    "		vec4 t = lut(rg);\n"                                                                                                                       \
 	    "		t.w = 1.0 - t.w;\n"                                                                                                                        \
 	    "		return t;\n"                                                                                                                               \
 	    "	}\n"                                                                                                                                        \
 	    "	void main() {\n"                                                                                                                            \
-	    "		vec4 color = (bilinearFilter > 0) ? bilinearTextureSample(v_texcoord.xy) : nearestTextureSample(v_texcoord.xy);\n"                         \
+	    GPU_TEXTURE_SAMPLE_MAIN                                                                                                                         \
 	    "		gl_FragColor = dither(color * v_color);\n"                                                                                                    \
-	    "		gl_FragColor.a = (psxDrawMaskSet != 0 || (psxTextureOutputStp != 0 && sampledStp >= 0.5)) ? 1.0 : 0.0;\n"                                     \
+	    "		gl_FragColor.a = max(psxDrawMaskSet, psxTextureOutputStp * sampledStp);\n"                                                               \
+	    GPU_PSX_BLEND_APPLY                                                                                                                            \
 	    "	}\n"
 
 global_variable const char *gpu_shader_common = "	varying vec4 v_texcoord;\n"
@@ -850,13 +1019,14 @@ const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
 const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
-                                 "	uniform int psxDrawMaskSet;\n"
+                                 "	uniform float psxDrawMaskSet;\n"
                                  "	uniform vec2 texelSize;\n"
                                  "	void main() {\n"
                                  "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
                                  "		gl_FragColor = dither(color * v_color);\n"
-                                 "		gl_FragColor.a = float(psxDrawMaskSet);\n"
+                                 "		gl_FragColor.a = psxDrawMaskSet;\n"
+                                 GPU_PSX_BLEND_APPLY
                                  "	}\n";
 
 #define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
@@ -926,7 +1096,7 @@ internal int NativeRenderer_Shader_CheckProgramStatus(GLuint program)
 	return 0;
 }
 
-internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader)
+internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader, const char *fragmentDefines)
 {
 	const char *GLSL_HEADER_VERT = "	#version 140\n"
 	                               "	precision lowp  int;\n"
@@ -955,6 +1125,13 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 
 	strcat(extra_vs_defines, "#define VERTEX\n");
 	strcat(extra_fs_defines, "#define FRAGMENT\n");
+	if (fragmentDefines != NULL)
+	{
+		strcat(extra_fs_defines, fragmentDefines);
+	}
+#ifdef __vita__
+	strcat(extra_fs_defines, "#define VITA_NEAREST_ONLY\n");
+#endif
 	if (g_cfg_bilinearFiltering)
 	{
 		strcat(extra_fs_defines, "#define BILINEAR_FILTER\n");
@@ -1017,9 +1194,11 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 
 	GLint textureSampler = 0;
 	GLint lutSampler = 1;
+	GLint presentLutSampler = 2;
 	glUseProgram(program);
 	glUniform1iv(glGetUniformLocation(program, "s_texture"), 1, &textureSampler);
 	glUniform1iv(glGetUniformLocation(program, "s_rgLut"), 1, &lutSampler);
+	glUniform1iv(glGetUniformLocation(program, "s_presentLut"), 1, &presentLutSampler);
 	glUseProgram(0);
 
 	return program;
@@ -1056,30 +1235,128 @@ internal void NativeRenderer_GenerateCommonTextures(void)
 
 		glActiveTexture(GL_TEXTURE0);
 	}
+
+#ifdef __vita__
+	for (u16 y = 0; y < LUT_HEIGHT; y++)
+	{
+		u8 *row = rgLUT + y * (LUT_WIDTH * 4);
+		for (u16 x = 0; x < LUT_WIDTH; x++)
+		{
+			const u16 c = (y << 8) | x;
+			const u8 r5 = (u8)(c & 31);
+			const u8 g5 = (u8)((c >> 5) & 31);
+			const u8 b5 = (u8)((c >> 10) & 31);
+			u8 *pixel = row + x * 4;
+			pixel[0] = (u8)((r5 << 3) | (r5 >> 2));
+			pixel[1] = (u8)((g5 << 3) | (g5 >> 2));
+			pixel[2] = (u8)((b5 << 3) | (b5 >> 2));
+			pixel[3] = (c & 0x8000) ? 255 : 0;
+		}
+	}
+
+	glGenTextures(1, &s_presentLutTexture);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, s_presentLutTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, LUT_WIDTH, LUT_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, &rgLUT);
+	glActiveTexture(GL_TEXTURE0);
+#endif
 }
 
-internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source)
+internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source, const char *fragmentDefines)
 {
-	sh->shader = NativeRenderer_Shader_Compile(source, true);
+	sh->shader = NativeRenderer_Shader_Compile(source, true, fragmentDefines);
 
 	sh->bilinearFilterLoc = glGetUniformLocation(sh->shader, "bilinearFilter");
 	sh->projectionLoc = glGetUniformLocation(sh->shader, "Projection");
 	sh->texelSizeLoc = glGetUniformLocation(sh->shader, "texelSize");
 	sh->texLoc = glGetUniformLocation(sh->shader, "s_texture");
 	sh->lutLoc = glGetUniformLocation(sh->shader, "s_rgLut");
+#ifndef __vita__
 	sh->psxSemiTransPassLoc = glGetUniformLocation(sh->shader, "psxSemiTransPass");
+#endif
 	sh->psxDrawMaskSetLoc = glGetUniformLocation(sh->shader, "psxDrawMaskSet");
 	sh->psxTextureOutputStpLoc = glGetUniformLocation(sh->shader, "psxTextureOutputStp");
 }
 
 internal void NativeRenderer_InitialisePSXShaders(void)
 {
-	NativeRenderer_CompilePSXShader(&s_gteShader4, gte_shader_4);
-	NativeRenderer_CompilePSXShader(&s_gteShader8, gte_shader_8);
-	NativeRenderer_CompilePSXShader(&s_gteShader16, gte_shader_16);
-	NativeRenderer_CompilePSXShader(&s_gteShader32Rgba, gte_shader_32_rgba);
+#ifdef __vita__
+	local_persist const char *variantDefines[NATIVE_PSX_SHADER_VARIANT_COUNT] = {
+	    "",
+	    "#define PSX_BLEND_AVERAGE\n",
+	    "#define PSX_BLEND_QUARTER\n",
+	    "#define PSX_PASS_NON_STP\n",
+	    "#define PSX_PASS_STP\n",
+	    "#define PSX_PASS_STP\n#define PSX_BLEND_AVERAGE\n",
+	    "#define PSX_PASS_STP\n#define PSX_BLEND_QUARTER\n",
+	};
+	const char *sources[4] = {gte_shader_4, gte_shader_8, gte_shader_16, gte_shader_32_rgba};
+
+	for (int format = TF_4_BIT; format <= TF_32_BIT_RGBA; format++)
+	{
+		const int variantCount = format == TF_32_BIT_RGBA ? 3 : NATIVE_PSX_SHADER_VARIANT_COUNT;
+		for (int variant = 0; variant < variantCount; variant++)
+		{
+			NativeRenderer_CompilePSXShader(&s_gteShaderVariants[format][variant], sources[format], variantDefines[variant]);
+		}
+	}
+#else
+	NativeRenderer_CompilePSXShader(&s_gteShader4, gte_shader_4, NULL);
+	NativeRenderer_CompilePSXShader(&s_gteShader8, gte_shader_8, NULL);
+	NativeRenderer_CompilePSXShader(&s_gteShader16, gte_shader_16, NULL);
+	NativeRenderer_CompilePSXShader(&s_gteShader32Rgba, gte_shader_32_rgba, NULL);
+#endif
 }
 
+#ifdef __vita__
+global_variable const char *ctr_pack_shader = "#ifdef VERTEX\n"
+                                              "attribute vec2 a_position;\n"
+                                              "varying vec2 v_uv;\n"
+                                              "uniform int flipY;\n"
+                                              "void main() {\n"
+                                              "    v_uv = a_position * 0.5 + 0.5;\n"
+                                              "    if (flipY != 0) { v_uv.y = 1.0 - v_uv.y; }\n"
+                                              "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+                                              "}\n"
+                                              "#endif\n"
+                                              "#ifdef FRAGMENT\n"
+                                              "varying vec2 v_uv;\n"
+                                              "uniform sampler2D s_src;\n"
+                                              "void main() {\n"
+                                              "    vec4 c = texture2D(s_src, v_uv);\n"
+                                              "    vec3 color5 = floor(c.rgb * (255.0 / 8.0) + 0.001);\n"
+                                              "    float lowByte = color5.r + mod(color5.g, 8.0) * 32.0;\n"
+                                              "    float highByte = floor(color5.g / 8.0) + color5.b * 4.0 + step(0.5, c.a) * 128.0;\n"
+                                              "    gl_FragColor = vec4(lowByte, highByte, 0.0, 0.0) / 255.0;\n"
+                                              "}\n"
+                                              "#endif\n";
+
+global_variable const char *ctr_present_vram_shader = "#ifdef VERTEX\n"
+                                                      "attribute vec2 a_position;\n"
+                                                      "varying vec2 v_uv;\n"
+                                                      "uniform vec4 sourceRect;\n"
+                                                      "void main() {\n"
+                                                      "    vec2 screenUV = a_position * 0.5 + 0.5;\n"
+                                                      "    vec2 sourcePixel = sourceRect.xy + vec2(screenUV.x, 1.0 - screenUV.y) * sourceRect.zw;\n"
+                                                      "    v_uv = sourcePixel / vec2(1024.0, 512.0);\n"
+                                                      "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+                                                      "}\n"
+                                                      "#endif\n"
+                                                      "#ifdef FRAGMENT\n"
+                                                      "varying vec2 v_uv;\n"
+                                                      "uniform sampler2D s_texture;\n"
+                                                      "uniform sampler2D s_presentLut;\n"
+                                                      "const vec2 c_LUTTexel = vec2(1.0 / 256.0, 1.0 / 256.0);\n"
+                                                      "void main() {\n"
+                                                      "    vec2 packedRg = texture2D(s_texture, v_uv).rg;\n"
+                                                      "    gl_FragColor = texture2D(s_presentLut, packedRg - c_LUTTexel * 0.0001);\n"
+                                                      "}\n"
+                                                      "#endif\n";
+#else
 // NOTE(aalhendi): GPU VRAM pack. Samples an RGBA render texture and writes PS1
 // 5:5:5:1 pixels into RG8 VRAM, low byte in R and high byte in G. NEAREST
 // sampling and integer channel shifts preserve the packed PS1 pixel value.
@@ -1099,7 +1376,7 @@ global_variable const char *ctr_pack_shader = "#ifdef VERTEX\n"
                                               "void main() {\n"
                                               "	ivec4 c = ivec4(texture2D(s_src, v_uv) * 255.0 + 0.5);\n"
                                               "	int px16 = (c.r >> 3) | ((c.g >> 3) << 5) | ((c.b >> 3) << 10) | ((c.a >> 7) << 15);\n"
-                                              "	fragColor = vec4(float(px16 & 0xFF) / 255.0, float((px16 >> 8) & 0xFF) / 255.0, 0.0, 0.0);\n"
+                                              "	gl_FragColor = vec4(float(px16 & 0xFF) / 255.0, float((px16 >> 8) & 0xFF) / 255.0, 0.0, 0.0);\n"
                                               "}\n"
                                               "#endif\n";
 
@@ -1125,23 +1402,46 @@ global_variable const char *ctr_present_vram_shader = "#ifdef VERTEX\n"
                                                       "\tivec3 color5 = ivec3(pixel & 31, (pixel >> 5) & 31, (pixel >> 10) & 31);\n"
                                                       "\tivec3 color8 = (color5 << 3) | (color5 >> 2);\n"
                                                       "\tfloat stp = float((pixel >> 15) & 1);\n"
-                                                      "\tfragColor = vec4(vec3(color8) / 255.0, stp);\n"
+                                                      "\tgl_FragColor = vec4(vec3(color8) / 255.0, stp);\n"
                                                       "}\n"
                                                       "#endif\n";
+#endif
+
+global_variable const char *ctr_present_rgba_shader = "#ifdef VERTEX\n"
+                                                       "attribute vec2 a_position;\n"
+                                                       "varying vec2 v_uv;\n"
+                                                       "void main() {\n"
+                                                       "    v_uv = a_position * 0.5 + 0.5;\n"
+                                                       "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+                                                       "}\n"
+                                                       "#endif\n"
+                                                       "#ifdef FRAGMENT\n"
+                                                       "varying vec2 v_uv;\n"
+                                                       "uniform sampler2D s_src;\n"
+                                                       "void main() {\n"
+                                                       "    gl_FragColor = texture2D(s_src, v_uv);\n"
+                                                       "}\n"
+                                                       "#endif\n";
 
 internal void NativeRenderer_InitVRAMPipelines(void)
 {
 	local_persist const float quad[12] = {-1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f};
 
-	s_packShader = NativeRenderer_Shader_Compile(ctr_pack_shader, false);
+	s_packShader = NativeRenderer_Shader_Compile(ctr_pack_shader, false, NULL);
 	glUseProgram(s_packShader);
 	const GLint packSrcLoc = glGetUniformLocation(s_packShader, "s_src");
 	s_packFlipYLoc = glGetUniformLocation(s_packShader, "flipY");
 	glUniform1i(packSrcLoc, 0);
 	glUseProgram(0);
 
-	s_presentVramShader = NativeRenderer_Shader_Compile(ctr_present_vram_shader, false);
+	s_presentVramShader = NativeRenderer_Shader_Compile(ctr_present_vram_shader, false, NULL);
 	s_presentVramSourceRectLoc = glGetUniformLocation(s_presentVramShader, "sourceRect");
+
+	s_presentRgbaShader = NativeRenderer_Shader_Compile(ctr_present_rgba_shader, false, NULL);
+	glUseProgram(s_presentRgbaShader);
+	const GLint presentRgbaSrcLoc = glGetUniformLocation(s_presentRgbaShader, "s_src");
+	glUniform1i(presentRgbaSrcLoc, 0);
+	glUseProgram(0);
 
 	glGenVertexArrays(1, &s_vramQuadVAO);
 	glGenBuffers(1, &s_vramQuadVBO);
@@ -1232,10 +1532,8 @@ int NativeRenderer_InitialisePSX(void)
 		glGenFramebuffers(1, &s_glVramFramebuffer);
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, s_glVramFramebuffer);
-
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_vramTexture, 0);
-#ifndef __vita__
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_vram.texture, 0);
+#ifndef __vita__
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 #else
@@ -1255,16 +1553,16 @@ int NativeRenderer_InitialisePSX(void)
 		int i;
 
 		glGenBuffers(MAX_NUM_VERTEX_BUFFERS, s_glVertexBuffer);
-#ifndef __vita__
 		glGenVertexArrays(MAX_NUM_VERTEX_BUFFERS, s_glVertexArray);
-#endif
 		for (i = 0; i < MAX_NUM_VERTEX_BUFFERS; i++)
 		{
-#ifndef __vita__
 			glBindVertexArray(s_glVertexArray[i]);
-#endif
 			glBindBuffer(GL_ARRAY_BUFFER, s_glVertexBuffer[i]);
-#ifndef __vita__
+#ifdef __vita__
+			// Initialise vitaGL's VBO metadata. Each submitted batch later
+			// replaces this pointer with mapped scratch storage, without a copy.
+			glBufferData(GL_ARRAY_BUFFER, sizeof(GrVertex), NULL, GL_STREAM_DRAW);
+#else
 			glBufferData(GL_ARRAY_BUFFER, sizeof(GrVertex) * MAX_VERTEX_BUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
 #endif
 			glEnableVertexAttribArray(a_position);
@@ -1277,9 +1575,7 @@ int NativeRenderer_InitialisePSX(void)
 			glVertexAttribPointer(a_color, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(GrVertex), &((GrVertex *)NULL)->r);
 			glVertexAttribPointer(a_extra, 4, GL_BYTE, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->tcx);
 		}
-#ifndef __vita__
 		glBindVertexArray(0);
-#endif
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
@@ -1357,12 +1653,12 @@ void NativeRenderer_SetupClipMode(const RECT16 *rect, const DISPENV *displayEnv,
 		clipRectX += 0.5f;
 	}
 
-	// Normal game draws target the PSX-sized main framebuffer. Host-window
-	// coordinates are introduced only by the final presentation pass.
+	// The draw environment remains in PS1 coordinates. Scale its normalized clip
+	// rectangle to the physical main render target used by this frame.
 	const float viewportX = 0.0f;
 	const float viewportY = 0.0f;
-	const float viewportW = (float)displayEnv->disp.w;
-	const float viewportH = (float)displayEnv->disp.h;
+	const float viewportW = (float)(s_mainRenderTarget.width > 0 ? s_mainRenderTarget.width : displayEnv->disp.w);
+	const float viewportH = (float)(s_mainRenderTarget.height > 0 ? s_mainRenderTarget.height : displayEnv->disp.h);
 	const float flipOffset = viewportY + viewportH - clipRectH * viewportH;
 	const float crx = viewportX + clipRectX * viewportW;
 	const float cry = clipRectY * viewportH;
@@ -1383,47 +1679,69 @@ internal void NativeRenderer_SetShader(const ShaderID shader)
 }
 
 
-void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
+void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode)
 {
+#ifdef __vita__
+	int variant;
+	if (semiTransPass == 1)
+	{
+		variant = NATIVE_PSX_SHADER_NON_STP;
+	}
+	else if (semiTransPass == 2)
+	{
+		variant = blendMode == BM_AVERAGE         ? NATIVE_PSX_SHADER_STP_AVERAGE
+		          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_STP_QUARTER
+		                                               : NATIVE_PSX_SHADER_STP;
+	}
+	else
+	{
+		variant = blendMode == BM_AVERAGE         ? NATIVE_PSX_SHADER_OPAQUE_AVERAGE
+		          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_OPAQUE_QUARTER
+		                                               : NATIVE_PSX_SHADER_OPAQUE;
+	}
+	if (texFormat == TF_32_BIT_RGBA && variant >= NATIVE_PSX_SHADER_NON_STP)
+	{
+		variant = blendMode == BM_AVERAGE         ? NATIVE_PSX_SHADER_OPAQUE_AVERAGE
+		          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_OPAQUE_QUARTER
+		                                               : NATIVE_PSX_SHADER_OPAQUE;
+	}
+	if (texFormat < TF_4_BIT || texFormat > TF_32_BIT_RGBA)
+	{
+		return;
+	}
+	GTEShader *shader = &s_gteShaderVariants[texFormat][variant];
+#else
+	GTEShader *shader = NULL;
 	switch (texFormat)
 	{
 	case TF_4_BIT:
-		NativeRenderer_SetShader(s_gteShader4.shader);
-		u_bilinearFilterLoc = s_gteShader4.bilinearFilterLoc;
-		u_projectionLoc = s_gteShader4.projectionLoc;
-		u_texelSizeLoc = -1;
-		u_psxSemiTransPassLoc = s_gteShader4.psxSemiTransPassLoc;
-		u_psxDrawMaskSetLoc = s_gteShader4.psxDrawMaskSetLoc;
-		u_psxTextureOutputStpLoc = s_gteShader4.psxTextureOutputStpLoc;
+		shader = &s_gteShader4;
 		break;
 	case TF_8_BIT:
-		NativeRenderer_SetShader(s_gteShader8.shader);
-		u_bilinearFilterLoc = s_gteShader8.bilinearFilterLoc;
-		u_projectionLoc = s_gteShader8.projectionLoc;
-		u_texelSizeLoc = -1;
-		u_psxSemiTransPassLoc = s_gteShader8.psxSemiTransPassLoc;
-		u_psxDrawMaskSetLoc = s_gteShader8.psxDrawMaskSetLoc;
-		u_psxTextureOutputStpLoc = s_gteShader8.psxTextureOutputStpLoc;
+		shader = &s_gteShader8;
 		break;
 	case TF_16_BIT:
-		NativeRenderer_SetShader(s_gteShader16.shader);
-		u_bilinearFilterLoc = s_gteShader16.bilinearFilterLoc;
-		u_projectionLoc = s_gteShader16.projectionLoc;
-		u_texelSizeLoc = -1;
-		u_psxSemiTransPassLoc = s_gteShader16.psxSemiTransPassLoc;
-		u_psxDrawMaskSetLoc = s_gteShader16.psxDrawMaskSetLoc;
-		u_psxTextureOutputStpLoc = s_gteShader16.psxTextureOutputStpLoc;
+		shader = &s_gteShader16;
 		break;
 	case TF_32_BIT_RGBA:
-		NativeRenderer_SetShader(s_gteShader32Rgba.shader);
-		u_bilinearFilterLoc = s_gteShader32Rgba.bilinearFilterLoc;
-		u_projectionLoc = s_gteShader32Rgba.projectionLoc;
-		u_texelSizeLoc = s_gteShader32Rgba.texelSizeLoc;
-		u_psxSemiTransPassLoc = s_gteShader32Rgba.psxSemiTransPassLoc;
-		u_psxDrawMaskSetLoc = s_gteShader32Rgba.psxDrawMaskSetLoc;
-		u_psxTextureOutputStpLoc = s_gteShader32Rgba.psxTextureOutputStpLoc;
+		shader = &s_gteShader32Rgba;
 		break;
 	}
+	if (shader == NULL)
+	{
+		return;
+	}
+#endif
+
+	NativeRenderer_SetShader(shader->shader);
+	u_bilinearFilterLoc = shader->bilinearFilterLoc;
+	u_projectionLoc = shader->projectionLoc;
+	u_texelSizeLoc = texFormat == TF_32_BIT_RGBA ? shader->texelSizeLoc : -1;
+#ifndef __vita__
+	u_psxSemiTransPassLoc = shader->psxSemiTransPassLoc;
+#endif
+	u_psxDrawMaskSetLoc = shader->psxDrawMaskSetLoc;
+	u_psxTextureOutputStpLoc = shader->psxTextureOutputStpLoc;
 
 	if (g_dbg_texturelessMode)
 	{
@@ -1438,7 +1756,12 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 	{
 		glUniform1i(u_bilinearFilterLoc, g_cfg_bilinearFiltering);
 	}
-	NativeRenderer_SetPSXTextureSemiTransPass(0);
+#ifndef __vita__
+	if (u_psxSemiTransPassLoc >= 0)
+	{
+		glUniform1i(u_psxSemiTransPassLoc, semiTransPass);
+	}
+#endif
 
 	if (s_lastBoundTexture == texture)
 	{
@@ -1462,19 +1785,11 @@ void NativeRenderer_SetOverrideTextureSize(int width, int height)
 	glUniform2fv(u_texelSizeLoc, 1, vec);
 }
 
-void NativeRenderer_SetPSXTextureSemiTransPass(int pass)
-{
-	if (u_psxSemiTransPassLoc >= 0)
-	{
-		glUniform1i(u_psxSemiTransPassLoc, pass);
-	}
-}
-
 void NativeRenderer_SetPSXTextureOutputSTP(int enabled)
 {
 	if (u_psxTextureOutputStpLoc >= 0)
 	{
-		glUniform1i(u_psxTextureOutputStpLoc, enabled);
+		glUniform1f(u_psxTextureOutputStpLoc, enabled ? 1.0f : 0.0f);
 	}
 }
 
@@ -1482,7 +1797,7 @@ void NativeRenderer_SetPSXDrawMaskSet(int maskSet)
 {
 	if (u_psxDrawMaskSetLoc >= 0)
 	{
-		glUniform1i(u_psxDrawMaskSetLoc, maskSet);
+		glUniform1f(u_psxDrawMaskSetLoc, maskSet ? 1.0f : 0.0f);
 	}
 }
 
@@ -1722,12 +2037,18 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 		return;
 	}
 
-	const int relX = overlapX - displayX;
+	const int physicalW = s_mainRenderTarget.width > 0 ? s_mainRenderTarget.width : displayW;
+	const int physicalH = s_mainRenderTarget.height > 0 ? s_mainRenderTarget.height : displayH;
+	const int relLeft = overlapX - displayX;
+	const int relRight = overlapRight - displayX;
+	const int relTop = overlapY - displayY;
 	const int relBottom = overlapBottom - displayY;
-	const int scissorX = relX;
-	const int scissorY = displayH - relBottom;
-	const int scissorW = overlapRight - overlapX;
-	const int scissorH = overlapBottom - overlapY;
+	const int scissorX = relLeft * physicalW / displayW;
+	const int scissorRight = (relRight * physicalW + displayW - 1) / displayW;
+	const int scissorY = (displayH - relBottom) * physicalH / displayH;
+	const int scissorTop = ((displayH - relTop) * physicalH + displayH - 1) / displayH;
+	const int scissorW = scissorRight - scissorX;
+	const int scissorH = scissorTop - scissorY;
 
 	if ((scissorW <= 0) || (scissorH <= 0))
 	{
@@ -1841,14 +2162,36 @@ internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h)
 	GLint previousPackRowLength;
 	GLint previousPackAlignment;
 	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+#ifndef __vita__
 	glGetIntegerv(GL_PACK_ROW_LENGTH, &previousPackRowLength);
 	glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+#endif
 
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, s_glVramFramebuffer);
+#ifndef __vita__
 	glPixelStorei(GL_PACK_ROW_LENGTH, VRAM_WIDTH);
 	glPixelStorei(GL_PACK_ALIGNMENT, sizeof(u16));
 	glReadPixels(readRect.x, readRect.y, readRect.w, readRect.h, VRAM_FORMAT, GL_UNSIGNED_BYTE,
 	             s_vram.cpuPixels + (size_t)readRect.y * VRAM_WIDTH + readRect.x);
+#else
+	// READBACKS_SPEEDHACK deliberately omits vitaGL's implicit scene finish.
+	// CPU consumers such as the pause-screen compressor access the returned
+	// bytes immediately, so make this explicit at the native synchronization
+	// boundary instead of disabling the speedhack globally.
+	glFinish();
+	// vitaGL always packs rows tightly.  Passing a pointer into cpuPixels here
+	// would advance each subsequent row by readRect.w instead of VRAM_WIDTH.
+	glReadPixels(readRect.x, readRect.y, readRect.w, readRect.h, VRAM_FORMAT, GL_UNSIGNED_BYTE, s_vitaVramTransferPixels);
+	for (int row = 0; row < readRect.h; row++)
+	{
+		const u8 *src = s_vitaVramTransferPixels + (size_t)row * readRect.w * 4;
+		u16 *dst = s_vram.cpuPixels + (size_t)(readRect.y + row) * VRAM_WIDTH + readRect.x;
+		for (int column = 0; column < readRect.w; column++)
+		{
+			dst[column] = (u16)(src[column * 4] | ((u16)src[column * 4 + 1] << 8));
+		}
+	}
+#endif
 
 	for (int tileY = tileY0; tileY <= tileY1; tileY++)
 	{
@@ -1859,13 +2202,20 @@ internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h)
 		}
 	}
 
+#ifndef __vita__
 	glPixelStorei(GL_PACK_ROW_LENGTH, previousPackRowLength);
 	glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+#endif
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)previousReadFramebuffer);
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_FRAMEBUFFER_READBACK);
 }
 
 internal void NativeRenderer_ResolveVRAMRead(int x, int y, int w, int h)
+{
+	NativeRenderer_SyncGpuVRAMToCPU(x, y, w, h);
+}
+
+void NativeRenderer_SyncVRAMToCPU(int x, int y, int w, int h)
 {
 	NativeRenderer_SyncGpuVRAMToCPU(x, y, w, h);
 }
@@ -1928,8 +2278,10 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 
 		s_previousOffscreenState = 1;
 		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, offscreenRect->w, offscreenRect->h);
+		s_offscreenRenderTarget.logicalWidth = offscreenRect->w;
+		s_offscreenRenderTarget.logicalHeight = offscreenRect->h;
 		s_previousOffscreen = *offscreenRect;
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y);
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y, offscreenRect->w, offscreenRect->h);
 	}
 	else
 	{
@@ -1963,6 +2315,7 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 	const TextureID previousTexture = s_lastBoundTexture;
 	const BlendMode previousBlendMode = s_previousBlendMode;
 	const int previousScissorState = s_previousScissorState;
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
 
 	NativeRenderer_UpdateVRAM();
 
@@ -1970,6 +2323,7 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 
 	glDisable(GL_BLEND);
 	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_STENCIL_TEST);
 	glViewport(x, y, w, h);
 
 	glUseProgram(s_packShader);
@@ -1998,6 +2352,10 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 		NativeRenderer_BindMainRenderTarget();
 		glViewport(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height);
 	}
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
 
 	glUseProgram(previousShader == (ShaderID)-1 ? 0 : previousShader);
 	glActiveTexture(GL_TEXTURE0);
@@ -2018,7 +2376,6 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_FRAMEBUFFER_STORE);
-
 	NativeRenderer_GpuPackTextureToVRAM(s_mainRenderTarget.texture, x, y, w, h, true);
 
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_FRAMEBUFFER_STORE);
@@ -2101,8 +2458,12 @@ int NativeRenderer_RestoreVRAMState(const void *src, int srcSize)
 	NativeRenderer_MarkVRAMDirty(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
 	s_mainRenderTarget.width = 0;
 	s_mainRenderTarget.height = 0;
+	s_mainRenderTarget.logicalWidth = 0;
+	s_mainRenderTarget.logicalHeight = 0;
 	s_offscreenRenderTarget.width = 0;
 	s_offscreenRenderTarget.height = 0;
+	s_offscreenRenderTarget.logicalWidth = 0;
+	s_offscreenRenderTarget.logicalHeight = 0;
 	s_previousOffscreen = zeroRect;
 	s_previousOffscreenState = 0;
 	s_previousShader = (ShaderID)-1;
@@ -2124,6 +2485,28 @@ void NativeRenderer_UpdateVRAM(void)
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, s_vram.texture);
+#ifdef __vita__
+	// Expand each packed PSX word to the RGBA render-target representation.
+	// The shaders consume only .r/.g, which retain the low/high PSX bytes.
+	for (s32 i = 0; i < rectCount; i++)
+	{
+		const RECT16 r = s_vram.cpuDirtyRects[i];
+		u8 *dst = s_vitaVramTransferPixels;
+		for (int y = 0; y < r.h; y++)
+		{
+			const u16 *src = s_vram.cpuPixels + (size_t)(r.y + y) * VRAM_WIDTH + r.x;
+			for (int x = 0; x < r.w; x++)
+			{
+				const u16 pixel = src[x];
+				*dst++ = (u8)pixel;
+				*dst++ = (u8)(pixel >> 8);
+				*dst++ = 0;
+				*dst++ = 255;
+			}
+		}
+		glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.w, r.h, VRAM_FORMAT, GL_UNSIGNED_BYTE, s_vitaVramTransferPixels);
+	}
+#else
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, VRAM_WIDTH);
 	for (s32 i = 0; i < rectCount; i++)
 	{
@@ -2131,6 +2514,7 @@ void NativeRenderer_UpdateVRAM(void)
 		glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.w, r.h, VRAM_FORMAT, GL_UNSIGNED_BYTE, s_vram.cpuPixels + (size_t)r.y * VRAM_WIDTH + r.x);
 	}
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
 	s_lastBoundTexture = (TextureID)-1;
 
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_RENDERER_UPDATE_VRAM);
@@ -2151,8 +2535,46 @@ void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, in
 	NativeRenderer_SetScissorState(0);
 	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_NONE);
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
+	glDisable(GL_STENCIL_TEST);
 
 	NativeRenderer_DrawVRAMRegion(displayX, displayY, displayW, displayH);
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
+	glBindVertexArray(0);
+
+	s_previousShader = (ShaderID)-1;
+	s_lastBoundTexture = (TextureID)-1;
+}
+
+void NativeRenderer_PresentMainRenderTarget(void)
+{
+	if ((s_mainRenderTarget.texture == 0) || (s_mainRenderTarget.width <= 0) || (s_mainRenderTarget.height <= 0))
+	{
+		return;
+	}
+
+	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	NativeRenderer_SetScissorState(0);
+	NativeRenderer_EnableDepth(0);
+	NativeRenderer_SetBlendMode(BM_NONE);
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
+	glDisable(GL_STENCIL_TEST);
+
+	glUseProgram(s_presentRgbaShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, s_mainRenderTarget.texture);
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
+
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
 	glBindVertexArray(0);
 
 	s_previousShader = (ShaderID)-1;
@@ -2261,7 +2683,7 @@ void NativeRenderer_SetBlendMode(BlendMode blendMode)
 	case BM_ADD_QUATER_SOURCE:
 		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 #ifdef __vita__
-		glBlendFuncSeparate(GL_SRC_COLOR, GL_ONE, GL_ONE, GL_ZERO);
+		glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ZERO);
 #else
 		glBlendFuncSeparate(GL_CONSTANT_COLOR, GL_ONE, GL_ONE, GL_ZERO);
 #endif
@@ -2284,6 +2706,11 @@ internal void NativeRenderer_SetWireframe(int enable)
 void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int num_vertices)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_RENDERER_VERTEX_UPLOAD);
+	if (num_vertices <= 0)
+	{
+		NativePerf_EndScope(NATIVE_PERF_BUCKET_RENDERER_VERTEX_UPLOAD);
+		return;
+	}
 	if ((u32)num_vertices >= MAX_VERTEX_BUFFER_SIZE)
 	{
 		NATIVE_RENDERER_ERROR("%s\n", "MAX_VERTEX_BUFFER_SIZE reached, expect rendering errors");
@@ -2291,13 +2718,34 @@ void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int num_vertice
 	}
 
 	const int bufferIndex = s_curVertexBuffer;
-	s_curVertexBuffer = (s_curVertexBuffer + 1) & 1;
+#ifndef __vita__
+	s_curVertexBuffer = (s_curVertexBuffer + 1) % MAX_NUM_VERTEX_BUFFERS;
+#endif
 	s_boundVertexBuffer = bufferIndex;
 	glBindVertexArray(s_glVertexArray[bufferIndex]);
 	glBindBuffer(GL_ARRAY_BUFFER, s_glVertexBuffer[bufferIndex]);
+#ifdef __vita__
+	// vertices is already in vitaGL's GPU-mapped circular pool.
+	vglBufferData(GL_ARRAY_BUFFER, vertices);
+#else
 	glBufferSubData(GL_ARRAY_BUFFER, 0, num_vertices * sizeof(GrVertex), vertices);
+#endif
 
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_RENDERER_VERTEX_UPLOAD);
+}
+
+GrVertex *NativeRenderer_AllocateVertexBuffer(int count)
+{
+#ifdef __vita__
+	if (count <= 0 || (u32)count > MAX_VERTEX_BUFFER_SIZE)
+	{
+		return NULL;
+	}
+	return (GrVertex *)vglAllocFromScratch((size_t)count * sizeof(GrVertex));
+#else
+	(void)count;
+	return NULL;
+#endif
 }
 
 void NativeRenderer_DrawTriangles(int start_vertex, int triangles)

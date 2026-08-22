@@ -129,32 +129,66 @@ void MM_TrackSelect_Video_State(b32 resetPreview)
 #ifdef CTR_NATIVE
 #include <platform/native_str.h>
 
-static void MM_TrackSelect_Video_DrawNativePreview(RECT *r, int srcX, int srcY)
+static void MM_TrackSelect_Video_DrawNativePreview(RECT *r, u32 texture, int textureWidth, int textureHeight)
 {
 	struct GameTracker *gGT = sdata->gGT;
-	u32 *prim = (u32 *)gGT->backBuffer->primMem.cursor;
+	DR_PSYX_TEX *setTexture = (DR_PSYX_TEX *)gGT->backBuffer->primMem.cursor;
+	POLY_FT4 *poly = (POLY_FT4 *)(setTexture + 1);
+	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
 	u32 *ot = gGT->pushBuffer_UI.ptrOT;
 	u32 oldTag = (u32)*ot;
-	struct DisplayBlurTile tile[2] = {
-	    {
-	        .srcX = (s16)srcX,
-	        .srcY = (s16)srcY,
-	        .srcW = MM_TRACK_VIDEO_FRAME_WIDTH,
-	        .srcH = MM_TRACK_VIDEO_FRAME_HEIGHT,
-	        .dstX = (s16)(r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X),
-	        .dstY = (s16)(r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y),
-	        .dstW = MM_TRACK_VIDEO_FRAME_WIDTH,
-	        .dstH = MM_TRACK_VIDEO_FRAME_HEIGHT,
-	    },
-	};
+	const s16 dstX = (s16)(r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X);
+	const s16 dstY = (s16)(r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y);
+	const u8 srcX = MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X;
+	const u8 srcY = MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y;
+	const u8 srcRight = (u8)(srcX + MM_TRACK_VIDEO_FRAME_WIDTH);
+	const u8 srcBottom = (u8)(srcY + MM_TRACK_VIDEO_FRAME_HEIGHT);
+	const u16 iconTpage = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.tpage;
+	const u8 iconU = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.u0;
+	const u8 iconV = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.v0;
+	const int oldVramX = (u16)iconU + (iconTpage & 0xf) * 0x40;
+	const int oldVramY = (u16)iconV + (iconTpage & 0x10) * 0x10 + (s16)(((u32)iconTpage & 0x800) >> 2);
 
-	// NOTE(aalhendi): Retail copies decoded MDEC output with MoveImage. Native
-	// presents menus from queued primitives, so draw the same VRAM rectangle as
-	// a 16-bit textured quad instead of relying on a CPU-side VRAM copy.
-	*ot = (u32)CtrGpu_PrimToOTLink24(prim);
-	u32 *nextPrim = DISPLAY_Blur_SubFunc(prim, &tile[0]);
-	((POLY_FT4 *)nextPrim - 1)->tag = CtrGpu_PackOTTag(oldTag, 0x09000000);
-	gGT->backBuffer->primMem.cursor = nextPrim;
+	if ((texture == 0) || (textureWidth <= srcRight) || (textureHeight <= srcBottom))
+	{
+		return;
+	}
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+
+	poly->r0 = 0x80;
+	poly->g0 = 0x80;
+	poly->b0 = 0x80;
+	poly->code = 0x2f;
+	poly->x0 = dstX;
+	poly->y0 = dstY;
+	poly->x1 = dstX + MM_TRACK_VIDEO_FRAME_WIDTH;
+	poly->y1 = dstY;
+	poly->x2 = dstX;
+	poly->y2 = dstY + MM_TRACK_VIDEO_FRAME_HEIGHT;
+	poly->x3 = dstX + MM_TRACK_VIDEO_FRAME_WIDTH;
+	poly->y3 = dstY + MM_TRACK_VIDEO_FRAME_HEIGHT;
+	poly->u0 = srcX;
+	poly->v0 = srcY;
+	poly->clut = 0;
+	poly->u1 = srcRight;
+	poly->v1 = srcY;
+	// Preserve the draw-mode side effect of the former VRAM-backed preview;
+	// sprites later in the same UI OT may inherit this tpage.
+	poly->tpage = getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)oldVramX, (u32)oldVramY);
+	poly->u2 = srcX;
+	poly->v2 = srcBottom;
+	poly->pad1 = 0;
+	poly->u3 = srcRight;
+	poly->v3 = srcBottom;
+	poly->pad2 = 0;
+	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
+
+	SetPsyXTexture(resetTexture, 0, 0, 0);
+	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
+	*ot = (u32)CtrGpu_PrimToOTLink24(setTexture);
+	gGT->backBuffer->primMem.cursor = resetTexture + 1;
 }
 #endif
 
@@ -190,12 +224,7 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 		if (((D230.trackSelect.videoStatePrev == MM_TRACK_VIDEO_PLAYING) || (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_PLAYING)) ||
 		    (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_START_STREAM))
 		{
-			u16 tpage = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.tpage;
-			u8 u0 = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.u0;
-			u8 v0 = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.v0;
-			int srcX = (u16)u0 + (tpage & 0xf) * 0x40;
-			int srcY = (u16)v0 + (tpage & 0x10) * 0x10 + (s16)(((u32)tpage & 0x800) >> 2);
-			int uploaded = NativeSTR_UploadNextFrame(srcX, srcY);
+			int uploaded = NativeSTR_UploadNextFrameToTexture();
 
 			if ((uploaded == 1) && (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_START_STREAM))
 			{
@@ -204,7 +233,7 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 
 			if (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_PLAYING)
 			{
-				MM_TrackSelect_Video_DrawNativePreview(r, srcX + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X, srcY + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y);
+				MM_TrackSelect_Video_DrawNativePreview(r, NativeSTR_GetFrameTexture(), NativeSTR_GetFrameWidth(), NativeSTR_GetFrameHeight());
 			}
 		}
 	}

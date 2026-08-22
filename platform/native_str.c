@@ -19,6 +19,7 @@
 #define NATIVE_STR_MAX_FRAME_BYTES          (NATIVE_STR_MAX_FRAME_SECTORS * NATIVE_STR_CD_SECTOR_PAYLOAD)
 #define NATIVE_STR_MAX_WIDTH                512
 #define NATIVE_STR_MAX_HEIGHT               240
+#define NATIVE_STR_STREAM_TEXTURE_COUNT     3
 #define NATIVE_STR_ID                       0x80010160u
 #define NATIVE_STR_BS_ID                    0x3800u
 #define NATIVE_STR_END_OF_BLOCK             0xfe00u
@@ -57,8 +58,14 @@ struct NativeSTRState
 	s32 frameSize;
 	s32 width;
 	s32 height;
+	u32 frameTextures[NATIVE_STR_STREAM_TEXTURE_COUNT];
+	s32 frameTextureIndex;
+	s32 frameTextureWidth;
+	s32 frameTextureHeight;
+	u32 displayTexture;
 	u8 frameData[NATIVE_STR_MAX_FRAME_BYTES];
 	u16 rgb555[NATIVE_STR_MAX_WIDTH * NATIVE_STR_MAX_HEIGHT];
+	u8 rgba8888[NATIVE_STR_MAX_WIDTH * NATIVE_STR_MAX_HEIGHT * 4];
 };
 
 struct NativeSTRSectorHeader
@@ -89,6 +96,43 @@ struct NativeSTRAcGroup
 };
 
 global_variable struct NativeSTRState s_str;
+
+internal void NativeSTR_DestroyFrameTextures(void)
+{
+	for (s32 i = 0; i < NATIVE_STR_STREAM_TEXTURE_COUNT; i++)
+	{
+		NativeRenderer_DestroyStreamingTexture(s_str.frameTextures[i]);
+		s_str.frameTextures[i] = 0;
+	}
+
+	s_str.frameTextureIndex = -1;
+	s_str.frameTextureWidth = 0;
+	s_str.frameTextureHeight = 0;
+	s_str.displayTexture = 0;
+}
+
+internal s32 NativeSTR_EnsureFrameTextures(void)
+{
+	if ((s_str.frameTextureWidth == s_str.width) && (s_str.frameTextureHeight == s_str.height) && (s_str.frameTextures[0] != 0))
+	{
+		return 1;
+	}
+
+	NativeSTR_DestroyFrameTextures();
+	for (s32 i = 0; i < NATIVE_STR_STREAM_TEXTURE_COUNT; i++)
+	{
+		s_str.frameTextures[i] = NativeRenderer_CreateStreamingTexture(s_str.width, s_str.height);
+		if (s_str.frameTextures[i] == 0)
+		{
+			NativeSTR_DestroyFrameTextures();
+			return 0;
+		}
+	}
+
+	s_str.frameTextureWidth = s_str.width;
+	s_str.frameTextureHeight = s_str.height;
+	return 1;
+}
 
 // NOTE(aalhendi): MDEC tables and BS v1/v2/v3 Huffman groups are transcribed
 // from psx-spx's documented PS1 MDEC/STR format.
@@ -821,18 +865,45 @@ void NativeSTR_Stop(void)
 	s_str.width = 0;
 	s_str.height = 0;
 	s_str.frameSize = 0;
+	s_str.displayTexture = 0;
 }
 
-s32 NativeSTR_UploadNextFrame(s32 dstX, s32 dstY)
+void NativeSTR_Shutdown(void)
 {
-	RECT16 rect;
+	NativeSTR_Stop();
+	NativeSTR_DestroyFrameTextures();
+}
+
+internal s32 NativeSTR_ReadDecodeNextFrame(void)
+{
+	s32 readOk;
+	s32 decodeOk;
 
 	if ((s_str.active == 0) || (s_str.source == NATIVE_STR_SOURCE_NONE))
 	{
 		return 0;
 	}
 
-	if ((NativeSTR_ReadNextFrame() == 0) || (NativeSTR_DecodeFrame() == 0))
+	readOk = NativeSTR_ReadNextFrame();
+	if (readOk == 0)
+	{
+		return 0;
+	}
+
+	decodeOk = NativeSTR_DecodeFrame();
+	if (decodeOk == 0)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+s32 NativeSTR_UploadNextFrame(s32 dstX, s32 dstY)
+{
+	RECT16 rect;
+
+	if (NativeSTR_ReadDecodeNextFrame() == 0)
 	{
 		return 0;
 	}
@@ -842,9 +913,55 @@ s32 NativeSTR_UploadNextFrame(s32 dstX, s32 dstY)
 	rect.w = s_str.width;
 	rect.h = s_str.height;
 	LoadImage(&rect, s_str.rgb555);
-	// NOTE(aalhendi): Track-preview STR draws these uploaded pixels as same-pass
-	// textured primitives. Retail LoadImage is GPU-visible immediately; refresh
-	// the host VRAM texture at that boundary.
+	// Scrapbook playback still follows the retail VRAM path. LoadImage is
+	// GPU-visible immediately, so refresh the host VRAM texture at that boundary.
 	NativeRenderer_UpdateVRAM();
 	return 1;
+}
+
+s32 NativeSTR_UploadNextFrameToTexture(void)
+{
+	if (NativeSTR_ReadDecodeNextFrame() == 0)
+	{
+		return 0;
+	}
+
+	if (NativeSTR_EnsureFrameTextures() == 0)
+	{
+		return 0;
+	}
+
+	const s32 pixelCount = s_str.width * s_str.height;
+	for (s32 i = 0; i < pixelCount; i++)
+	{
+		const u16 pixel = s_str.rgb555[i];
+		const u8 r5 = (u8)(pixel & 31);
+		const u8 g5 = (u8)((pixel >> 5) & 31);
+		const u8 b5 = (u8)((pixel >> 10) & 31);
+		u8 *dst = &s_str.rgba8888[i * 4];
+		dst[0] = (u8)((r5 << 3) | (r5 >> 2));
+		dst[1] = (u8)((g5 << 3) | (g5 >> 2));
+		dst[2] = (u8)((b5 << 3) | (b5 >> 2));
+		dst[3] = 255;
+	}
+
+	s_str.frameTextureIndex = (s_str.frameTextureIndex + 1) % NATIVE_STR_STREAM_TEXTURE_COUNT;
+	s_str.displayTexture = s_str.frameTextures[s_str.frameTextureIndex];
+	NativeRenderer_UpdateStreamingTexture(s_str.displayTexture, s_str.width, s_str.height, s_str.rgba8888);
+	return 1;
+}
+
+u32 NativeSTR_GetFrameTexture(void)
+{
+	return s_str.displayTexture;
+}
+
+s32 NativeSTR_GetFrameWidth(void)
+{
+	return s_str.width;
+}
+
+s32 NativeSTR_GetFrameHeight(void)
+{
+	return s_str.height;
 }

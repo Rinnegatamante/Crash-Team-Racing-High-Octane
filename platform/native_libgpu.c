@@ -263,6 +263,13 @@ void SetDrawMove(DR_MOVE *p, RECT16 *rect, int x, int y)
 	setlen(p, len);
 }
 
+void SetPsyXTexture(DR_PSYX_TEX *p, uint32_t grTextureId, int width, int height)
+{
+	p->code[0] = 0xB1000000u | (grTextureId & 0x00ffffffu);
+	p->code[1] = ((uint32_t)(height & 0x0fff) << 16) | (uint32_t)(width & 0x0fff);
+	setlen(p, 2);
+}
+
 uint32_t DrawSyncCallback(void (*func)(void))
 {
 	drawsync_callback = func;

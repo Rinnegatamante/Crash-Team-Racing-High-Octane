@@ -3,6 +3,7 @@
 #include <macros.h>
 
 #include "platform/native_audio.h"
+#include "platform/native_cd.h"
 #include "platform/native_glad.h"
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
@@ -11,6 +12,7 @@
 #include "platform/native_renderer.h"
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
+#include "platform/native_str.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -284,6 +286,7 @@ void Platform_Shutdown(void)
 	Platform_InputShutdown();
 	NativeCD_Shutdown();
 	NativeAudio_Shutdown();
+	NativeSTR_Shutdown();
 	NativeRenderer_Shutdown();
 
 	if (g_window != NULL)
@@ -376,7 +379,11 @@ void Platform_EndScene(void)
 	// NOTE(aalhendi): Keep the displayed VRAM region current for screen-copy
 	// effects without forcing a CPU readback.
 	NativeRenderer_StoreFrameBuffer(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+#ifdef __vita__
+	NativeRenderer_PresentMainRenderTarget();
+#else
 	NativeRenderer_PresentVRAMRect(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+#endif
 	NativeRenderer_EndGpuFrame();
 	NativeRenderer_SwapWindow();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
