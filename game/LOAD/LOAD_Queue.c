@@ -1,5 +1,9 @@
 #include <common.h>
 
+#ifdef CTR_NATIVE
+#include <platform/native_cd.h>
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80032d30-0x80032d8c.
 void LOAD_AppendQueue(struct BigHeader *bigfile, int type, int fileIndex, void *destinationPtr, void (*callback)(struct LoadQueueSlot *))
 {
@@ -34,6 +38,10 @@ void LOAD_CDRequestCallback(struct LoadQueueSlot *lqs)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 PS1 path 0x80032dc0-0x80032ffc.
 void LOAD_NextQueuedFile()
 {
+#ifdef CTR_NATIVE
+	NativeCD_PumpCallbacks();
+#endif
+
 	struct LoadQueueSlot *curr = &data.currSlot;
 
 	if ((sdata->queueReady != 0) && (sdata->XA_State == 0) && (sdata->queueLength != 0))

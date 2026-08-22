@@ -5,6 +5,8 @@
 #include <platform/native_path.h>
 #include <psx/libcd.h>
 
+#include <SDL3/SDL.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -29,6 +31,23 @@ struct NativeCDOpenFile
 	struct NativeDiscImageFile discFile;
 };
 
+struct NativeCDReadWorker
+{
+	SDL_Mutex *mutex;
+	SDL_Condition *condition;
+	SDL_Thread *thread;
+	b32 quit;
+	b32 pending;
+	b32 busy;
+	b32 complete;
+	b32 success;
+	s32 fileIndex;
+	s32 firstSector;
+	s32 sectorCount;
+	void *destination;
+	CdlCB callback;
+};
+
 global_variable s32 s_cdDebugLevel;
 global_variable s32 s_cdLastCom;
 global_variable CdlCB s_cdReadyCallback;
@@ -39,6 +58,7 @@ global_variable struct NativeCDOpenFile s_nativeCdFiles[NATIVE_CD_MAX_OPEN_FILES
 global_variable s32 s_nativeCdFileCount;
 global_variable s32 s_nativeCdCurrentFile;
 global_variable s32 s_nativeCdCurrentSector;
+global_variable struct NativeCDReadWorker s_nativeCdReadWorker;
 
 int boolDecodeXaDuringVsyncCallback;
 
@@ -220,38 +240,160 @@ internal s32 NativeCD_SetLoc(const CdlLOC *pos)
 
 	s_nativeCdCurrentFile = fileIndex;
 	s_nativeCdCurrentSector = sector;
-
-	if (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_DISC)
-	{
-		return 1;
-	}
-
-	return fseek(s_nativeCdFiles[s_nativeCdCurrentFile].hostFile, sector * NATIVE_CD_SECTOR_SIZE, SEEK_SET) == 0;
+	return 1;
 }
 
-internal s32 NativeCD_ReadSectors(s32 sectors, void *dst)
+internal s32 NativeCD_ReadSectorsAt(s32 fileIndex, s32 firstSector, s32 sectors, void *dst)
 {
+	u64 byteOffset;
 	size_t byteCount;
 
-	if ((s_nativeCdCurrentFile < 0) || (s_nativeCdCurrentFile >= s_nativeCdFileCount) || (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_NONE))
+	if ((fileIndex < 0) || (fileIndex >= s_nativeCdFileCount) || (s_nativeCdFiles[fileIndex].source == NATIVE_CD_FILE_NONE) || (firstSector < 0) ||
+	    (sectors <= 0) || (dst == NULL))
 	{
 		return 0;
 	}
 
 	byteCount = (size_t)sectors * NATIVE_CD_SECTOR_SIZE;
 
-	if (s_nativeCdFiles[s_nativeCdCurrentFile].source == NATIVE_CD_FILE_DISC)
+	if (s_nativeCdFiles[fileIndex].source == NATIVE_CD_FILE_DISC)
 	{
-		if (!NativeDiscImage_ReadDataSectors(&s_nativeCdFiles[s_nativeCdCurrentFile].discFile, (u32)s_nativeCdCurrentSector, (u32)sectors, dst))
-		{
-			return 0;
-		}
-
-		s_nativeCdCurrentSector += sectors;
-		return 1;
+		return NativeDiscImage_ReadDataSectors(&s_nativeCdFiles[fileIndex].discFile, (u32)firstSector, (u32)sectors, dst);
 	}
 
-	return fread(dst, 1, byteCount, s_nativeCdFiles[s_nativeCdCurrentFile].hostFile) == byteCount;
+	byteOffset = (u64)(u32)firstSector * NATIVE_CD_SECTOR_SIZE;
+	if ((byteOffset > (u64)LONG_MAX) || (fseek(s_nativeCdFiles[fileIndex].hostFile, (long)byteOffset, SEEK_SET) != 0))
+	{
+		return 0;
+	}
+
+	return fread(dst, 1, byteCount, s_nativeCdFiles[fileIndex].hostFile) == byteCount;
+}
+
+internal int SDLCALL NativeCD_ReadWorkerThread(void *unused)
+{
+	(void)unused;
+
+	for (;;)
+	{
+		s32 fileIndex;
+		s32 firstSector;
+		s32 sectorCount;
+		void *destination;
+		b32 success;
+
+		SDL_LockMutex(s_nativeCdReadWorker.mutex);
+		while (!s_nativeCdReadWorker.quit && !s_nativeCdReadWorker.pending)
+		{
+			SDL_WaitCondition(s_nativeCdReadWorker.condition, s_nativeCdReadWorker.mutex);
+		}
+
+		if (s_nativeCdReadWorker.quit)
+		{
+			SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+			break;
+		}
+
+		fileIndex = s_nativeCdReadWorker.fileIndex;
+		firstSector = s_nativeCdReadWorker.firstSector;
+		sectorCount = s_nativeCdReadWorker.sectorCount;
+		destination = s_nativeCdReadWorker.destination;
+		s_nativeCdReadWorker.pending = 0;
+		s_nativeCdReadWorker.busy = 1;
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+
+		success = NativeCD_ReadSectorsAt(fileIndex, firstSector, sectorCount, destination);
+
+		SDL_LockMutex(s_nativeCdReadWorker.mutex);
+		s_nativeCdReadWorker.busy = 0;
+		s_nativeCdReadWorker.success = success;
+		s_nativeCdReadWorker.complete = 1;
+		SDL_SignalCondition(s_nativeCdReadWorker.condition);
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+	}
+
+	return 0;
+}
+
+internal s32 NativeCD_ReadWorkerInit(void)
+{
+	memset(&s_nativeCdReadWorker, 0, sizeof(s_nativeCdReadWorker));
+	s_nativeCdReadWorker.mutex = SDL_CreateMutex();
+	s_nativeCdReadWorker.condition = SDL_CreateCondition();
+	if ((s_nativeCdReadWorker.mutex == NULL) || (s_nativeCdReadWorker.condition == NULL))
+	{
+		SDL_DestroyCondition(s_nativeCdReadWorker.condition);
+		SDL_DestroyMutex(s_nativeCdReadWorker.mutex);
+		memset(&s_nativeCdReadWorker, 0, sizeof(s_nativeCdReadWorker));
+		return 0;
+	}
+
+	s_nativeCdReadWorker.thread = SDL_CreateThread(NativeCD_ReadWorkerThread, "CTR CD Reader", NULL);
+	if (s_nativeCdReadWorker.thread == NULL)
+	{
+		SDL_DestroyCondition(s_nativeCdReadWorker.condition);
+		SDL_DestroyMutex(s_nativeCdReadWorker.mutex);
+		memset(&s_nativeCdReadWorker, 0, sizeof(s_nativeCdReadWorker));
+		return 0;
+	}
+
+	return 1;
+}
+
+void NativeCD_Shutdown(void)
+{
+	s32 i;
+
+	if (s_nativeCdReadWorker.mutex != NULL)
+	{
+		SDL_LockMutex(s_nativeCdReadWorker.mutex);
+		s_nativeCdReadWorker.quit = 1;
+		SDL_SignalCondition(s_nativeCdReadWorker.condition);
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		SDL_WaitThread(s_nativeCdReadWorker.thread, NULL);
+		SDL_DestroyCondition(s_nativeCdReadWorker.condition);
+		SDL_DestroyMutex(s_nativeCdReadWorker.mutex);
+		memset(&s_nativeCdReadWorker, 0, sizeof(s_nativeCdReadWorker));
+	}
+
+	for (i = 0; i < s_nativeCdFileCount; i++)
+	{
+		if (s_nativeCdFiles[i].hostFile != NULL)
+		{
+			fclose(s_nativeCdFiles[i].hostFile);
+		}
+	}
+
+	memset(s_nativeCdFiles, 0, sizeof(s_nativeCdFiles));
+	s_nativeCdFileCount = 0;
+	s_nativeCdCurrentFile = -1;
+	s_nativeCdCurrentSector = 0;
+}
+
+void NativeCD_PumpCallbacks(void)
+{
+	CdlCB callback = NULL;
+	b32 success = 0;
+
+	if (s_nativeCdReadWorker.mutex == NULL)
+	{
+		return;
+	}
+
+	SDL_LockMutex(s_nativeCdReadWorker.mutex);
+	if (s_nativeCdReadWorker.complete)
+	{
+		success = s_nativeCdReadWorker.success;
+		callback = s_nativeCdReadWorker.callback;
+		s_nativeCdReadWorker.complete = 0;
+		s_nativeCdReadWorker.callback = NULL;
+	}
+	SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+
+	if (callback != NULL)
+	{
+		callback(success ? CdlComplete : CdlDiskError, NULL);
+	}
 }
 
 internal void NativeCD_SetLastCom(int com)
@@ -261,15 +403,7 @@ internal void NativeCD_SetLastCom(int com)
 
 int NativeCD_Init(void)
 {
-	s32 i;
-
-	for (i = 0; i < s_nativeCdFileCount; i++)
-	{
-		if (s_nativeCdFiles[i].hostFile != NULL)
-		{
-			fclose(s_nativeCdFiles[i].hostFile);
-		}
-	}
+	NativeCD_Shutdown();
 
 	s_cdDebugLevel = 0;
 	s_cdLastCom = 0;
@@ -281,6 +415,7 @@ int NativeCD_Init(void)
 	s_nativeCdCurrentFile = -1;
 	s_nativeCdCurrentSector = 0;
 	memset(s_cdSectorData, 0, sizeof(s_cdSectorData));
+	NativeCD_ReadWorkerInit();
 	return 0;
 }
 
@@ -340,8 +475,18 @@ int CdGetSector(void *madr, int size)
 
 CdlCB CdReadCallback(CdlCB func)
 {
-	CdlCB old = s_nativeCdReadCallback;
+	CdlCB old;
+
+	if (s_nativeCdReadWorker.mutex != NULL)
+	{
+		SDL_LockMutex(s_nativeCdReadWorker.mutex);
+	}
+	old = s_nativeCdReadCallback;
 	s_nativeCdReadCallback = func;
+	if (s_nativeCdReadWorker.mutex != NULL)
+	{
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+	}
 	return old;
 }
 
@@ -374,7 +519,15 @@ int CdControl(uint8_t com, uint8_t *param, uint8_t *result)
 
 	if ((com == CdlSetloc) && (param != NULL))
 	{
+		if (s_nativeCdReadWorker.mutex != NULL)
+		{
+			SDL_LockMutex(s_nativeCdReadWorker.mutex);
+		}
 		NativeCD_SetLoc((const CdlLOC *)param);
+		if (s_nativeCdReadWorker.mutex != NULL)
+		{
+			SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		}
 	}
 
 	if ((com == CdlSetmode) && (param != NULL))
@@ -395,22 +548,103 @@ int CdControl(uint8_t com, uint8_t *param, uint8_t *result)
 
 int CdRead(int sectors, uint32_t *buf, int mode)
 {
+	s32 fileIndex;
+	s32 firstSector;
+	CdlCB callback;
+	b32 success;
+
 	(void)mode;
 
-	NativeCD_ReadSectors(sectors, buf);
-
-	if (s_nativeCdReadCallback != 0)
+	if ((sectors <= 0) || (buf == NULL))
 	{
-		s_nativeCdReadCallback(CdlComplete, 0);
+		return 0;
 	}
 
+	if (s_nativeCdReadWorker.mutex == NULL)
+	{
+		success = NativeCD_ReadSectorsAt(s_nativeCdCurrentFile, s_nativeCdCurrentSector, sectors, buf);
+		if (success)
+		{
+			s_nativeCdCurrentSector += sectors;
+		}
+		if (s_nativeCdReadCallback != NULL)
+		{
+			s_nativeCdReadCallback(success ? CdlComplete : CdlDiskError, NULL);
+		}
+		return success;
+	}
+
+	SDL_LockMutex(s_nativeCdReadWorker.mutex);
+	if (s_nativeCdReadWorker.pending || s_nativeCdReadWorker.busy || s_nativeCdReadWorker.complete)
+	{
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		return 0;
+	}
+
+	fileIndex = s_nativeCdCurrentFile;
+	firstSector = s_nativeCdCurrentSector;
+	callback = s_nativeCdReadCallback;
+	if ((fileIndex < 0) || (fileIndex >= s_nativeCdFileCount) || (s_nativeCdFiles[fileIndex].source == NATIVE_CD_FILE_NONE))
+	{
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		return 0;
+	}
+
+	s_nativeCdCurrentSector += sectors;
+	s_nativeCdReadWorker.fileIndex = fileIndex;
+	s_nativeCdReadWorker.firstSector = firstSector;
+	s_nativeCdReadWorker.sectorCount = sectors;
+	s_nativeCdReadWorker.destination = buf;
+	s_nativeCdReadWorker.callback = callback;
+	s_nativeCdReadWorker.pending = 1;
+	SDL_SignalCondition(s_nativeCdReadWorker.condition);
+	SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
 	return 1;
 }
 
 int CdReadSync(int mode, uint8_t *result)
 {
-	(void)mode;
-	(void)result;
+	b32 success;
+	CdlCB callback;
 
-	return 0;
+	if (s_nativeCdReadWorker.mutex == NULL)
+	{
+		return 0;
+	}
+
+	SDL_LockMutex(s_nativeCdReadWorker.mutex);
+	if (mode != 0)
+	{
+		int busy = s_nativeCdReadWorker.pending || s_nativeCdReadWorker.busy;
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		return busy;
+	}
+
+	while (s_nativeCdReadWorker.pending || s_nativeCdReadWorker.busy)
+	{
+		SDL_WaitCondition(s_nativeCdReadWorker.condition, s_nativeCdReadWorker.mutex);
+	}
+
+	if (!s_nativeCdReadWorker.complete)
+	{
+		SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+		return 0;
+	}
+
+	success = s_nativeCdReadWorker.success;
+	callback = s_nativeCdReadWorker.callback;
+	s_nativeCdReadWorker.complete = 0;
+	s_nativeCdReadWorker.callback = NULL;
+	SDL_UnlockMutex(s_nativeCdReadWorker.mutex);
+
+	if (result != NULL)
+	{
+		result[0] = success ? CdlComplete : CdlDiskError;
+	}
+	if (callback != NULL)
+	{
+		callback(success ? CdlComplete : CdlDiskError, NULL);
+	}
+
+	return success ? 0 : CdlDiskError;
 }

@@ -282,6 +282,7 @@ void Platform_Shutdown(void)
 	NativeReplayScheduler_Shutdown();
 #endif
 	Platform_InputShutdown();
+	NativeCD_Shutdown();
 	NativeAudio_Shutdown();
 	NativeRenderer_Shutdown();
 
@@ -631,6 +632,7 @@ internal void Native_WaitUntilVBlankTarget(void)
 
 internal void Native_EmitVBlank(void)
 {
+	NativeCD_PumpCallbacks();
 	NativeRCnt_EmitVBlank();
 
 	if (vsync_callback != NULL)

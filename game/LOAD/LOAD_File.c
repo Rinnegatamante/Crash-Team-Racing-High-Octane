@@ -384,8 +384,8 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 	}
 
 #if defined(CTR_NATIVE)
-	// NOTE(aalhendi): native CD reads can call back before wrapper callers store
-	// the returned pointer back into data.currSlot.
+	// Publish the request metadata before the asynchronous native CD read is
+	// queued. Its completion callback is dispatched later on the main thread.
 	lqs->ptrDestination = ptrDst;
 	lqs->size_UNUSED = eSize;
 #endif
@@ -418,6 +418,10 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 		{
 			break;
 		}
+
+#if defined(CTR_NATIVE)
+		VSync(0);
+#endif
 	}
 
 	if ((callback == NULL) && (originalDst == NULL))

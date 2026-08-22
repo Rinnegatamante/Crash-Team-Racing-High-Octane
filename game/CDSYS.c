@@ -597,6 +597,9 @@ int CDSYS_XASeek(b32 boolCdControl, int categoryID, int xaID)
 
 	if (sdata->boolUseDisc == 0)
 	{
+#if defined(CTR_NATIVE)
+		return NativeAudio_PreloadXATrack(categoryID, xaID);
+#endif
 		return 1;
 	}
 

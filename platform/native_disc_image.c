@@ -2,6 +2,7 @@
 
 #include <platform/native_path.h>
 
+#include <SDL3/SDL_mutex.h>
 #include <limits.h>
 #if !defined(_WIN32)
 #include <dirent.h>
@@ -38,6 +39,7 @@ global_variable char s_nativeDiscImagePath[NATIVE_DISC_IMAGE_PATH_MAX];
 global_variable FILE *s_nativeDiscImageFile;
 global_variable struct NativeDiscImageFile s_nativeDiscImageRoot;
 global_variable int s_nativeDiscImageAvailable;
+global_variable SDL_Mutex *s_nativeDiscImageMutex;
 
 internal int NativeDiscImage_FindHostImagePath(char *dst, size_t dstSize, NativeStr8 assetsDir)
 {
@@ -106,24 +108,36 @@ internal int NativeDiscImage_CheckRawSectorHeader(const u8 *sector)
 internal int NativeDiscImage_ReadRawSector(u32 lba, u8 *sector)
 {
 	u64 offset;
+	int result = 0;
 
 	if (s_nativeDiscImageFile == NULL)
 	{
 		return 0;
 	}
 
+	if (s_nativeDiscImageMutex != NULL)
+	{
+		SDL_LockMutex(s_nativeDiscImageMutex);
+	}
 	offset = (u64)lba * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE;
 	if ((offset > (u64)LONG_MAX) || (fseek(s_nativeDiscImageFile, (long)offset, SEEK_SET) != 0))
 	{
-		return 0;
+		goto done;
 	}
 
 	if (fread(sector, 1, NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE, s_nativeDiscImageFile) != NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE)
 	{
-		return 0;
+		goto done;
 	}
 
-	return NativeDiscImage_CheckRawSectorHeader(sector);
+	result = NativeDiscImage_CheckRawSectorHeader(sector);
+
+done:
+	if (s_nativeDiscImageMutex != NULL)
+	{
+		SDL_UnlockMutex(s_nativeDiscImageMutex);
+	}
+	return result;
 }
 
 internal int NativeDiscImage_ReadDataSector(u32 lba, u8 *payload)
@@ -367,6 +381,10 @@ internal int NativeDiscImage_LoadRoot(void)
 int NativeDiscImage_Init(const char *assetsDir)
 {
 	char path[NATIVE_DISC_IMAGE_PATH_MAX];
+	if (s_nativeDiscImageMutex == NULL)
+	{
+		s_nativeDiscImageMutex = SDL_CreateMutex();
+	}
 
 	s_nativeDiscImageAvailable = 0;
 	s_nativeDiscImagePath[0] = '\0';

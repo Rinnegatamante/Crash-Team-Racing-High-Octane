@@ -11,12 +11,18 @@ void Music_SetIntro(void)
 
 	while (Bank_AssignSpuAddrs() == 0)
 	{
+#ifdef CTR_NATIVE
+		VSync(0);
+#endif
 	}
 
 	howl_SetSong(HOWL_SONG_ND_CRATE);
 
 	while (howl_LoadSong() == 0)
 	{
+#ifdef CTR_NATIVE
+		VSync(0);
+#endif
 	}
 }
 

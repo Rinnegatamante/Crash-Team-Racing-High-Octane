@@ -3,5 +3,7 @@
 
 // NOTE(aalhendi): Native Cd* facade for extracted assets and disc-image fallback.
 int NativeCD_Init(void);
+void NativeCD_PumpCallbacks(void);
+void NativeCD_Shutdown(void);
 
 #endif
