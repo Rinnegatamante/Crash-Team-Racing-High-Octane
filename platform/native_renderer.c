@@ -1070,7 +1070,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	    GPU_PSX_BLEND_APPLY                                                                                                                            \
 	    "	}\n"
 
-global_variable const char *gpu_shader_common = "	varying vec4 v_texcoord;\n"
+global_variable const char *gpu_shader_common = "	centroid varying vec4 v_texcoord;\n"
                                                 "	varying vec4 v_color;\n"
                                                 "	varying vec4 v_page_clut;\n"
                                                 "	varying vec2 v_ditherCoord;\n"

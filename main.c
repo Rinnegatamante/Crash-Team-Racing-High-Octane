@@ -190,7 +190,7 @@ void *real_main(void *_argv)
 	vglSetShaderCachePath("ux0:data/ctr/shader_cache");
 	vglUseLowPrecision(GL_TRUE);
 	vglSetupRuntimeShaderCompiler(SHARK_OPT_UNSAFE, GL_TRUE, GL_TRUE, GL_TRUE);
-	vglInitExtended(0, 960, 544, 4 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
+	vglInitExtended(0, 960, 544, 4 * 1024 * 1024, SCE_GXM_MULTISAMPLE_4X);
 	char **argv = _argv;
 	int argc = 0;
 #else
