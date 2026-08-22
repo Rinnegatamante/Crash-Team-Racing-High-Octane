@@ -103,7 +103,11 @@ typedef struct
 	bool psxDrawMaskSet;
 	bool framebufferFeedbackRunActive;
 
+#ifdef __vita__
+	GrVertex *vertexBuffer;
+#else
 	GrVertex vertexBuffer[MAX_VERTEX_BUFFER_SIZE];
+#endif
 	GPUDrawSplit splits[MAX_DRAW_SPLITS];
 	int vertexIndex;
 	int splitIndex;
@@ -131,6 +135,9 @@ int NativeGpu_HasPendingSplits(void)
 void ClearSplits(void)
 {
 	s_gpu.currentSplitDebugText = NULL;
+#ifdef __vita__
+	s_gpu.vertexBuffer = NULL;
+#endif
 	s_gpu.vertexIndex = 0;
 	s_gpu.splitIndex = 0;
 	s_gpu.splits[0].texFormat = (TexFormat)0xFFFF;
@@ -468,19 +475,16 @@ void MakeTexcoordRect(GrVertex *vertex, u8 *uv, s16 page, s16 clut, s16 w, s16 h
 {
 	assert(uv);
 
-	// sim overflow
-	if ((int)uv[0] + w > 255)
-	{
-		w = 255 - uv[0];
-	}
-	if ((int)uv[1] + h > 255)
-	{
-		h = 255 - uv[1];
-	}
-
 	const u8 bright = 2;
 	const u8 dither = 0;
 	const short texPage = GetTPageBase(page);
+	const int endU = (int)uv[0] + w;
+	const int endV = (int)uv[1] + h;
+	const bool wrapsU = endU == 256;
+	const bool wrapsV = endV == 256;
+	const s8 texelCenterOffset = g_cfg_bilinearFiltering ? -1 : 0;
+	const u8 encodedEndU = wrapsU ? 255 : (u8)endU;
+	const u8 encodedEndV = wrapsV ? 255 : (u8)endV;
 
 	vertex[0].u = uv[0];
 	vertex[0].v = uv[1];
@@ -488,42 +492,35 @@ void MakeTexcoordRect(GrVertex *vertex, u8 *uv, s16 page, s16 clut, s16 w, s16 h
 	vertex[0].dither = dither;
 	vertex[0].page = texPage;
 	vertex[0].clut = clut;
+	vertex[0].tcx = texelCenterOffset;
+	vertex[0].tcy = texelCenterOffset;
 
 	vertex[1].u = uv[0];
-	vertex[1].v = uv[1] + h;
+	vertex[1].v = encodedEndV;
 	vertex[1].bright = bright;
 	vertex[1].dither = dither;
 	vertex[1].page = texPage;
 	vertex[1].clut = clut;
+	vertex[1].tcx = texelCenterOffset;
+	vertex[1].tcy = texelCenterOffset + (wrapsV ? 2 : 0);
 
-	vertex[2].u = uv[0] + w;
-	vertex[2].v = uv[1] + h;
+	vertex[2].u = encodedEndU;
+	vertex[2].v = encodedEndV;
 	vertex[2].bright = bright;
 	vertex[2].dither = dither;
 	vertex[2].page = texPage;
 	vertex[2].clut = clut;
+	vertex[2].tcx = texelCenterOffset + (wrapsU ? 2 : 0);
+	vertex[2].tcy = texelCenterOffset + (wrapsV ? 2 : 0);
 
-	vertex[3].u = uv[0] + w;
+	vertex[3].u = encodedEndU;
 	vertex[3].v = uv[1];
 	vertex[3].bright = bright;
 	vertex[3].dither = dither;
 	vertex[3].page = texPage;
 	vertex[3].clut = clut;
-
-	if (g_cfg_bilinearFiltering)
-	{
-		vertex[0].tcx = -1;
-		vertex[0].tcy = -1;
-
-		vertex[1].tcx = -1;
-		vertex[1].tcy = -1;
-
-		vertex[2].tcx = -1;
-		vertex[2].tcy = -1;
-
-		vertex[3].tcx = -1;
-		vertex[3].tcy = -1;
-	}
+	vertex[3].tcx = texelCenterOffset + (wrapsU ? 2 : 0);
+	vertex[3].tcy = texelCenterOffset;
 }
 
 void MakeTexcoordLineZero(GrVertex *vertex, u8 dither)
@@ -724,7 +721,7 @@ void MakeColourQuad(GrVertex *vertex, bool shadeTexOn, u8 *col0, u8 *col1, u8 *c
 	vertex[3].a = 255;
 }
 
-void TriangulateQuad()
+internal void TriangulateQuadVertices(GrVertex *vertex)
 {
 	/*
 	Triangulate like this:
@@ -737,11 +734,50 @@ void TriangulateQuad()
 	NOTE: v2 swapped with v3 during primitive parsing but it not shown here
 	*/
 
-	s_gpu.vertexBuffer[s_gpu.vertexIndex + 4] = s_gpu.vertexBuffer[s_gpu.vertexIndex + 3];
+	vertex[4] = vertex[3];
+	vertex[5] = vertex[2];
+	vertex[2] = vertex[3];
+	vertex[3] = vertex[1];
+}
 
-	s_gpu.vertexBuffer[s_gpu.vertexIndex + 5] = s_gpu.vertexBuffer[s_gpu.vertexIndex + 2];
-	s_gpu.vertexBuffer[s_gpu.vertexIndex + 2] = s_gpu.vertexBuffer[s_gpu.vertexIndex + 3];
-	s_gpu.vertexBuffer[s_gpu.vertexIndex + 3] = s_gpu.vertexBuffer[s_gpu.vertexIndex + 1];
+void TriangulateQuad()
+{
+	TriangulateQuadVertices(&s_gpu.vertexBuffer[s_gpu.vertexIndex]);
+}
+
+internal int NativeGpu_EmitTexturedSprite(VERTTYPE *position, u8 *uv, s16 page, s16 clut, s16 width, s16 height, bool shadeTexOn, u8 *color)
+{
+	int emittedVertices = 0;
+	int yOffset = 0;
+
+	while (yOffset < height)
+	{
+		const int texV = ((int)uv[1] + yOffset) & 255;
+		const int remainingH = height - yOffset;
+		const int partH = remainingH < 256 - texV ? remainingH : 256 - texV;
+		int xOffset = 0;
+
+		while (xOffset < width)
+		{
+			const int texU = ((int)uv[0] + xOffset) & 255;
+			const int remainingW = width - xOffset;
+			const int partW = remainingW < 256 - texU ? remainingW : 256 - texU;
+			VERTTYPE partPosition[2] = {(VERTTYPE)(position[0] + xOffset), (VERTTYPE)(position[1] + yOffset)};
+			u8 partUv[2] = {(u8)texU, (u8)texV};
+			GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex + emittedVertices];
+
+			MakeVertexRect(firstVertex, partPosition, (s16)partW, (s16)partH);
+			MakeTexcoordRect(firstVertex, partUv, page, clut, (s16)partW, (s16)partH);
+			MakeColourQuad(firstVertex, shadeTexOn, color, color, color, color);
+			TriangulateQuadVertices(firstVertex);
+			emittedVertices += 6;
+			xOffset += partW;
+		}
+
+		yOffset += partH;
+	}
+
+	return emittedVertices;
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -809,6 +845,18 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 		s_gpu.framebufferFeedbackRunActive = false;
 	}
 
+#ifdef __vita__
+	if (s_gpu.vertexBuffer == NULL)
+	{
+		s_gpu.vertexBuffer = NativeRenderer_AllocateVertexBuffer(MAX_VERTEX_BUFFER_SIZE);
+		if (s_gpu.vertexBuffer == NULL)
+		{
+			NATIVE_GPU_ERROR("%s\n", "failed to reserve Vita scratch vertex buffer");
+			abort();
+		}
+	}
+#endif
+
 	GPUDrawSplit *curSplit = &s_gpu.splits[s_gpu.splitIndex];
 
 	BlendMode blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
@@ -866,6 +914,19 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->numVerts = 0;
 }
 
+internal void NativeGpu_SetSplitShaderState(const GPUDrawSplit *split, int semiTransPass, BlendMode blendMode, bool offscreen)
+{
+	NativeRenderer_SetBlendMode(blendMode);
+	NativeRenderer_SetTexture(split->textureId, split->texFormat, semiTransPass, blendMode);
+	if (split->texFormat == TF_32_BIT_RGBA)
+	{
+		NativeRenderer_SetOverrideTextureSize(split->drawenv.tw.w, split->drawenv.tw.h);
+	}
+	NativeRenderer_SetPSXDrawMaskSet(split->psxDrawMaskSet);
+	NativeRenderer_SetPSXTextureOutputSTP(split->psxTextureOutputSTP);
+	NativeRenderer_SetProjection(&split->drawenv.clip, &split->dispenv, offscreen);
+}
+
 void DrawSplit(const GPUDrawSplit *split)
 {
 	if (split->debugText)
@@ -890,19 +951,8 @@ void DrawSplit(const GPUDrawSplit *split)
 
 	NativeRenderer_SetStencilMode(split->drawPrimMode); // draw with mask 0x16
 
-	NativeRenderer_SetTexture(split->textureId, split->texFormat);
-
-	if (split->texFormat == TF_32_BIT_RGBA)
-	{
-		NativeRenderer_SetOverrideTextureSize(split->drawenv.tw.w, split->drawenv.tw.h);
-	}
-
-	NativeRenderer_SetPSXDrawMaskSet(split->psxDrawMaskSet);
-	NativeRenderer_SetPSXTextureOutputSTP(split->psxTextureOutputSTP);
-
 	NativeRenderer_SetupClipMode(&split->drawenv.clip, &split->dispenv, drawOnScreen);
 	NativeRenderer_SetOffscreenState(&split->drawenv.clip, !drawOnScreen);
-	NativeRenderer_SetProjection(&split->drawenv.clip, &split->dispenv, !drawOnScreen);
 
 	if (split->psxTexturedSemiTrans)
 	{
@@ -910,20 +960,15 @@ void DrawSplit(const GPUDrawSplit *split)
 		// PS1 textured ABE only blends texels whose sampled 16-bit color has STP
 		// set; non-STP texels remain opaque. Native split state is per draw,
 		// so draw this primitive-sized split twice with shader-side STP masks.
-		NativeRenderer_SetBlendMode(BM_NONE);
-		NativeRenderer_SetPSXTextureSemiTransPass(1);
+		NativeGpu_SetSplitShaderState(split, 1, BM_NONE, !drawOnScreen);
 		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
 
-		NativeRenderer_SetBlendMode(split->blendMode);
-		NativeRenderer_SetPSXTextureSemiTransPass(2);
+		NativeGpu_SetSplitShaderState(split, 2, split->blendMode, !drawOnScreen);
 		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
-
-		NativeRenderer_SetPSXTextureSemiTransPass(0);
 	}
 	else
 	{
-		NativeRenderer_SetBlendMode(split->blendMode);
-		NativeRenderer_SetPSXTextureSemiTransPass(0);
+		NativeGpu_SetSplitShaderState(split, 0, split->blendMode, !drawOnScreen);
 		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
 	}
 
@@ -932,6 +977,100 @@ void DrawSplit(const GPUDrawSplit *split)
 		NativeRenderer_PopDebugLabel();
 	}
 }
+
+#ifdef __vita__
+struct NativeGpuSplitBounds
+{
+	s32 minX;
+	s32 minY;
+	s32 maxX;
+	s32 maxY;
+};
+
+internal bool NativeGpu_GetSplitBounds(const GPUDrawSplit *split, struct NativeGpuSplitBounds *bounds)
+{
+	if (split->numVerts == 0)
+	{
+		return false;
+	}
+
+	const GrVertex *first = &s_gpu.vertexBuffer[split->startVertex];
+	bounds->minX = bounds->maxX = first->x;
+	bounds->minY = bounds->maxY = first->y;
+	for (u32 i = 1; i < split->numVerts; i++)
+	{
+		const GrVertex *vertex = &s_gpu.vertexBuffer[split->startVertex + i];
+		if (vertex->x < bounds->minX)
+		{
+			bounds->minX = vertex->x;
+		}
+		if (vertex->x > bounds->maxX)
+		{
+			bounds->maxX = vertex->x;
+		}
+		if (vertex->y < bounds->minY)
+		{
+			bounds->minY = vertex->y;
+		}
+		if (vertex->y > bounds->maxY)
+		{
+			bounds->maxY = vertex->y;
+		}
+	}
+
+	return true;
+}
+
+internal bool NativeGpu_SemiTransSplitsCanMerge(const GPUDrawSplit *first, const GPUDrawSplit *second)
+{
+	if (!first->psxTexturedSemiTrans || !second->psxTexturedSemiTrans || first->startVertex + first->numVerts != second->startVertex ||
+	    (u32)first->numVerts + second->numVerts > 0xffffu)
+	{
+		return false;
+	}
+
+	if (first->blendMode != second->blendMode || first->texFormat != second->texFormat || first->textureId != second->textureId ||
+	    first->drawPrimMode != second->drawPrimMode || first->psxTextureOutputSTP != second->psxTextureOutputSTP ||
+	    first->psxDrawMaskSet != second->psxDrawMaskSet || first->debugText != second->debugText ||
+	    memcmp(&first->drawenv, &second->drawenv, sizeof(first->drawenv)) != 0 || memcmp(&first->dispenv, &second->dispenv, sizeof(first->dispenv)) != 0)
+	{
+		return false;
+	}
+
+	struct NativeGpuSplitBounds firstBounds;
+	struct NativeGpuSplitBounds secondBounds;
+	if (!NativeGpu_GetSplitBounds(first, &firstBounds) || !NativeGpu_GetSplitBounds(second, &secondBounds))
+	{
+		return false;
+	}
+
+	// Preserve exact primitive ordering whenever their covered regions can
+	// overlap. Disjoint primitives may share the same opaque/STP draw pair.
+	return firstBounds.maxX <= secondBounds.minX || secondBounds.maxX <= firstBounds.minX || firstBounds.maxY <= secondBounds.minY ||
+	       secondBounds.maxY <= firstBounds.minY;
+}
+
+internal void NativeGpu_CoalesceNonOverlappingSemiTransSplits(void)
+{
+	int outputIndex = 0;
+	for (int inputIndex = 1; inputIndex <= s_gpu.splitIndex; inputIndex++)
+	{
+		GPUDrawSplit split = s_gpu.splits[inputIndex];
+		if (outputIndex > 0 && NativeGpu_SemiTransSplitsCanMerge(&s_gpu.splits[outputIndex], &split))
+		{
+			s_gpu.splits[outputIndex].numVerts = (u16)(s_gpu.splits[outputIndex].numVerts + split.numVerts);
+			continue;
+		}
+
+		outputIndex++;
+		if (outputIndex != inputIndex)
+		{
+			s_gpu.splits[outputIndex] = split;
+		}
+	}
+	s_gpu.splitIndex = outputIndex;
+}
+#endif
 
 internal void SetPSXMaskState(u32 code)
 {
@@ -972,6 +1111,10 @@ void DrawAllSplits()
 
 	// next code ideally should be called before EndScene
 	NativeRenderer_UpdateVertexBuffer(s_gpu.vertexBuffer, s_gpu.vertexIndex);
+
+#ifdef __vita__
+	NativeGpu_CoalesceNonOverlappingSemiTransSplits();
+#endif
 
 	for (int i = 1; i <= s_gpu.splitIndex; i++)
 	{
@@ -1555,15 +1698,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 		SPRT *poly = (SPRT *)polyTag;
 
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
-
-		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
-		MakeVertexRect(firstVertex, &poly->x0, poly->w, poly->h);
-		MakeTexcoordRect(firstVertex, &poly->u0, activeDrawEnv.tpage, poly->clut, poly->w, poly->h);
-		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0, &poly->r0);
-
-		TriangulateQuad();
-
-		s_gpu.vertexIndex += 6;
+		s_gpu.vertexIndex += NativeGpu_EmitTexturedSprite(&poly->x0, &poly->u0, activeDrawEnv.tpage, poly->clut, poly->w, poly->h, shadeTexOn, &poly->r0);
 
 		return 4;
 	}
@@ -1606,15 +1741,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 		SPRT_8 *poly = (SPRT_8 *)polyTag;
 
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
-
-		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
-		MakeVertexRect(firstVertex, &poly->x0, 8, 8);
-		MakeTexcoordRect(firstVertex, &poly->u0, activeDrawEnv.tpage, poly->clut, 8, 8);
-		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0, &poly->r0);
-
-		TriangulateQuad();
-
-		s_gpu.vertexIndex += 6;
+		s_gpu.vertexIndex += NativeGpu_EmitTexturedSprite(&poly->x0, &poly->u0, activeDrawEnv.tpage, poly->clut, 8, 8, shadeTexOn, &poly->r0);
 
 		return 3;
 	}
@@ -1640,15 +1767,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 		SPRT_16 *poly = (SPRT_16 *)polyTag;
 
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
-
-		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
-		MakeVertexRect(firstVertex, &poly->x0, 16, 16);
-		MakeTexcoordRect(firstVertex, &poly->u0, activeDrawEnv.tpage, poly->clut, 16, 16);
-		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0, &poly->r0);
-
-		TriangulateQuad();
-
-		s_gpu.vertexIndex += 6;
+		s_gpu.vertexIndex += NativeGpu_EmitTexturedSprite(&poly->x0, &poly->u0, activeDrawEnv.tpage, poly->clut, 16, 16, shadeTexOn, &poly->r0);
 
 		return 3;
 	}
@@ -1884,7 +2003,20 @@ int ParsePrimitive(P_TAG *polyTag)
 			{
 				DrawAllSplits();
 			}
-			ClearImage(&rect, fill->r0, fill->g0, fill->b0);
+			// CTR's per-viewport sky clear is a GPU FILL entirely inside the
+			// active draw page. Mirroring it into CPU VRAM as well makes the next
+			// batch re-upload that page, even though the render target is packed
+			// into VRAM on the GPU at the normal feedback/end-of-frame boundary.
+			// Keep CPU mirroring for genuine offscreen/mixed VRAM fills.
+			if (activeDrawEnv.dfe && rect.x >= activeDrawEnv.clip.x && rect.y >= activeDrawEnv.clip.y &&
+			    rect.x + rect.w <= activeDrawEnv.clip.x + activeDrawEnv.clip.w && rect.y + rect.h <= activeDrawEnv.clip.y + activeDrawEnv.clip.h)
+			{
+				NativeRenderer_Clear(rect.x, rect.y, rect.w, rect.h, fill->r0, fill->g0, fill->b0);
+			}
+			else
+			{
+				ClearImage(&rect, fill->r0, fill->g0, fill->b0);
+			}
 			primLength = 3;
 		}
 		break;
