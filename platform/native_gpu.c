@@ -83,6 +83,10 @@ typedef struct
 	bool psxTexturedSemiTrans;
 	bool psxTextureOutputSTP;
 	bool psxDrawMaskSet;
+#ifdef __vita__
+	bool psxTextureFullyOpaque;
+#endif
+	u8 psxSemiTransPassMask;
 
 	u16 startVertex;
 	u16 numVerts;
@@ -144,6 +148,10 @@ void ClearSplits(void)
 	s_gpu.splits[0].psxTexturedSemiTrans = false;
 	s_gpu.splits[0].psxTextureOutputSTP = false;
 	s_gpu.splits[0].psxDrawMaskSet = false;
+#ifdef __vita__
+	s_gpu.splits[0].psxTextureFullyOpaque = false;
+#endif
+	s_gpu.splits[0].psxSemiTransPassMask = 0;
 	s_gpu.framebufferFeedbackRunActive = false;
 }
 
@@ -903,6 +911,10 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->psxTexturedSemiTrans = psxTexturedSemiTrans;
 	split->psxTextureOutputSTP = psxTextureOutputSTP;
 	split->psxDrawMaskSet = s_gpu.psxDrawMaskSet;
+#ifdef __vita__
+	split->psxTextureFullyOpaque = false;
+#endif
+	split->psxSemiTransPassMask = psxTexturedSemiTrans ? 3 : 0;
 	split->drawenv = activeDrawEnv;
 	split->dispenv = activeDispEnv;
 	split->debugText = s_gpu.currentSplitDebugText;
@@ -917,7 +929,14 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 internal void NativeGpu_SetSplitShaderState(const GPUDrawSplit *split, int semiTransPass, BlendMode blendMode, bool offscreen)
 {
 	NativeRenderer_SetBlendMode(blendMode);
-	NativeRenderer_SetTexture(split->textureId, split->texFormat, semiTransPass, blendMode);
+	NativeRenderer_SetTexture(split->textureId, split->texFormat, semiTransPass, blendMode,
+	                          split->textureId != NativeRenderer_GetWhiteTexture(),
+#ifdef __vita__
+	                          split->psxTextureFullyOpaque
+#else
+	                          false
+#endif
+	);
 	if (split->texFormat == TF_32_BIT_RGBA)
 	{
 		NativeRenderer_SetOverrideTextureSize(split->drawenv.tw.w, split->drawenv.tw.h);
@@ -960,11 +979,17 @@ void DrawSplit(const GPUDrawSplit *split)
 		// PS1 textured ABE only blends texels whose sampled 16-bit color has STP
 		// set; non-STP texels remain opaque. Native split state is per draw,
 		// so draw this primitive-sized split twice with shader-side STP masks.
-		NativeGpu_SetSplitShaderState(split, 1, BM_NONE, !drawOnScreen);
-		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+		if ((split->psxSemiTransPassMask & 1) != 0)
+		{
+			NativeGpu_SetSplitShaderState(split, 1, BM_NONE, !drawOnScreen);
+			NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+		}
 
-		NativeGpu_SetSplitShaderState(split, 2, split->blendMode, !drawOnScreen);
-		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+		if ((split->psxSemiTransPassMask & 2) != 0)
+		{
+			NativeGpu_SetSplitShaderState(split, 2, split->blendMode, !drawOnScreen);
+			NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+		}
 	}
 	else
 	{
@@ -1070,6 +1095,106 @@ internal void NativeGpu_CoalesceNonOverlappingSemiTransSplits(void)
 	}
 	s_gpu.splitIndex = outputIndex;
 }
+
+internal u8 NativeGpu_GetCachedPaletteProperties(u32 *keys, u8 *values, u32 *keyCount, TexFormat format, int clut)
+{
+	const u32 key = ((u32)format << 16) | (u16)clut;
+	for (u32 keyIndex = 0; keyIndex < *keyCount; keyIndex++)
+	{
+		if (keys[keyIndex] == key)
+		{
+			return values[keyIndex];
+		}
+	}
+
+	const u8 properties = (u8)NativeRenderer_GetPaletteProperties(format, clut);
+	if (*keyCount < 512)
+	{
+		keys[*keyCount] = key;
+		values[*keyCount] = properties;
+		(*keyCount)++;
+	}
+	return properties;
+}
+
+internal void NativeGpu_ClassifyOpaqueTextureSplits(void)
+{
+	u32 paletteKeys[512];
+	u8 palettePropertiesCache[512];
+	u32 paletteKeyCount = 0;
+	for (int splitIndex = 1; splitIndex <= s_gpu.splitIndex; splitIndex++)
+	{
+		GPUDrawSplit *split = &s_gpu.splits[splitIndex];
+		split->psxTextureFullyOpaque = false;
+		split->psxSemiTransPassMask = split->psxTexturedSemiTrans ? 3 : 0;
+		if (split->numVerts == 0)
+		{
+			continue;
+		}
+
+		if (split->textureId == NativeRenderer_GetWhiteTexture())
+		{
+			continue;
+		}
+		if (!split->psxTextureOutputSTP)
+		{
+			// Native RGBA override textures already use a shader without discard.
+			continue;
+		}
+		if (split->psxTexturedSemiTrans)
+		{
+			if (split->texFormat == TF_4_BIT || split->texFormat == TF_8_BIT)
+			{
+				u8 paletteProperties = 0;
+				for (u32 vertexIndex = split->startVertex; vertexIndex + 2 < (u32)split->startVertex + split->numVerts; vertexIndex += 3)
+				{
+					const GrVertex *vertex = &s_gpu.vertexBuffer[vertexIndex];
+					paletteProperties |= NativeGpu_GetCachedPaletteProperties(paletteKeys, palettePropertiesCache, &paletteKeyCount,
+					                                                               split->texFormat, vertex->clut);
+					if (paletteProperties == (NATIVE_PALETTE_HAS_TRANSPARENT | NATIVE_PALETTE_HAS_OPAQUE | NATIVE_PALETTE_HAS_STP))
+					{
+						break;
+					}
+				}
+
+				if ((paletteProperties & NATIVE_PALETTE_HAS_OPAQUE) == 0)
+				{
+					split->psxSemiTransPassMask &= ~1;
+				}
+				if ((paletteProperties & NATIVE_PALETTE_HAS_STP) == 0)
+				{
+					split->psxSemiTransPassMask &= ~2;
+				}
+				if ((split->psxSemiTransPassMask == 1 || split->psxSemiTransPassMask == 2) &&
+				    (paletteProperties & NATIVE_PALETTE_HAS_TRANSPARENT) == 0)
+				{
+					split->psxTextureFullyOpaque = true;
+				}
+			}
+			continue;
+		}
+
+		if (split->texFormat != TF_4_BIT && split->texFormat != TF_8_BIT)
+		{
+			continue;
+		}
+
+		bool allOpaque = true;
+		for (u32 vertexIndex = split->startVertex; vertexIndex + 2 < (u32)split->startVertex + split->numVerts; vertexIndex += 3)
+		{
+			const GrVertex *vertex = &s_gpu.vertexBuffer[vertexIndex];
+			const u8 paletteProperties = NativeGpu_GetCachedPaletteProperties(paletteKeys, palettePropertiesCache, &paletteKeyCount,
+			                                                                     split->texFormat, vertex->clut);
+			if ((paletteProperties & NATIVE_PALETTE_HAS_TRANSPARENT) != 0)
+			{
+				allOpaque = false;
+				break;
+			}
+		}
+
+		split->psxTextureFullyOpaque = allOpaque;
+	}
+}
 #endif
 
 internal void SetPSXMaskState(u32 code)
@@ -1114,6 +1239,7 @@ void DrawAllSplits()
 
 #ifdef __vita__
 	NativeGpu_CoalesceNonOverlappingSemiTransSplits();
+	NativeGpu_ClassifyOpaqueTextureSplits();
 #endif
 
 	for (int i = 1; i <= s_gpu.splitIndex; i++)

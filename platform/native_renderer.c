@@ -811,6 +811,8 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 
 #ifdef __vita__
 global_variable GTEShader s_gteShaderVariants[4][NATIVE_PSX_SHADER_VARIANT_COUNT];
+global_variable GTEShader s_gteFullyOpaqueShaderVariants[2][3];
+global_variable GTEShader s_gteUntexturedShaderVariants[3];
 #else
 global_variable GTEShader s_gteShader4;
 global_variable GTEShader s_gteShader8;
@@ -839,6 +841,17 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 				glDeleteProgram(s_gteShaderVariants[format][variant].shader);
 			}
 		}
+	}
+	for (int format = TF_4_BIT; format <= TF_8_BIT; format++)
+	{
+		for (int variant = 0; variant < 3; variant++)
+		{
+			glDeleteProgram(s_gteFullyOpaqueShaderVariants[format][variant].shader);
+		}
+	}
+	for (int variant = 0; variant < 3; variant++)
+	{
+		glDeleteProgram(s_gteUntexturedShaderVariants[variant].shader);
 	}
 #else
 	glDeleteProgram(s_gteShader4.shader);
@@ -1041,9 +1054,13 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	    "	}\n#endif\n"                                                                                                                                \
 	    "	vec4 nearestTextureSample(vec2 P) {\n"                                                                                                      \
 	    "		vec2 rg = samplePSX(P);\n"                                                                                                                 \
+	    "#ifdef PSX_FULLY_OPAQUE\n"                                                                                                                      \
+	    "		sampledStp = stpWeight(rg);\n"                                                                                                            \
+	    "#else\n"                                                                                                                                       \
 	    "		float visible = texelVisible(rg);\n"                                                                                                       \
 	    "		sampledStp = visible * stpWeight(rg);\n"                                                                                                   \
 	    "		if(discardForSemiTransPass(visible, sampledStp)) { discard; }\n"                                                                         \
+	    "#endif\n"                                                                                                                                      \
 	    "		vec4 t = decodePSX(rg);\n"                                                                                                                 \
 	    "		return t;\n"                                                                                                                               \
 	    "	}\n"                                                                                                                                        \
@@ -1063,6 +1080,13 @@ const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
 #ifdef __vita__
+const char *gte_shader_untextured = "\tuniform float psxDrawMaskSet;\n"
+                                    "\tvoid main() {\n"
+                                    "\t\tgl_FragColor.rgb = v_color.rgb * (248.0 / 255.0);\n"
+                                    "\t\tgl_FragColor.a = psxDrawMaskSet;\n"
+                                    GPU_PSX_BLEND_APPLY
+                                    "\t}\n";
+
 #define GPU_RGBA_FRAGMENT_OUTPUT                                    \
 	"		gl_FragColor.rgb = color.rgb * v_color.rgb;\n"             \
 	"		gl_FragColor.a = psxDrawMaskSet;\n"
@@ -1351,6 +1375,11 @@ internal void NativeRenderer_InitialisePSXShaders(void)
 	    "#define PSX_PASS_STP\n#define PSX_BLEND_AVERAGE\n",
 	    "#define PSX_PASS_STP\n#define PSX_BLEND_QUARTER\n",
 	};
+	local_persist const char *fullyOpaqueVariantDefines[3] = {
+	    "#define PSX_FULLY_OPAQUE\n",
+	    "#define PSX_FULLY_OPAQUE\n#define PSX_BLEND_AVERAGE\n",
+	    "#define PSX_FULLY_OPAQUE\n#define PSX_BLEND_QUARTER\n",
+	};
 	const char *sources[4] = {gte_shader_4, gte_shader_8, gte_shader_16, gte_shader_32_rgba};
 
 	for (int format = TF_4_BIT; format <= TF_32_BIT_RGBA; format++)
@@ -1360,6 +1389,18 @@ internal void NativeRenderer_InitialisePSXShaders(void)
 		{
 			NativeRenderer_CompilePSXShader(&s_gteShaderVariants[format][variant], sources[format], variantDefines[variant]);
 		}
+	}
+	for (int format = TF_4_BIT; format <= TF_8_BIT; format++)
+	{
+		for (int variant = 0; variant < 3; variant++)
+		{
+			NativeRenderer_CompilePSXShader(&s_gteFullyOpaqueShaderVariants[format][variant], sources[format],
+			                                fullyOpaqueVariantDefines[variant]);
+		}
+	}
+	for (int variant = 0; variant < 3; variant++)
+	{
+		NativeRenderer_CompilePSXShader(&s_gteUntexturedShaderVariants[variant], gte_shader_untextured, variantDefines[variant]);
 	}
 #else
 	NativeRenderer_CompilePSXShader(&s_gteShader4, gte_shader_4, NULL);
@@ -1736,7 +1777,8 @@ internal void NativeRenderer_SetShader(const ShaderID shader)
 }
 
 
-void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode)
+void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode, int textured,
+                               int textureFullyOpaque)
 {
 #ifdef __vita__
 	int variant;
@@ -1766,8 +1808,25 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiT
 	{
 		return;
 	}
-	GTEShader *shader = &s_gteShaderVariants[texFormat][variant];
+	GTEShader *shader;
+	if (!textured)
+	{
+		shader = &s_gteUntexturedShaderVariants[variant < 3 ? variant : 0];
+	}
+	else if (textureFullyOpaque && texFormat <= TF_8_BIT)
+	{
+		const int opaqueVariant = blendMode == BM_AVERAGE              ? NATIVE_PSX_SHADER_OPAQUE_AVERAGE
+		                          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_OPAQUE_QUARTER
+		                                                               : NATIVE_PSX_SHADER_OPAQUE;
+		shader = &s_gteFullyOpaqueShaderVariants[texFormat][opaqueVariant];
+	}
+	else
+	{
+		shader = &s_gteShaderVariants[texFormat][variant];
+	}
 #else
+	(void)textured;
+	(void)textureFullyOpaque;
 	GTEShader *shader = NULL;
 	switch (texFormat)
 	{
@@ -1915,6 +1974,68 @@ internal int NativeRenderer_ClipVRAMRect(RECT16 *out, int x, int y, int w, int h
 	out->h = (s16)h;
 	return 1;
 }
+
+#ifdef __vita__
+internal int NativeRenderer_HasGpuNewerVRAMTiles(int x, int y, int w, int h)
+{
+	const int tileX0 = x / NATIVE_VRAM_TILE_SIZE;
+	const int tileY0 = y / NATIVE_VRAM_TILE_SIZE;
+	const int tileX1 = (x + w - 1) / NATIVE_VRAM_TILE_SIZE;
+	const int tileY1 = (y + h - 1) / NATIVE_VRAM_TILE_SIZE;
+	for (int tileY = tileY0; tileY <= tileY1; tileY++)
+	{
+		for (int tileX = tileX0; tileX <= tileX1; tileX++)
+		{
+			const int tileIndex = tileY * NATIVE_VRAM_TILE_COLS + tileX;
+			if ((s_vram.gpuNewerTiles[tileIndex >> 5] & (1u << (tileIndex & 31))) != 0)
+			{
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+int NativeRenderer_GetPaletteProperties(TexFormat format, int clut)
+{
+	const int width = format == TF_4_BIT ? 16 : format == TF_8_BIT ? 256 : 0;
+	const int x = (clut & 0x3f) << 4;
+	const int y = clut >> 6;
+	if (width == 0 || y < 0 || y >= VRAM_HEIGHT || x < 0 || x + width > VRAM_WIDTH)
+	{
+		return NATIVE_PALETTE_HAS_TRANSPARENT | NATIVE_PALETTE_HAS_OPAQUE | NATIVE_PALETTE_HAS_STP;
+	}
+	if (NativeRenderer_HasGpuNewerVRAMTiles(x, y, width, 1))
+	{
+		return NATIVE_PALETTE_HAS_TRANSPARENT | NATIVE_PALETTE_HAS_OPAQUE | NATIVE_PALETTE_HAS_STP;
+	}
+
+	int properties = 0;
+	const u16 *palette = s_vram.cpuPixels + y * VRAM_WIDTH + x;
+	for (int colorIndex = 0; colorIndex < width; colorIndex++)
+	{
+		const u16 color = palette[colorIndex];
+		if (color == 0)
+		{
+			properties |= NATIVE_PALETTE_HAS_TRANSPARENT;
+		}
+		else if ((color & 0x8000) != 0)
+		{
+			properties |= NATIVE_PALETTE_HAS_STP;
+		}
+		else
+		{
+			properties |= NATIVE_PALETTE_HAS_OPAQUE;
+		}
+		if (properties == (NATIVE_PALETTE_HAS_TRANSPARENT | NATIVE_PALETTE_HAS_OPAQUE | NATIVE_PALETTE_HAS_STP))
+		{
+			break;
+		}
+	}
+	return properties;
+}
+
+#endif
 
 internal int NativeRenderer_DirtyRectContains(const RECT16 *outer, const RECT16 *inner)
 {

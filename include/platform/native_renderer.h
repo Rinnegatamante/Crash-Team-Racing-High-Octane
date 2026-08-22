@@ -29,6 +29,12 @@ int NativeRenderer_CaptureVRAMState(void *dst, int dstSize);
 int NativeRenderer_RestoreVRAMState(const void *src, int srcSize);
 TextureID NativeRenderer_GetVRAMTexture(void);
 TextureID NativeRenderer_GetWhiteTexture(void);
+#ifdef __vita__
+#define NATIVE_PALETTE_HAS_TRANSPARENT 0x1
+#define NATIVE_PALETTE_HAS_OPAQUE      0x2
+#define NATIVE_PALETTE_HAS_STP         0x4
+int NativeRenderer_GetPaletteProperties(TexFormat format, int clut);
+#endif
 TextureID NativeRenderer_CreateStreamingTexture(int width, int height);
 void NativeRenderer_UpdateStreamingTexture(TextureID texture, int width, int height, const u8 *rgbaPixels);
 void NativeRenderer_DestroyStreamingTexture(TextureID texture);
@@ -37,7 +43,8 @@ void NativeRenderer_SetStencilMode(int drawPrim);
 void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable);
 void NativeRenderer_SetProjection(const RECT16 *drawRect, const DISPENV *displayEnv, int offscreen);
 void NativeRenderer_SetupClipMode(const RECT16 *clipRect, const DISPENV *displayEnv, int enable);
-void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode);
+void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode, int textured,
+                               int textureFullyOpaque);
 void NativeRenderer_SetOverrideTextureSize(int width, int height);
 void NativeRenderer_SetPSXTextureOutputSTP(int enabled);
 void NativeRenderer_SetPSXDrawMaskSet(int maskSet);
