@@ -848,6 +848,21 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #endif
 }
 
+#ifdef __vita__
+#define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                                                 \
+	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
+	"		float texelX = floor(tc.x + 0.0001);\n"                                                             \
+	"		float lanePhase = fract(texelX * 0.25);\n"                                                        \
+	"		vec2 packedRg = VRAM((vec2(tc.x * 0.25, tc.y) + v_page_clut.xy) * c_VRAMTexel);\n"             \
+	"		vec2 nibblePair = packedRg * (255.0 / 16.0);\n"                                               \
+	"		vec2 lowNibble = fract(nibblePair) * 16.0;\n"                                                    \
+	"		vec2 highNibble = floor(nibblePair + vec2(0.001));\n"                                          \
+	"		float oddTexel = step(0.25, fract(lanePhase * 2.0));\n"                                         \
+	"		vec2 nibbleCandidates = mix(lowNibble, highNibble, oddTexel);\n"                             \
+	"		float paletteIndex = mix(nibbleCandidates.x, nibbleCandidates.y, step(0.5, lanePhase));\n"    \
+	"		return VRAM(v_page_clut.zw + vec2(paletteIndex * c_VRAMTexel.x, 0.0));\n"                       \
+	"	}\n"
+#else
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                              \
 	"	// returns 16 bit colour\n"                                                                 \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                        \
@@ -862,7 +877,18 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"		clut_pos.x += paletteIndex * c_VRAMTexel.x;\n"                                   \
 	"		return VRAM(clut_pos);\n"                                                          \
 	"	}\n"
+#endif
 
+#ifdef __vita__
+#define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                                                 \
+	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
+	"		float texelX = floor(tc.x + 0.0001);\n"                                                             \
+	"		vec2 packedRg = VRAM((vec2(tc.x * 0.5, tc.y) + v_page_clut.xy) * c_VRAMTexel);\n"              \
+	"		float highByte = step(0.25, fract(texelX * 0.5));\n"                                                \
+	"		float paletteIndex = mix(packedRg.x, packedRg.y, highByte) * 255.0;\n"                            \
+	"		return VRAM(v_page_clut.zw + vec2(paletteIndex * c_VRAMTexel.x, 0.0));\n"                       \
+	"	}\n"
+#else
 #define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                              \
 	"	// returns 16 bit colour\n"                                                                 \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                        \
@@ -874,6 +900,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"		clut_pos.x += paletteIndex * c_VRAMTexel.x;\n"                                   \
 	"		return VRAM(clut_pos);\n"                                                          \
 	"	}\n"
+#endif
 
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                    \
 	"	vec2 samplePSX(vec2 tc) {\n"                       \
@@ -926,9 +953,29 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"	}\n"
 #endif
 
+#ifdef __vita__
+#define GPU_PSX_COLOR_UNIFORM
+#define GPU_PSX_COLOR_DECODE                                                                                   \
+	"	vec4 decodePSX(vec2 rg) {\n"                                                                         \
+	"		vec2 scaled = rg * vec2(255.0 / 32.0, 255.0 / 4.0);\n"                                  \
+	"		vec2 whole = floor(scaled + vec2(0.001));\n"                                                \
+	"		vec2 part = scaled - whole;\n"                                                               \
+	"		float blue = whole.y - step(32.0, whole.y) * 32.0;\n"                                      \
+	"		vec3 color5 = vec3(part.x * 32.0, whole.x + part.y * 32.0, blue);\n"                       \
+	"		return vec4(color5 * (8.0 / 255.0), 1.0);\n"                                            \
+	"	}\n"
+#define GPU_PSX_FRAGMENT_OUTPUT                                                                                \
+	"		gl_FragColor.rgb = color.rgb * v_color.rgb;\n"                                                  \
+	"		gl_FragColor.a = max(psxDrawMaskSet, psxTextureOutputStp * sampledStp);\n"
+#else
+#define GPU_PSX_COLOR_UNIFORM "\tuniform sampler2D s_rgLut;\n"
 #define GPU_PSX_COLOR_DECODE                                                                                   \
 	"	const vec2 c_LUTTexel = vec2(1.0 / 256.0, 1.0 / 256.0);\n"                                      \
-	"	vec4 lut(vec2 rg) { return texture2D(s_rgLut, rg - c_LUTTexel * 0.0001); }\n"
+	"	vec4 decodePSX(vec2 rg) { return texture2D(s_rgLut, rg - c_LUTTexel * 0.0001); }\n"
+#define GPU_PSX_FRAGMENT_OUTPUT                                                                                \
+	"		gl_FragColor = dither(color * v_color);\n"                                                   \
+	"		gl_FragColor.a = max(psxDrawMaskSet, psxTextureOutputStp * sampledStp);\n"
+#endif
 
 #ifdef __vita__
 // This is used to simulate GL_CONSTANT_COLOR blending since sceGxm has no equivalents for them
@@ -949,7 +996,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #define GPU_FRAGMENT_SAMPLE_SHADER(bit)                                                                                                               \
 	GPU_FETCH_VRAM_FUNC                                                                                                                               \
 	GPU_SAMPLE_TEXTURE_##bit##BIT_FUNC                                                                                                                \
-	    "	uniform sampler2D s_rgLut;\n"                                                                                                               \
+	    GPU_PSX_COLOR_UNIFORM                                                                                                                         \
 	    "#ifndef VITA_NEAREST_ONLY\n\tuniform int bilinearFilter;\n#endif\n"                                                                                 \
 	    GPU_SEMI_TRANS_UNIFORM                                                                                                                        \
 	    "	uniform float psxDrawMaskSet;\n"                                                                                                            \
@@ -987,10 +1034,9 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	    "		float stpClass = step(nonStp, stp);\n"                                                                                                    \
 	    "		sampledStp = stpClass;\n"                                                                                                                  \
 	    "		if(discardForSemiTransPass(axm, stpClass)) { discard; }\n"                                                                                 \
-	    "		vec4 x1 = mix(lut(C11), lut(C21), _frac.x);\n"                                                                                              \
-	    "		vec4 x2 = mix(lut(C12), lut(C22), _frac.x);\n"                                                                                              \
+	    "		vec4 x1 = mix(decodePSX(C11), decodePSX(C21), _frac.x);\n"                                                                              \
+	    "		vec4 x2 = mix(decodePSX(C12), decodePSX(C22), _frac.x);\n"                                                                              \
 	    "		vec4 t = mix(x1, x2, _frac.y);\n"                                                                                                           \
-	    "		t.w = 1.0 - t.w;\n"                                                                                                                        \
 	    "		return t;\n"                                                                                                                               \
 	    "	}\n#endif\n"                                                                                                                                \
 	    "	vec4 nearestTextureSample(vec2 P) {\n"                                                                                                      \
@@ -998,14 +1044,12 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	    "		float visible = texelVisible(rg);\n"                                                                                                       \
 	    "		sampledStp = visible * stpWeight(rg);\n"                                                                                                   \
 	    "		if(discardForSemiTransPass(visible, sampledStp)) { discard; }\n"                                                                         \
-	    "		vec4 t = lut(rg);\n"                                                                                                                       \
-	    "		t.w = 1.0 - t.w;\n"                                                                                                                        \
+	    "		vec4 t = decodePSX(rg);\n"                                                                                                                 \
 	    "		return t;\n"                                                                                                                               \
 	    "	}\n"                                                                                                                                        \
 	    "	void main() {\n"                                                                                                                            \
 	    GPU_TEXTURE_SAMPLE_MAIN                                                                                                                         \
-	    "		gl_FragColor = dither(color * v_color);\n"                                                                                                    \
-	    "		gl_FragColor.a = max(psxDrawMaskSet, psxTextureOutputStp * sampledStp);\n"                                                               \
+	    GPU_PSX_FRAGMENT_OUTPUT                                                                                                                         \
 	    GPU_PSX_BLEND_APPLY                                                                                                                            \
 	    "	}\n"
 
@@ -1018,14 +1062,23 @@ global_variable const char *gpu_shader_common = "	varying vec4 v_texcoord;\n"
 const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
+#ifdef __vita__
+#define GPU_RGBA_FRAGMENT_OUTPUT                                    \
+	"		gl_FragColor.rgb = color.rgb * v_color.rgb;\n"             \
+	"		gl_FragColor.a = psxDrawMaskSet;\n"
+#else
+#define GPU_RGBA_FRAGMENT_OUTPUT                                    \
+	"		gl_FragColor = dither(color * v_color);\n"              \
+	"		gl_FragColor.a = psxDrawMaskSet;\n"
+#endif
+
 const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
                                  "	uniform float psxDrawMaskSet;\n"
                                  "	uniform vec2 texelSize;\n"
                                  "	void main() {\n"
                                  "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
-                                 "		gl_FragColor = dither(color * v_color);\n"
-                                 "		gl_FragColor.a = psxDrawMaskSet;\n"
+                                 GPU_RGBA_FRAGMENT_OUTPUT
                                  GPU_PSX_BLEND_APPLY
                                  "	}\n";
 
@@ -1193,11 +1246,13 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 	}
 
 	GLint textureSampler = 0;
-	GLint lutSampler = 1;
 	GLint presentLutSampler = 2;
 	glUseProgram(program);
 	glUniform1iv(glGetUniformLocation(program, "s_texture"), 1, &textureSampler);
+#ifndef __vita__
+	GLint lutSampler = 1;
 	glUniform1iv(glGetUniformLocation(program, "s_rgLut"), 1, &lutSampler);
+#endif
 	glUniform1iv(glGetUniformLocation(program, "s_presentLut"), 1, &presentLutSampler);
 	glUseProgram(0);
 
@@ -1221,6 +1276,7 @@ internal void NativeRenderer_GenerateCommonTextures(void)
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
+#ifndef __vita__
 	glGenTextures(1, &s_rgLutTexture);
 	{
 		// Texture unit 1 is reserved for the immutable PSX color lookup table.
@@ -1235,6 +1291,7 @@ internal void NativeRenderer_GenerateCommonTextures(void)
 
 		glActiveTexture(GL_TEXTURE0);
 	}
+#endif
 
 #ifdef __vita__
 	for (u16 y = 0; y < LUT_HEIGHT; y++)
