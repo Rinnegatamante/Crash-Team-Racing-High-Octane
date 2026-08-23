@@ -184,10 +184,12 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	{
 		statBarLength = &gGarage.statBarLengths[i];
 
+		const s16 statBarDrawLength = (s16)CTR_WIDESCREEN_SCALE_X(*statBarLength);
+
 		// bar outline
 		r.x = statBarPosX;
 		r.y = statBarStart_Y;
-		r.w = *statBarLength;
+		r.w = statBarDrawLength;
 		r.h = GARAGE_STAT_BAR_HEIGHT;
 
 		// outline color white at 0x800b7780
@@ -196,7 +198,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 		// bar shadows
 		r.x = statBarPosX + 1;
 		r.y = statBarShadows_Y;
-		r.w = *statBarLength - 2;
+		r.w = statBarDrawLength - 2;
 		r.h = GARAGE_STAT_BAR_SHADOW_HEIGHT;
 
 		// outline color black (shadows)
@@ -241,14 +243,15 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 				CtrGpu_WriteColorCode(&p->r2, barColor[0] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
 				CtrGpu_WriteColorCode(&p->r3, barColor[1] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
 
-				s16 segmentX = statBarPosX + segmentStart;
+				s16 segmentX = statBarPosX + CTR_WIDESCREEN_SCALE_X(segmentStart);
+				s16 segmentRightX = statBarPosX + CTR_WIDESCREEN_SCALE_X(segmentStart + currSegmentLen);
 
 				// top left
 				p->x0 = segmentX;
 				p->y0 = statBarStart_Y;
 
 				// top right
-				p->x1 = segmentX + currSegmentLen;
+				p->x1 = segmentRightX;
 				p->y1 = statBarStart_Y;
 
 				// bottom left
@@ -256,7 +259,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 				p->y2 = statBarEnd_Y;
 
 				// bottom right
-				p->x3 = segmentX + currSegmentLen;
+				p->x3 = segmentRightX;
 				p->y3 = statBarEnd_Y;
 
 				addPolyG4(gGT->pushBuffer_UI.ptrOT, p);
