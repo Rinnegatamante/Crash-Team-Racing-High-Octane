@@ -274,12 +274,51 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 		statBarShadows_Y += GARAGE_STAT_BAR_ROW_STEP;
 	}
 
-	s16 classMaxLen = DecalFont_GetLineWidth(sdata->lngStrings[LNG_INTERMEDIATE], FONT_BIG);
+	// Use the longest voice for calculating the box size in order to support multilanguage text.
+	int boxLeft = classNamePosX;
+	int boxRight = classNamePosX;
+
+	for (int i = 0; i < 3; i++)
+	{
+		int classWidth = DecalFont_GetLineWidth(sdata->lngStrings[gGarage.classStringIDs[i]], FONT_BIG);
+		int classLeft = classNamePosX - (classWidth >> 1);
+		int classRight = classLeft + classWidth;
+
+		if (classLeft < boxLeft)
+			boxLeft = classLeft;
+		if (classRight > boxRight)
+			boxRight = classRight;
+	}
+
+	const int statStringIDs[3] = {LNG_SPEED, LNG_ACCEL, LNG_TURN};
+	for (int i = 0; i < 3; i++)
+	{
+		int statWidth = DecalFont_GetLineWidth(sdata->lngStrings[statStringIDs[i]], FONT_BIG);
+		int statLeft = (int)statNamePosX - statWidth;
+
+		if (statLeft < boxLeft)
+			boxLeft = statLeft;
+		if ((int)statNamePosX > boxRight)
+			boxRight = (int)statNamePosX;
+	}
+
+	int maxStatBarLength = 0;
+	for (int i = 0; i < 12; i++)
+	{
+		if (gGarage.statBarTargetLengths[i] > maxStatBarLength)
+			maxStatBarLength = gGarage.statBarTargetLengths[i];
+	}
+
+	int statBarRight = (int)statBarPosX + CTR_WIDESCREEN_SCALE_X(maxStatBarLength);
+	if ((int)statBarPosX < boxLeft)
+		boxLeft = (int)statBarPosX;
+	if (statBarRight > boxRight)
+		boxRight = statBarRight;
 
 	// Stats box
-	r.x = (classNamePosX - (classMaxLen >> 1)) - GARAGE_STAT_BOX_PADDING_X;
+	r.x = boxLeft - GARAGE_STAT_BOX_PADDING_X;
 	r.y = GARAGE_STAT_BOX_Y;
-	r.w = classMaxLen + GARAGE_STAT_BOX_PADDING_X * 2;
+	r.w = (boxRight - boxLeft) + GARAGE_STAT_BOX_PADDING_X * 2;
 	r.h = GARAGE_STAT_BOX_HEIGHT;
 
 	// Draw 2D Menu rectangle background
