@@ -476,6 +476,13 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 			RECTMENU_GetWidth(m->ptrNextBox_InHierarchy, width, 1);
 		}
 	}
+
+#if defined(CTR_NATIVE) && CTR_VITA_WIDESCREEN
+	if ((m->drawStyle & 0x200) != 0)
+	{
+		*width = (s16)CTR_WIDESCREEN_EXPAND_X(*width + 8);
+	}
+#endif
 }
 
 

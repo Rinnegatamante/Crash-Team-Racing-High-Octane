@@ -221,6 +221,22 @@ void LOAD_LangFile(int bigfilePtr, int lang)
 
 	if (sdata->lngFile == 0)
 	{
+		struct BigHeader *bigfile = (struct BigHeader *)bigfilePtr;
+		struct BigEntry *entries = BIG_GETENTRY(bigfile);
+		u32 langBufferSize = (u32)sdata->langBufferSize;
+
+		for (int i = 0; i < (BI_RACERMODELHI - BI_LANGUAGEFILE); i++)
+		{
+			u32 fileSize = (u32)entries[BI_LANGUAGEFILE + i].size;
+			u32 readSize = (fileSize + LOAD_CD_DATA_SECTOR_ROUND_MASK) & ~LOAD_CD_DATA_SECTOR_ROUND_MASK;
+
+			if (langBufferSize < readSize)
+			{
+				langBufferSize = readSize;
+			}
+		}
+
+		sdata->langBufferSize = (int)langBufferSize;
 		sdata->lngFile = MEMPACK_AllocMem(sdata->langBufferSize /* "lang buffer" */);
 	}
 

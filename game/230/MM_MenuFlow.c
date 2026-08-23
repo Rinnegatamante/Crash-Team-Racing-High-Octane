@@ -1,5 +1,152 @@
 #include <common.h>
 
+
+#ifdef CTR_NATIVE
+enum MMNativeLanguageConstants
+{
+	MM_NATIVE_LANGUAGE_COUNT = 6,
+	MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES = CTR_SECONDS_TO_FRAMES(30),
+	MM_NATIVE_LANGUAGE_DRAWSTYLE_WIDESCREEN = 0x200,
+};
+
+static const s16 s_nativeLanguageFileIndex[MM_NATIVE_LANGUAGE_COUNT] =
+{
+	2, // English (PAL/UK)
+	3, // French
+	4, // German
+	5, // Italian
+	6, // Spanish
+	7, // Dutch
+};
+
+static struct MenuRow s_nativeLanguageRows[MM_NATIVE_LANGUAGE_COUNT + 1] =
+{
+	{LNG_ENGLISH, 0, 1, 0, 0},
+	{LNG_FRENCH, 0, 2, 1, 1},
+	{LNG_GERMAN, 1, 3, 2, 2},
+	{LNG_ITALIAN, 2, 4, 3, 3},
+	{LNG_SPANISH, 3, 5, 4, 4},
+	{LNG_DUTCH, 4, 5, 5, 5},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeMainMenuBasic[] =
+{
+	{LNG_ADVENTURE, 0, 1, 0, 0},
+	{LNG_TIME_TRIAL, 0, 2, 1, 1},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_HIGH_SCORE, 4, 6, 5, 5},
+	{LNG_LANGUAGE, 5, 6, 6, 6},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeMainMenuWithScrapbook[] =
+{
+	{LNG_ADVENTURE, 0, 1, 0, 0},
+	{LNG_TIME_TRIAL, 0, 2, 1, 1},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_HIGH_SCORE, 4, 6, 5, 5},
+	{LNG_LANGUAGE, 5, 7, 6, 6},
+	{LNG_SCRAPBOOK, 6, 7, 7, 7},
+	{RECTMENU_STRING_NONE},
+};
+
+static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
+static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
+
+static struct RectMenu s_nativeLanguageBootMenu =
+{
+	.stringIndexTitle = RECTMENU_STRING_NONE,
+	.posX_curr = 256,
+	.posY_curr = 118,
+	.state = RECTMENU_STATE_EXEC_CENTERED,
+	.rows = s_nativeLanguageRows,
+	.funcPtr = MM_NativeLanguageBootMenuProc,
+#if CTR_VITA_WIDESCREEN
+	.drawStyle = MM_NATIVE_LANGUAGE_DRAWSTYLE_WIDESCREEN,
+#endif
+};
+
+static struct RectMenu s_nativeLanguageMainMenu =
+{
+	.stringIndexTitle = RECTMENU_STRING_NONE,
+	.state = CENTER_ON_X,
+	.rows = s_nativeLanguageRows,
+	.funcPtr = MM_NativeLanguageMainMenuProc,
+};
+
+static s32 s_nativeLanguageChosen;
+static s32 s_nativeLanguageTimer;
+static s16 s_nativeLanguageRow;
+
+static void MM_NativeLanguageLoad(s16 row)
+{
+	if ((u16)row >= MM_NATIVE_LANGUAGE_COUNT)
+	{
+		row = 0;
+	}
+
+	LOAD_LangFile((int)sdata->ptrBigfile1, s_nativeLanguageFileIndex[row]);
+	s_nativeLanguageRow = row;
+	s_nativeLanguageChosen = 1;
+}
+
+static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
+	{
+		if (sdata->gGamepads->anyoneHeldCurr != 0)
+		{
+			s_nativeLanguageTimer = MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES;
+		}
+		else if (s_nativeLanguageTimer > 0)
+		{
+			s_nativeLanguageTimer--;
+		}
+
+		if (s_nativeLanguageTimer == 0)
+		{
+			MM_NativeLanguageLoad(menu->rowSelected);
+			sdata->ptrDesiredMenu = &D230.menuMainMenu;
+		}
+		return;
+	}
+
+	if ((menu->funcState != RECTMENU_FUNC_STATE_INPUT) || (menu->rowSelected < 0))
+	{
+		return;
+	}
+
+	MM_NativeLanguageLoad(menu->rowSelected);
+	sdata->ptrDesiredMenu = &D230.menuMainMenu;
+}
+
+static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	struct RectMenu *parent = menu->ptrPrevBox_InHierarchy;
+	if (parent == NULL)
+	{
+		return;
+	}
+
+	if (menu->rowSelected >= 0)
+	{
+		MM_NativeLanguageLoad(menu->rowSelected);
+	}
+
+	parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified against retail 230 0x800abaf0-0x800abcac.
 u8 MM_TransitionInOut(struct TransitionMeta *meta, int framesPassed, int numFrames)
 {
@@ -47,11 +194,22 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+#if defined(CTR_NATIVE)
+	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
+	{
+		mainMenu->rows = s_nativeMainMenuWithScrapbook;
+	}
+	else
+	{
+		mainMenu->rows = s_nativeMainMenuBasic;
+	}
+#else
 	// if scrapbook is unlocked, change "rows" to extended array
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
 		mainMenu->rows = &D230.rowsMainMenuWithScrapbook[0];
 	}
+#endif
 
 	MM_ParseCheatCodes();
 	MM_ToggleRows_Difficulty();
@@ -242,6 +400,20 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 		return;
 	}
+
+#if defined(CTR_NATIVE)
+	// Language
+	if (choose == LNG_LANGUAGE)
+	{
+		s_nativeLanguageMainMenu.rowSelected = s_nativeLanguageRow;
+		s_nativeLanguageMainMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeLanguageMainMenu.ptrPrevBox_InHierarchy = mainMenu;
+
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeLanguageMainMenu;
+		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+#endif
 
 	// Scrapbook
 	if (choose == LNG_SCRAPBOOK)
@@ -574,7 +746,21 @@ void MM_JumpTo_Title_FirstTime(void)
 
 	MainStats_ClearBattleVS();
 
-#if BUILD == EurRetail
+#if defined(CTR_NATIVE)
+	if (s_nativeLanguageChosen == 0)
+	{
+		s_nativeLanguageBootMenu.state = RECTMENU_STATE_EXEC_CENTERED;
+		s_nativeLanguageBootMenu.rowSelected = s_nativeLanguageRow;
+		s_nativeLanguageBootMenu.ptrNextBox_InHierarchy = 0;
+		s_nativeLanguageBootMenu.ptrPrevBox_InHierarchy = 0;
+		s_nativeLanguageTimer = MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES;
+		sdata->ptrActiveMenu = &s_nativeLanguageBootMenu;
+	}
+	else
+	{
+		sdata->ptrActiveMenu = &D230.menuMainMenu;
+	}
+#elif BUILD == EurRetail
 	// if you have not chose a language or skipped the language menu
 	if (sdata->boolLangChosen == 0)
 	{
