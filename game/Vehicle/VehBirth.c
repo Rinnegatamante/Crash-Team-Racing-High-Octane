@@ -45,6 +45,21 @@ CTR_STATIC_ASSERT(VEH_BIRTH_STEERING_FRAMES_RESET == 10000);
 CTR_STATIC_ASSERT(VEH_BIRTH_QUIP_NONE == -1);
 CTR_STATIC_ASSERT(VEH_BIRTH_PLAYER_THREAD_FLAGS == 0x62c0100);
 
+// PAL Penta Penguin stats
+static const s32 s_pentaPalMetaPhys[VEH_BIRTH_META_PHYS_COUNT] =
+{
+	900, 4596, 350, 120, 425, 120, 260, 120,
+	120, 544, 1152, 13900, 15400, 2048, 4096, 5120,
+	3900, 4096, 30, 48, 7252, 5500, 1250, 20480,
+	256, 64, 4, 8, 3072, 0, 128, 0,
+	350, 450, 30, 20, 60, 10, 32, 224,
+	-10, 22, 18, 100, 60, 60, 3000, 500,
+	384, 16, 15, 8192, 8192, 300, -128, 768,
+	30, 15, 60, 15, 36, 200, 5120, 2560,
+	15
+};
+CTR_STATIC_ASSERT(len(s_pentaPalMetaPhys) == VEH_BIRTH_META_PHYS_COUNT);
+
 static int VehBirth_IsDoor5InstDef(struct InstDef *instDef)
 {
 	if (instDef->modelID != STATIC_DOOR)
@@ -565,7 +580,8 @@ void VehBirth_SetConsts(struct Driver *driver)
 {
 	u8 *d = (u8 *)driver;
 
-	int engineID = data.MetaDataCharacters[data.characterIDs[driver->driverID]].engineID;
+	int characterID = data.characterIDs[driver->driverID];
+	int engineID = data.MetaDataCharacters[characterID].engineID;
 
 	for (u32 i = 0; i < VEH_BIRTH_META_PHYS_COUNT; i++)
 	{
@@ -573,7 +589,14 @@ void VehBirth_SetConsts(struct Driver *driver)
 
 		u32 metaPhysSize = metaPhys->size;
 
-		u32 rawValue = (u32)metaPhys->value[engineID];
+		// Patch Penta Penguin stats to PAL version ones
+		u32 rawValue;
+		if (characterID == PENTA_PENGUIN) {
+			rawValue = (u32)s_pentaPalMetaPhys[i];
+		} else {
+			rawValue = (u32)metaPhys->value[engineID];
+		}
+
 		u8 *dst = &d[metaPhys->offset];
 
 		if (metaPhysSize == 1)
