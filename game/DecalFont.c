@@ -1,5 +1,28 @@
 #include <common.h>
 
+static void DecalFont_DrawGlyph(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, u32 *ot, u32 color0, u32 color1, u32 color2, u32 color3,
+                                char transparency, s16 scale)
+{
+	POLY_GT4 *p = primMem->cursor;
+	DecalHUD_DrawPolyGT4(icon, posX, posY, primMem, ot, color0, color1, color2, color3, transparency, scale);
+
+#if CTR_VITA_WIDESCREEN
+	if ((icon != NULL) && (primMem->cursor == p + 1))
+	{
+		const int sourceWidth = FP_Mult(icon->texLayout.u1 - icon->texLayout.u0, scale);
+		const int targetWidth = (sourceWidth * 34 + 44) / 45;
+		const int drawnWidth = p->x1 - p->x0;
+		const int expandRight = targetWidth - drawnWidth;
+
+		if (expandRight > 0)
+		{
+			p->x1 += expandRight;
+			p->x3 += expandRight;
+		}
+	}
+#endif
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800223f4-0x800224d0.
 int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 {
@@ -82,7 +105,7 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 		len--;
 	}
 
-	return pixLength;
+	return CTR_WIDESCREEN_SCALE_X(pixLength);
 }
 
 
@@ -110,6 +133,14 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 		posX -= alignX;
 	}
+
+#if CTR_VITA_WIDESCREEN
+	const int widescreenLineStartX = posX;
+	int widescreenPenX = 0;
+#define DECAL_FONT_DRAW_X(extra) (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra)))
+#else
+#define DECAL_FONT_DRAW_X(extra) (posX + (extra))
+#endif
 
 // bug fix exclusive to versions after USA Retail
 #if BUILD >= JpnTrial
@@ -454,9 +485,9 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 				{
 					struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[iconGroupID]);
 
-					DecalHUD_DrawPolyGT4(iconPtrArray[iconID],
+					DecalFont_DrawGlyph(iconPtrArray[iconID],
 
-					                     posX + pixWidthExtra, posY + pixHeightExtra,
+					                     DECAL_FONT_DRAW_X(pixWidthExtra), posY + pixHeightExtra,
 
 					                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 
@@ -476,9 +507,9 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 			}
 			if (iconStruct != 0)
 			{
-				DecalHUD_DrawPolyGT4(iconStruct,
+				DecalFont_DrawGlyph(iconStruct,
 
-				                     posX + pixWidthExtra, posY + pixHeightExtra,
+				                     DECAL_FONT_DRAW_X(pixWidthExtra), posY + pixHeightExtra,
 
 				                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 
@@ -497,7 +528,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 				{
 					DecalHUD_Arrow2D(iconPtrArray[iconID],
 
-					                 posX + pixWidthExtra, posY + pixHeightExtra,
+					                 DECAL_FONT_DRAW_X(pixWidthExtra), posY + pixHeightExtra,
 
 					                 &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 
@@ -507,9 +538,9 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 				}
 				else
 				{
-					DecalHUD_DrawPolyGT4(iconPtrArray[iconID],
+					DecalFont_DrawGlyph(iconPtrArray[iconID],
 
-					                     posX + pixWidthExtra, posY + pixHeightExtra,
+					                     DECAL_FONT_DRAW_X(pixWidthExtra), posY + pixHeightExtra,
 
 					                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 
@@ -521,8 +552,15 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 #endif
 		}
+#if CTR_VITA_WIDESCREEN
+		widescreenPenX += charWidth;
+		posX = widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX);
+#else
 		posX += charWidth;
+#endif
 	}
+
+#undef DECAL_FONT_DRAW_X
 }
 
 

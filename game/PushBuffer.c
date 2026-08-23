@@ -423,6 +423,13 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 	// scale Y axis (3)
 	pb->matrix_ViewProj.m[1][2] = pb->matrix_ViewProj.m[1][2] * r360 / r600;
 
+#if CTR_VITA_WIDESCREEN
+	pb->matrix_ViewProj.t[0] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.t[0]);
+	pb->matrix_ViewProj.m[0][0] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][0]);
+	pb->matrix_ViewProj.m[0][1] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][1]);
+	pb->matrix_ViewProj.m[0][2] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][2]);
+#endif
+
 	// store camera matrix,
 	// otherwise oxide intro cutscene bugs out,
 	// when crash is sleeping on the grassy hill
@@ -610,6 +617,11 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 	val_X = pb->rect.w;
 	val_X = val_X / 2;
 
+#if CTR_VITA_WIDESCREEN
+	// Match visibility culling to the wider projection.
+	val_X = CTR_WIDESCREEN_EXPAND_X(val_X);
+#endif
+
 	val_Y = ((pb->rect.h * 0x600) / 0x360);
 	val_Y = val_Y / 2;
 
@@ -647,10 +659,17 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 		// from end of PushBuffer_SetMatrixVP (called earlier)
 		PushBuffer_UpdateFrustum_ReadMAC(&tx, &ty, &tz);
 
-		// far clip: pos + dir*100
+		// The wider corner rays need a longer conservative endpoint so the
+		// frustum AABB does not reject geometry visible at the side edges.
+#if CTR_VITA_WIDESCREEN
+		posX = tx * 0x200 + cameraPosX;
+		posY = ty * 0x200 + cameraPosY;
+		posZ = tz * 0x200 + cameraPosZ;
+#else
 		posX = tx * 0x100 + cameraPosX;
 		posY = ty * 0x100 + cameraPosY;
 		posZ = tz * 0x100 + cameraPosZ;
+#endif
 
 		iVar19 = 0x1000;
 

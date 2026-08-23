@@ -27,7 +27,7 @@ void UI_DrawSpeedNeedle(s16 posX, s16 posY, struct Driver *driver)
 	int angle2 = angle1 + ANG(90);
 
 	int cos[2] = {MATH_Cos(angle1), MATH_Cos(angle2)};
-	int sin[2] = {MATH_Sin(angle1), MATH_Sin(angle2)};
+	int sin[2] = {CTR_WIDESCREEN_SCALE_X(MATH_Sin(angle1)), CTR_WIDESCREEN_SCALE_X(MATH_Sin(angle2))};
 
 	PolyG3 *p;
 	GetPrimMem(p);

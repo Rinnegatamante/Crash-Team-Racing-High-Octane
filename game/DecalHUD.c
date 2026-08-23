@@ -17,6 +17,53 @@ enum
 	DECAL_HUD_TPAGE_TRANSPARENCY_STEP = 0x00200000u,
 };
 
+#if CTR_VITA_WIDESCREEN
+static s16 DecalHUD_WidescreenX(int x, int centerX)
+{
+	return (s16)(centerX + CTR_WIDESCREEN_SCALE_X(x - centerX));
+}
+
+static void DecalHUD_WidescreenPolyFT4(POLY_FT4 *p)
+{
+	int minX = p->x0;
+	int maxX = p->x0;
+	const s16 x[3] = {p->x1, p->x2, p->x3};
+	for (int i = 0; i < 3; i++)
+	{
+		if (x[i] < minX)
+			minX = x[i];
+		if (x[i] > maxX)
+			maxX = x[i];
+	}
+
+	const int centerX = (minX + maxX) / 2;
+	p->x0 = DecalHUD_WidescreenX(p->x0, centerX);
+	p->x1 = DecalHUD_WidescreenX(p->x1, centerX);
+	p->x2 = DecalHUD_WidescreenX(p->x2, centerX);
+	p->x3 = DecalHUD_WidescreenX(p->x3, centerX);
+}
+
+static void DecalHUD_WidescreenPolyGT4(POLY_GT4 *p)
+{
+	int minX = p->x0;
+	int maxX = p->x0;
+	const s16 x[3] = {p->x1, p->x2, p->x3};
+	for (int i = 0; i < 3; i++)
+	{
+		if (x[i] < minX)
+			minX = x[i];
+		if (x[i] > maxX)
+			maxX = x[i];
+	}
+
+	const int centerX = (minX + maxX) / 2;
+	p->x0 = DecalHUD_WidescreenX(p->x0, centerX);
+	p->x1 = DecalHUD_WidescreenX(p->x1, centerX);
+	p->x2 = DecalHUD_WidescreenX(p->x2, centerX);
+	p->x3 = DecalHUD_WidescreenX(p->x3, centerX);
+}
+#endif
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80022db0-0x80022ec4.
 void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, char transparency, s16 scale)
@@ -35,6 +82,9 @@ void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 rightX = posX + FP_Mult(width, scale);
 
 	setXY4CompilerHack(p, posX, posY, rightX, posY, posX, bottomY, rightX, bottomY);
+#if CTR_VITA_WIDESCREEN
+	DecalHUD_WidescreenPolyFT4(p);
+#endif
 	setIconUV(p, icon);
 
 	// this function doesn't support coloring the primitives
@@ -97,6 +147,10 @@ void DecalHUD_DrawWeapon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *
 		}
 	}
 
+#if CTR_VITA_WIDESCREEN
+	DecalHUD_WidescreenPolyFT4(p);
+#endif
+
 	setIconUV(p, icon);
 
 	// this function doesn't support coloring the primitives
@@ -133,6 +187,9 @@ void DecalHUD_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 bottomY = posY + FP_Mult(height, scale);
 	u32 rightX = (u16)posX + FP_Mult(width, scale);
 	setXY4CompilerHack(p, (u16)posX, posY, rightX, posY, (u16)posX, bottomY, rightX, bottomY);
+#if CTR_VITA_WIDESCREEN
+	DecalHUD_WidescreenPolyGT4(p);
+#endif
 	setIconUV(p, icon);
 
 	if (transparency)
@@ -255,6 +312,10 @@ LAB_800232d8:
 	                                 ((u32)(posY - (-bitshiftTopRightCorner * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 	CtrGpu_WritePackedXY(&p->x3, ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar7) & 0xffff) |
 	                                 ((u32)(posY - ((bitshiftTopRightCorner + 1) * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
+
+#if CTR_VITA_WIDESCREEN
+	DecalHUD_WidescreenPolyGT4(p);
+#endif
 
 	CtrGpu_WriteColorCode(&p->r1, color2);
 	CtrGpu_WriteColorCode(&p->r2, color3);

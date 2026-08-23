@@ -477,11 +477,11 @@ UpdateTrackerState:
 			CtrGpu_WriteColorCode(&poly->r1, UI_TRACKER_BORDER_CENTER_COLOR);
 			CtrGpu_WriteColorCode(&poly->r2, color2);
 
-			orientedX = orientation * sideOuterX;
+			orientedX = orientation * CTR_WIDESCREEN_SCALE_X(sideOuterX);
 			poly->x0 = screenPosX + orientedX;
 			poly->x2 = screenPosX + orientedX;
 
-			orientedX = orientation * trackerDistance;
+			orientedX = orientation * CTR_WIDESCREEN_SCALE_X(trackerDistance);
 			poly->x1 = screenPosX + orientedX;
 
 			poly->y0 = screenPosY - (sideHalfHeight + UI_TRACKER_SIDE_TIP_OFFSET);

@@ -51,8 +51,8 @@ void DebugFont_DrawNumbers(int index, int screenPosX, int screenPosY)
 
 	CtrGpu_WriteColorCode(&p->r0, 0x2e000000);
 	CtrGpu_WritePackedXY(&p->x0, CTR_PackS16Pair(screenPosX, screenPosY));
-	CtrGpu_WritePackedXY(&p->x3, CTR_PackS16Pair(screenPosX + DEBUG_FONT_DIGIT_TILE_SIZE, screenPosY + DEBUG_FONT_DIGIT_TILE_SIZE));
-	CtrGpu_WritePackedXY(&p->x1, CTR_PackS16Pair(screenPosX + DEBUG_FONT_DIGIT_TILE_SIZE, screenPosY));
+	CtrGpu_WritePackedXY(&p->x3, CTR_PackS16Pair(screenPosX + CTR_WIDESCREEN_SCALE_X(DEBUG_FONT_DIGIT_TILE_SIZE), screenPosY + DEBUG_FONT_DIGIT_TILE_SIZE));
+	CtrGpu_WritePackedXY(&p->x1, CTR_PackS16Pair(screenPosX + CTR_WIDESCREEN_SCALE_X(DEBUG_FONT_DIGIT_TILE_SIZE), screenPosY));
 	CtrGpu_WritePackedXY(&p->x2, CTR_PackS16Pair(screenPosX, screenPosY + DEBUG_FONT_DIGIT_TILE_SIZE));
 
 	// Each character is 7x7 pixels,

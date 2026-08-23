@@ -50,6 +50,16 @@ typedef double f64;
 #define MINUTES(x)                 ((s32)(((f32)(x)) * MINUTE))
 #define HOURS(x)                   ((s32)(((f32)(x)) * HOUR))
 
+#if defined(CTR_NATIVE) && defined(__vita__)
+#define CTR_VITA_WIDESCREEN             1
+#define CTR_WIDESCREEN_SCALE_X(value)   ((s32)(((s64)(value) * 34) / 45))
+#define CTR_WIDESCREEN_EXPAND_X(value)  ((s32)(((s64)(value) * 45) / 34))
+#else
+#define CTR_VITA_WIDESCREEN             0
+#define CTR_WIDESCREEN_SCALE_X(value)   (value)
+#define CTR_WIDESCREEN_EXPAND_X(value)  (value)
+#endif
+
 #define nullptr                    ((void *)0)
 
 #define force_inline CTR_FORCE_INLINE
