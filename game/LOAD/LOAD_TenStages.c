@@ -547,9 +547,23 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		void (*setPtrCb)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
 
 		// podium first place
-		if ((ptrIndexArr[0] != 0) && (ptrIndexArr[0] != STATIC_OXIDEDANCE))
+		if (ptrIndexArr[0] != 0)
 		{
-			fileIndex = BI_DANCEMODELWIN + podiumFileVariant + (ptrIndexArr[0] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			int danceModelIndex = ptrIndexArr[0] - STATIC_CRASHDANCE;
+
+#if defined(__vita__)
+			// Oxide has no usable first-place dance model in the retail BIGFILE.
+			// Use the losing one just to prevent it from being completely absent.
+			if (ptrIndexArr[0] == STATIC_OXIDEDANCE)
+			{
+				fileIndex = BI_DANCEMODELLOSE + podiumFileVariant + danceModelIndex * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			}
+			else
+#endif
+			{
+				fileIndex = BI_DANCEMODELWIN + podiumFileVariant + danceModelIndex * LOAD_PODIUM_MODEL_FILE_STRIDE;
+			}
+
 			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[0], setPtrCb);
 		}
 

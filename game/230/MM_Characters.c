@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(__vita__)
+#include "OxideMenuModel.h"
+#endif
+
 enum
 {
 	MM_CHARACTER_SELECT_SCREEN_W = 0x200,
@@ -9,7 +13,11 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
+#if defined(__vita__)
+	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
+#else
 	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
+#endif
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
 	MM_CHARACTER_SELECT_MAX_PLAYERS = 4,
@@ -20,6 +28,7 @@ enum
 	MM_CHARACTER_SELECT_ANGLE_STEP = 0x400,
 	MM_CHARACTER_SELECT_ANGLE_OFFSET = 400,
 	MM_CHARACTER_SELECT_SPIN_STEP = 0x40,
+	MM_CHARACTER_SELECT_WHEEL_SIZE = 0xccc,
 	MM_CHARACTER_SELECT_LAYOUT_3P = 2,
 	MM_CHARACTER_SELECT_LAYOUT_4P = 3,
 	MM_CHARACTER_SELECT_LAYOUT_1P_LIMITED = 4,
@@ -63,6 +72,111 @@ enum
 	MM_CHARACTER_SELECT_COLOR_PULSE_SCALE_SHIFT = 7,
 	MM_CHARACTER_SELECT_COLOR_PULSE_FP_SHIFT = 0xc,
 };
+
+#if defined(__vita__)
+static struct CharacterSelectMeta s_oxideCharacterSelectMeta1P2P[0x10] =
+{
+	{128, 96, {0, 4, 8, 1}, 0, 0xFFFF},
+	{192, 96, {1, 5, 0, 2}, 1, 0xFFFF},
+	{256, 96, {2, 6, 1, 3}, 2, 0xFFFF},
+	{320, 96, {3, 7, 2, 9}, 3, 0xFFFF},
+	{128, 135, {0, 12, 10, 5}, 4, 0xFFFF},
+	{192, 135, {1, 13, 4, 6}, 5, 0xFFFF},
+	{256, 135, {2, 14, 5, 7}, 6, 0xFFFF},
+	{320, 135, {3, 15, 6, 11}, 7, 0xFFFF},
+	{64, 96, {8, 10, 8, 0}, 12, 0x5},
+	{384, 96, {9, 11, 3, 9}, 8, 0xA},
+	{64, 135, {8, 10, 10, 4}, 10, 0x7},
+	{384, 135, {9, 15, 7, 11}, 9, 0x8},
+	{128, 174, {4, 12, 12, 13}, 11, 0x9},
+	{192, 174, {5, 13, 12, 14}, 13, 0x6},
+	{256, 174, {6, 14, 13, 15}, 14, 0xB},
+	{320, 174, {7, 15, 14, 11}, 15, 0xFFFF},
+};
+
+static struct CharacterSelectMeta s_oxideCharacterSelectMeta3P[0x10] =
+{
+	{32, 71, {12, 4, 0, 1}, 0, 0xFFFF},
+	{96, 71, {13, 5, 0, 2}, 1, 0xFFFF},
+	{160, 71, {14, 6, 1, 3}, 2, 0xFFFF},
+	{224, 71, {15, 7, 2, 3}, 3, 0xFFFF},
+	{32, 110, {0, 8, 4, 5}, 4, 0xFFFF},
+	{96, 110, {1, 9, 4, 6}, 5, 0xFFFF},
+	{160, 110, {2, 10, 5, 7}, 6, 0xFFFF},
+	{224, 110, {3, 11, 6, 7}, 7, 0xFFFF},
+	{32, 149, {4, 8, 8, 9}, 12, 0x5},
+	{96, 149, {5, 9, 8, 10}, 8, 0xA},
+	{160, 149, {6, 10, 9, 11}, 10, 0x7},
+	{224, 149, {7, 11, 10, 11}, 9, 0x8},
+	{32, 32, {12, 0, 12, 13}, 11, 0x9},
+	{96, 32, {13, 1, 12, 14}, 13, 0x6},
+	{160, 32, {14, 2, 13, 15}, 14, 0xB},
+	{224, 32, {15, 3, 14, 15}, 15, 0xFFFF},
+};
+
+static struct CharacterSelectMeta s_oxideCharacterSelectMeta4P[0x10] =
+{
+	{128, 71, {0, 4, 10, 1}, 0, 0xFFFF},
+	{192, 71, {14, 5, 0, 2}, 1, 0xFFFF},
+	{256, 71, {15, 6, 1, 3}, 2, 0xFFFF},
+	{320, 71, {3, 7, 2, 11}, 3, 0xFFFF},
+	{128, 110, {0, 4, 12, 5}, 4, 0xFFFF},
+	{192, 110, {1, 8, 4, 6}, 5, 0xFFFF},
+	{256, 110, {2, 9, 5, 7}, 6, 0xFFFF},
+	{320, 110, {3, 7, 6, 13}, 7, 0xFFFF},
+	{192, 149, {5, 8, 8, 9}, 12, 0x5},
+	{256, 149, {6, 9, 8, 9}, 14, 0xB},
+	{64, 71, {10, 12, 10, 0}, 10, 0x7},
+	{384, 71, {11, 13, 3, 11}, 9, 0x8},
+	{64, 110, {10, 12, 12, 4}, 11, 0x9},
+	{384, 110, {11, 13, 7, 13}, 8, 0xA},
+	{192, 32, {14, 1, 14, 15}, 13, 0x6},
+	{256, 32, {15, 2, 14, 15}, 15, 0xFFFF},
+};
+
+static struct Model *s_oxideCharacterSelectModel;
+
+internal struct Model *MM_Characters_GetOxideMenuModel(void)
+{
+	if (s_oxideCharacterSelectModel == NULL)
+	{
+		u8 *fileBuf = s_oxideMenuModelFile;
+		s32 ptrMapOffset = (s32)CTR_ReadU32LE(fileBuf);
+		u8 *modelBuf = fileBuf + sizeof(u32);
+		struct DramPointerMap *ptrMap = (struct DramPointerMap *)(modelBuf + ptrMapOffset);
+
+		LOAD_RunPtrMap((char *)modelBuf, DRAM_GETOFFSETS(ptrMap), ptrMap->numBytes >> DRAM_POINTER_MAP_WORD_SHIFT);
+
+		s_oxideCharacterSelectModel = (struct Model *)modelBuf;
+
+		if ((s_oxideCharacterSelectModel->headers != NULL) && (s_oxideCharacterSelectModel->numHeaders > 0))
+		{
+			struct ModelHeader *header = &s_oxideCharacterSelectModel->headers[0];
+			header->scale.x = (header->scale.x * 5) >> 3;
+			header->scale.y = (header->scale.y * 5) >> 3;
+			header->scale.z = (header->scale.z * 5) >> 3;
+		}
+	}
+
+	return s_oxideCharacterSelectModel;
+}
+
+internal struct CharacterSelectMeta *MM_Characters_GetOxideMetaForLayout(s32 layoutIndex)
+{
+	switch (layoutIndex)
+	{
+	case 0:
+	case 1:
+		return s_oxideCharacterSelectMeta1P2P;
+	case MM_CHARACTER_SELECT_LAYOUT_3P:
+		return s_oxideCharacterSelectMeta3P;
+	case MM_CHARACTER_SELECT_LAYOUT_4P:
+		return s_oxideCharacterSelectMeta4P;
+	default:
+		return D230.characterSelectMetaByLayout[layoutIndex];
+	}
+}
+#endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800ad98c-0x800ada4c.
 void MM_Characters_AnimateColors(u8 *colorData, s16 playerID, s16 flag)
@@ -191,6 +305,17 @@ struct Model *MM_Characters_GetModelByName(const char *name)
 			return model;
 		}
 	}
+
+#if defined(__vita__)
+	if ((ModelName_ReadWord(name, 0) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 0)) &&
+	    (ModelName_ReadWord(name, 1) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 1)) &&
+	    (ModelName_ReadWord(name, 2) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 2)) &&
+	    (ModelName_ReadWord(name, 3) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 3)))
+	{
+		return MM_Characters_GetOxideMenuModel();
+	}
+#endif
+
 	return NULL;
 }
 
@@ -302,6 +427,10 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 
 		s16 *currCharacterID = &D230.characterSelectPlayerState.currentCharacterID[playerIndex];
 
+#if defined(__vita__)
+		gGT->drivers[playerIndex]->wheelSize = (*currCharacterID == NITROS_OXIDE) ? 0 : MM_CHARACTER_SELECT_WHEEL_SIZE;
+#endif
+
 		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
@@ -392,6 +521,9 @@ void MM_Characters_SetMenuLayout(void)
 
 	// Loop through bottom characters,
 	// if any are unlocked, use expanded
+#if defined(__vita__)
+	expandRoster = true;
+#else
 	for (s32 iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
 		// OG game code
@@ -403,6 +535,7 @@ void MM_Characters_SetMenuLayout(void)
 			break;
 		}
 	}
+#endif
 
 	if (
 	    // if 1P2P (0 or 1)
@@ -427,7 +560,11 @@ void MM_Characters_SetMenuLayout(void)
 
 	D230.activeCharacterSelectWindowPos = D230.characterSelectWindowPosByLayout[layoutIndex];
 
+#if defined(__vita__)
+	D230.activeCharacterSelectMeta = MM_Characters_GetOxideMetaForLayout(layoutIndex);
+#else
 	D230.activeCharacterSelectMeta = D230.characterSelectMetaByLayout[layoutIndex];
+#endif
 
 	D230.characterSelectNameTextY = D230.characterSelectLayout.textY[layoutIndex];
 
