@@ -17,6 +17,7 @@
 #define NATIVE_INPUT_PAD_MULTITAP          0x80
 #define NATIVE_INPUT_PAD_DISCONNECT        0xff
 #define NATIVE_INPUT_AXIS_DEADZONE         500
+#define NATIVE_INPUT_VITA_STICK_THRESHOLD  64
 #define NATIVE_INPUT_MAP_FLAG_AXIS         0x4000
 #define NATIVE_INPUT_MAP_FLAG_INVERSE      0x8000
 #define NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT 0
@@ -100,6 +101,9 @@ global_variable s32 s_inputInitialized;
 global_variable s32 s_installedSnapshotsActive;
 global_variable s32 s_keyboardControllerSlot = NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT;
 global_variable s32 s_lastActiveControllerSlot = -1;
+#ifdef __vita__
+global_variable s32 s_vitaIsHandheld;
+#endif
 
 extern s32 g_padCommEnable;
 
@@ -355,6 +359,43 @@ internal s32 NativeInput_AxisIsActive(s32 axis)
 	return abs(axis) > NATIVE_INPUT_AXIS_DEADZONE;
 }
 
+#ifdef __vita__
+// Emulate dpad presses on left analog and LR/R2 on right analog
+internal void NativeInput_VitaApplyStickButtons(u16 *buttons, const SceCtrlData *pad)
+{
+	if (pad->lx < (128 - NATIVE_INPUT_VITA_STICK_THRESHOLD))
+	{
+		*buttons &= ~0x80;
+	}
+	else if (pad->lx > (128 + NATIVE_INPUT_VITA_STICK_THRESHOLD))
+	{
+		*buttons &= ~0x20;
+	}
+
+	if (pad->ly < (128 - NATIVE_INPUT_VITA_STICK_THRESHOLD))
+	{
+		*buttons &= ~0x10;
+	}
+	else if (pad->ly > (128 + NATIVE_INPUT_VITA_STICK_THRESHOLD))
+	{
+		*buttons &= ~0x40;
+	}
+
+	// Overload L2/R2 only on actual Vita since on PSTV we definitely want to keep og behaviour
+	if (s_vitaIsHandheld != 0)
+	{
+		if (pad->rx < (128 - NATIVE_INPUT_VITA_STICK_THRESHOLD))
+		{
+			*buttons &= ~0x100;
+		}
+		else if (pad->rx > (128 + NATIVE_INPUT_VITA_STICK_THRESHOLD))
+		{
+			*buttons &= ~0x200;
+		}
+	}
+}
+#endif
+
 internal void NativeInput_ApplyController(s32 slot)
 {
 	struct NativeInputController *nativeController = &s_controllers[slot];
@@ -366,13 +407,21 @@ internal void NativeInput_ApplyController(s32 slot)
 	s32 leftX;
 	s32 leftY;
 	SceCtrlData pad;
-	u16 buttons = 0xffff;
-	sceCtrlPeekBufferNegative(slot, &pad, 1);
-	buttons = pad.buttons & 0xFFFF;
-	rightX = ((s32)pad.rx - 127) * 32767;
-	rightX = ((s32)pad.ry - 127) * 32767;
-	leftX = ((s32)pad.lx - 127) * 32767;
-	leftY = ((s32)pad.ly - 127) * 32767;
+	u16 buttons;
+
+	memset(&pad, 0, sizeof(pad));
+	if (sceCtrlPeekBufferPositive2(slot, &pad, 1) < 0)
+	{
+		return;
+	}
+
+	buttons = (u16)(~pad.buttons & 0xffff);
+	NativeInput_VitaApplyStickButtons(&buttons, &pad);
+
+	rightX = ((s32)pad.rx - 128) * 256;
+	rightY = ((s32)pad.ry - 128) * 256;
+	leftX = ((s32)pad.lx - 128) * 256;
+	leftY = ((s32)pad.ly - 128) * 256;
 #else
 	const struct NativeInputControllerMapping *mapping = &s_controllerMapping;
 	SDL_Gamepad *controller = nativeController->controller;
@@ -772,6 +821,9 @@ int Platform_InputInit(void)
 	s_lastActiveControllerSlot = -1;
 	s_installedSnapshotsActive = 0;
 	s_keyboardState = SDL_GetKeyboardState(NULL);
+#ifdef __vita__
+	s_vitaIsHandheld = sceKernelGetModel() == SCE_KERNEL_MODEL_VITA;
+#endif
 
 	if (SDL_InitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC) == 0)
 	{
@@ -804,6 +856,9 @@ void Platform_InputShutdown(void)
 	s_installedSnapshotsActive = 0;
 	s_keyboardControllerSlot = NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT;
 	s_lastActiveControllerSlot = -1;
+#ifdef __vita__
+	s_vitaIsHandheld = 0;
+#endif
 	memset(s_padSlotData, 0, sizeof(s_padSlotData));
 	s_keyboardState = NULL;
 }
