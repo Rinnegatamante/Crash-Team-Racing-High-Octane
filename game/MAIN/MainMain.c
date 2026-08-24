@@ -6,6 +6,8 @@
 #include <platform/native_savestate.h>
 #endif
 
+extern int cfg_language;
+
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 static struct NativePerfFrameInfo MainPerf_FrameInfo(struct GameTracker *gGT)
 {
@@ -603,10 +605,10 @@ void StateZero()
 		firstEntry[i].size = 2 * 0x800;
 #endif
 
+#ifdef CTR_NATIVE
 	// Load PAL English on native so the boot language selector can use the
 	// localized language-name strings shared by the PAL language files.
-#ifdef CTR_NATIVE
-	LOAD_LangFile((int)sdata->ptrBigfile1, 2);
+	LOAD_LangFile((int)sdata->ptrBigfile1, cfg_language);
 #else
 	// English=1
 	// PAL SCES02105 calls it multiple times

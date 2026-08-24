@@ -79,9 +79,11 @@ static struct RectMenu s_nativeLanguageMainMenu =
 	.funcPtr = MM_NativeLanguageMainMenuProc,
 };
 
-static s32 s_nativeLanguageChosen;
+s32 s_nativeLanguageChosen = 0;
 static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
+extern int cfg_language;
+extern void save_config();
 
 static void MM_NativeLanguageLoad(s16 row)
 {
@@ -90,9 +92,11 @@ static void MM_NativeLanguageLoad(s16 row)
 		row = 0;
 	}
 
-	LOAD_LangFile((int)sdata->ptrBigfile1, s_nativeLanguageFileIndex[row]);
+	cfg_language = s_nativeLanguageFileIndex[row];
+	LOAD_LangFile((int)sdata->ptrBigfile1, cfg_language);
 	s_nativeLanguageRow = row;
 	s_nativeLanguageChosen = 1;
+	save_config();
 }
 
 static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu)

@@ -184,8 +184,34 @@ int main(int argc, char *argv[]) {
 	return sceKernelExitDeleteThread(0);
 }
 
-void *real_main(void *_argv)
-{
+extern s32 s_nativeLanguageChosen; // Flag if language has been selected on first boot
+int cfg_language = 2; // Default: PAL UK language
+
+void load_config() {
+	char buffer[30];
+	int value;
+	FILE *config = fopen("ux0:data/ctr/config.ini", "r");
+	if (config) {
+		while (EOF != fscanf(config, "%[^=]=%d\n", buffer, &value)) {
+			if (strcmp("language", buffer) == 0) {
+				cfg_language = value;
+				s_nativeLanguageChosen = 1;
+			}
+		}
+		fclose(config);
+	}
+}
+
+void save_config() {
+	FILE *config = fopen("ux0:data/ctr/config.ini", "w+");
+	if (config != NULL) {
+		fprintf(config, "%s=%d\n", "language", cfg_language);
+		fclose(config);
+	}
+}
+
+void *real_main(void *_argv) {
+	load_config();
 	sceIoMkdir("ux0:data/ctr/shader_cache", 0777);
 	vglSetShaderCachePath("ux0:data/ctr/shader_cache");
 	vglUseLowPrecision(GL_TRUE);
