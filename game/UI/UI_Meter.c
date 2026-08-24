@@ -53,6 +53,12 @@ enum
 	UI_SLIDE_METER_EMPTY_R = 0x80,
 	UI_SLIDE_METER_EMPTY_G = 0x80,
 	UI_SLIDE_METER_EMPTY_B = 0x80,
+	UI_RESERVES_METER_BAR_W = 0x31,
+	UI_RESERVES_METER_BAR_H = 3,
+	UI_RESERVES_METER_SCALE_NUMERATOR = 0xE,
+	UI_RESERVES_METER_SCALE_DENOMINATOR = 0x960,
+	UI_RESERVES_METER_YELLOW_THRESHOLD = 1600,
+	UI_RESERVES_METER_GREEN_THRESHOLD = 3840,
 };
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80051c64-0x80051e24.
@@ -344,3 +350,81 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 		meterLength = barWidth;
 	}
 }
+
+#if defined(CTR_NATIVE)
+void UI_DrawReservesMeter(s16 posX, s16 posY, struct Driver *driver)
+{
+	if (driver == NULL)
+	{
+		return;
+	}
+
+	struct GameTracker *gGT = sdata->gGT;
+	const int barWidth = CTR_WIDESCREEN_SCALE_X(UI_RESERVES_METER_BAR_W);
+	const int barHeight = UI_RESERVES_METER_BAR_H;
+
+	int reserves = driver->reserves;
+	if (reserves < 0)
+	{
+		reserves = 0;
+	}
+
+	int meterWidth = (reserves * UI_RESERVES_METER_SCALE_NUMERATOR) / UI_RESERVES_METER_SCALE_DENOMINATOR;
+	meterWidth = CTR_WIDESCREEN_SCALE_X(meterWidth);
+
+	const PrimCode primCode = {.poly = {.quad = 1, .renderCode = RenderCode_Polygon}};
+	ColorCode meterColor = MakeColorCode(0xff, 0, 0, primCode);
+
+	if (reserves > UI_RESERVES_METER_YELLOW_THRESHOLD)
+	{
+		if (reserves < UI_RESERVES_METER_GREEN_THRESHOLD)
+		{
+			meterColor = MakeColorCode(0xff, 0xff, 0, primCode);
+		}
+		else
+		{
+			meterColor = MakeColorCode(0, 0xff, 0, primCode);
+		}
+	}
+
+	if (meterWidth > barWidth)
+	{
+		meterWidth = barWidth;
+		meterColor = MakeColorCode(0, 0, 0xff, primCode);
+	}
+
+	RECT box = {
+		.x = (s16)(posX - barWidth),
+		.y = (s16)(posY - barHeight),
+		.w = (s16)barWidth,
+		.h = (s16)barHeight,
+	};
+	Color black = MakeColor(0, 0, 0);
+	CTR_Box_DrawWireBox(&box, &black, gGT->pushBuffer_UI.ptrOT, &gGT->backBuffer->primMem);
+
+	for (int i = 0; i < 2; i++)
+	{
+		PolyF4 *p;
+		GetPrimMem(p);
+		if (p == nullptr)
+		{
+			return;
+		}
+
+		p->colorCode = meterColor;
+		p->v[0].pos.x = (s16)(posX - meterWidth);
+		p->v[0].pos.y = (s16)(posY - barHeight);
+		p->v[1].pos.x = posX;
+		p->v[1].pos.y = (s16)(posY - barHeight);
+		p->v[2].pos.x = (s16)(posX - meterWidth);
+		p->v[2].pos.y = posY;
+		p->v[3].pos.x = posX;
+		p->v[3].pos.y = posY;
+
+		AddPrimitive(p, gGT->pushBuffer_UI.ptrOT);
+
+		meterColor = MakeColorCode(0x80, 0x80, 0x80, primCode);
+		meterWidth = barWidth;
+	}
+}
+#endif

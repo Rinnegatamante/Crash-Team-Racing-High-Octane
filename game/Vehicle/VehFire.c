@@ -234,7 +234,7 @@ void VehFire_Increment(struct Driver *driver, int reserves, u32 type, int fireLe
 			// make flame disappear after
 			// 	- powerslide: two frames (quick death)
 			//	- all others: -1 frames (255 = 'no' death)
-			if ((type & POWER_SLIDE_HANG_TIME) != 0)
+			if (((type & POWER_SLIDE_HANG_TIME) != 0) && (driver->reserves == 0))
 			{
 				count = VEH_FIRE_POWER_SLIDE_DISAPPEAR_FRAMES;
 			}
@@ -318,11 +318,15 @@ void VehFire_Increment(struct Driver *driver, int reserves, u32 type, int fireLe
 		// all other boosts
 		else
 		{
-			// make fire invisible for the sake of the visibility cooldown as explained in common.h
-			turboInst1->flags |= DEPTH_FADE | HIDE_MODEL;
-			turboInst2->flags |= DEPTH_FADE | HIDE_MODEL;
+			if (driver->reserves == 0)
+			{
+				// make fire invisible for the sake of the visibility cooldown as explained in common.h
+				turboInst1->flags |= DEPTH_FADE | HIDE_MODEL;
+				turboInst2->flags |= DEPTH_FADE | HIDE_MODEL;
 
-			turboObj->fireVisibilityCooldown = VEH_FIRE_VISIBILITY_COOLDOWN;
+				turboObj->fireVisibilityCooldown = VEH_FIRE_VISIBILITY_COOLDOWN;
+			}
+
 			driver->numTurbos = (s16)CTR_MipsAddLo((u16)driver->numTurbos, 1);
 #if BUILD == JpnRetail
 			// the japanese version of the game keeps track of your highest turbo chain in a race

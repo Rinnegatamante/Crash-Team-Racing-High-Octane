@@ -881,6 +881,12 @@ void UI_RenderFrame_Racing()
 		// disable the randomizing effect in the HUD
 		gGT->gameMode1 &= ~ROLLING_ITEM;
 	}
+
+	if ((numPlyr == 1) && (gGT->drivers[0] != NULL))
+	{
+		struct UiElement2D *hud1P = data.hudStructPtr[0];
+		UI_DrawReservesMeter(hud1P[UI_HUD_SLOT_SLIDE_METER].x, hud1P[UI_HUD_SLOT_SLIDE_METER].y + 5, gGT->drivers[0]);
+	}
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80054298-0x8005435c.
