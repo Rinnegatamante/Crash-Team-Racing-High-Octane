@@ -24,6 +24,12 @@ void MainKillGame_StopCTR(void)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c480-0x8003c508 for the retail shutdown path.
 void MainKillGame_LaunchSpyro2(void)
 {
+#if defined(__vita__)
+	UNLOCK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_OXIDE);
+	OtherFX_Play(MM_CHEAT_SUCCESS_SFX, 1);
+	return;
+#endif
+
 	CTR_ErrorScreen(0, 0, 0);
 
 	Music_Stop();

@@ -91,7 +91,7 @@ static struct CharacterSelectMeta s_oxideCharacterSelectMeta1P2P[0x10] =
 	{128, 174, {4, 12, 12, 13}, 11, 0x9},
 	{192, 174, {5, 13, 12, 14}, 13, 0x6},
 	{256, 174, {6, 14, 13, 15}, 14, 0xB},
-	{320, 174, {7, 15, 14, 11}, 15, 0xFFFF},
+	{320, 174, {7, 15, 14, 11}, 15, GAME_UNLOCK_BIT_OXIDE},
 };
 
 static struct CharacterSelectMeta s_oxideCharacterSelectMeta3P[0x10] =
@@ -111,7 +111,7 @@ static struct CharacterSelectMeta s_oxideCharacterSelectMeta3P[0x10] =
 	{32, 32, {12, 0, 12, 13}, 11, 0x9},
 	{96, 32, {13, 1, 12, 14}, 13, 0x6},
 	{160, 32, {14, 2, 13, 15}, 14, 0xB},
-	{224, 32, {15, 3, 14, 15}, 15, 0xFFFF},
+	{224, 32, {15, 3, 14, 15}, 15, GAME_UNLOCK_BIT_OXIDE},
 };
 
 static struct CharacterSelectMeta s_oxideCharacterSelectMeta4P[0x10] =
@@ -131,7 +131,7 @@ static struct CharacterSelectMeta s_oxideCharacterSelectMeta4P[0x10] =
 	{64, 110, {10, 12, 12, 4}, 11, 0x9},
 	{384, 110, {11, 13, 7, 13}, 8, 0xA},
 	{192, 32, {14, 1, 14, 15}, 13, 0x6},
-	{256, 32, {15, 2, 14, 15}, 15, 0xFFFF},
+	{256, 32, {15, 2, 14, 15}, 15, GAME_UNLOCK_BIT_OXIDE},
 };
 
 static struct Model *s_oxideCharacterSelectModel;
