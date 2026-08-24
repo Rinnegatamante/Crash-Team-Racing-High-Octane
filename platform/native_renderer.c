@@ -208,6 +208,7 @@ global_variable GLint s_packFlipYLoc = -1;
 global_variable GLuint s_presentVramShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
 global_variable GLuint s_presentRgbaShader = 0;
+global_variable GLint s_presentRgbaFlipYLoc = -1;
 global_variable GLuint s_vramQuadVAO = 0;
 global_variable GLuint s_vramQuadVBO = 0;
 
@@ -1516,8 +1517,9 @@ global_variable const char *ctr_present_rgba_shader = "#ifdef VERTEX\n"
                                                        "#ifdef FRAGMENT\n"
                                                        "varying vec2 v_uv;\n"
                                                        "uniform sampler2D s_src;\n"
+	                                                   "uniform float flipY;\n"
                                                        "void main() {\n"
-                                                       "    gl_FragColor = texture2D(s_src, v_uv);\n"
+	                                                   "    gl_FragColor = texture2D(s_src, vec2(v_uv.x, mix(v_uv.y, 1.0 - v_uv.y, flipY)));\n"
                                                        "}\n"
                                                        "#endif\n";
 
@@ -1538,7 +1540,9 @@ internal void NativeRenderer_InitVRAMPipelines(void)
 	s_presentRgbaShader = NativeRenderer_Shader_Compile(ctr_present_rgba_shader, false, NULL);
 	glUseProgram(s_presentRgbaShader);
 	const GLint presentRgbaSrcLoc = glGetUniformLocation(s_presentRgbaShader, "s_src");
+	s_presentRgbaFlipYLoc = glGetUniformLocation(s_presentRgbaShader, "flipY");
 	glUniform1i(presentRgbaSrcLoc, 0);
+	glUniform1f(s_presentRgbaFlipYLoc, 0.0f);
 	glUseProgram(0);
 
 	glGenVertexArrays(1, &s_vramQuadVAO);
@@ -2744,6 +2748,7 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	glDisable(GL_STENCIL_TEST);
 
 	glUseProgram(s_presentRgbaShader);
+	glUniform1f(s_presentRgbaFlipYLoc, 0.0f);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, s_mainRenderTarget.texture);
 	glBindVertexArray(s_vramQuadVAO);
@@ -2755,6 +2760,42 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	}
 	glBindVertexArray(0);
 
+	s_previousShader = (ShaderID)-1;
+	s_lastBoundTexture = (TextureID)-1;
+}
+
+void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight, int displayHeight)
+{
+	if ((texture == 0) || (contentHeight <= 0) || (displayHeight < contentHeight))
+	{
+		return;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	NativeRenderer_SetScissorState(0);
+	NativeRenderer_EnableDepth(0);
+	NativeRenderer_SetBlendMode(BM_NONE);
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
+	glDisable(GL_STENCIL_TEST);
+
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	const int viewportH = (s_presentViewport.h * contentHeight + displayHeight / 2) / displayHeight;
+	const int viewportY = s_presentViewport.y + (s_presentViewport.h - viewportH) / 2;
+	NativeRenderer_SetViewPort(s_presentViewport.x, viewportY, s_presentViewport.w, viewportH);
+
+	glUseProgram(s_presentRgbaShader);
+	glUniform1f(s_presentRgbaFlipYLoc, 1.0f);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
+
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
+	glBindVertexArray(0);
 	s_previousShader = (ShaderID)-1;
 	s_lastBoundTexture = (TextureID)-1;
 }

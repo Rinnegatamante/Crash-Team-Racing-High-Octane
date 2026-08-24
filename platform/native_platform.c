@@ -41,6 +41,9 @@ global_variable int s_pinnedVramDisplayX = 0;
 global_variable int s_pinnedVramDisplayY = 0;
 global_variable int s_pinnedVramDisplayW = 0;
 global_variable int s_pinnedVramDisplayH = 0;
+global_variable unsigned int s_pinnedDisplayTexture = 0;
+global_variable int s_pinnedDisplayTextureContentHeight = 0;
+global_variable int s_pinnedDisplayTextureHeight = 0;
 #define NATIVE_FPS_REPORT_FRAME_WINDOW 2000
 global_variable int s_fpsFrameCount = 0;
 global_variable u64 s_fpsLastCounter = 0;
@@ -357,7 +360,11 @@ void Platform_EndScene(void)
 
 	if (s_pinnedVramDisplayFrames > 0)
 	{
-		if (s_pinnedVramDisplayCustomRect)
+		if (s_pinnedDisplayTexture != 0)
+		{
+			NativeRenderer_PresentStreamingTexture(s_pinnedDisplayTexture, s_pinnedDisplayTextureContentHeight, s_pinnedDisplayTextureHeight);
+		}
+		else if (s_pinnedVramDisplayCustomRect)
 		{
 			NativeRenderer_PresentVRAMRect(s_pinnedVramDisplayX, s_pinnedVramDisplayY, s_pinnedVramDisplayW, s_pinnedVramDisplayH);
 		}
@@ -371,6 +378,7 @@ void Platform_EndScene(void)
 		if (s_pinnedVramDisplayFrames <= 0)
 		{
 			s_pinnedVramDisplayCustomRect = 0;
+			s_pinnedDisplayTexture = 0;
 		}
 		NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
 		return;
@@ -412,6 +420,7 @@ void Platform_PinVRAMDisplayFrames(int frameCount)
 	{
 		s_pinnedVramDisplayFrames = frameCount;
 		s_pinnedVramDisplayCustomRect = 0;
+		s_pinnedDisplayTexture = 0;
 	}
 }
 
@@ -428,6 +437,21 @@ void Platform_PinVRAMDisplayRect(int x, int y, int w, int h, int frameCount)
 	s_pinnedVramDisplayH = h;
 	s_pinnedVramDisplayFrames = frameCount;
 	s_pinnedVramDisplayCustomRect = 1;
+	s_pinnedDisplayTexture = 0;
+}
+
+void Platform_PinTextureDisplay(unsigned int texture, int contentHeight, int displayHeight, int frameCount)
+{
+	if ((texture == 0) || (contentHeight <= 0) || (displayHeight < contentHeight) || (frameCount <= 0))
+	{
+		return;
+	}
+
+	s_pinnedDisplayTexture = texture;
+	s_pinnedDisplayTextureContentHeight = contentHeight;
+	s_pinnedDisplayTextureHeight = displayHeight;
+	s_pinnedVramDisplayFrames = frameCount;
+	s_pinnedVramDisplayCustomRect = 0;
 }
 
 void Platform_PollHostEvents(void)
