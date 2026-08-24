@@ -11,6 +11,7 @@ It focuses on new features, enhancements and optimization.
 - Penta Penguin has its stats set to its PAL/NTSC-J counterpart (6/6/6).
 - Playable Nitrous Oxide (Unlockable via the original Spyro 2 Demo cheatcode). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/OxideFix))
 - Reserves Meter (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/ReservesMeter))
+- Customizable Cups (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/CustomCups)
 - Splitscreen support via MiniVitaTV or natively on PSTV.
 - Multilanguage support.
 
