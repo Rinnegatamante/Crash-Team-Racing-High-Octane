@@ -1,6 +1,5 @@
 #include <common.h>
 
-#ifdef CTR_NATIVE
 static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_info *mesh)
 {
 	if (mesh == NULL || mesh->bspRoot == NULL)
@@ -25,7 +24,6 @@ static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_i
 		}
 	}
 }
-#endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003af84-0x8003b008 for the retail path.
 void MainInit_VisMem(struct GameTracker *gGT)
@@ -215,6 +213,36 @@ EndFunc:
 	gGT->otSwapchainDB[1] = MEMPACK_AllocMem(size); // "ot2"
 }
 
+#if defined(CTR_NATIVE)
+enum
+{
+	MAININIT_OXIDE_SMALL_STACK_MAX_ITEMS = (0x1000 * 0x19) >> 10,
+	MAININIT_OXIDE_SMALL_STACK_ITEM_SIZE = 0x48,
+	MAININIT_OXIDE_LARGE_STACK_MAX_ITEMS = 0x1000 >> 9,
+	MAININIT_OXIDE_LARGE_STACK_ITEM_SIZE = 0x670,
+};
+
+static u32 s_oxideSmallStackPool[(MAININIT_OXIDE_SMALL_STACK_MAX_ITEMS * MAININIT_OXIDE_SMALL_STACK_ITEM_SIZE + 3) / 4];
+static u32 s_oxideLargeStackPool[(MAININIT_OXIDE_LARGE_STACK_MAX_ITEMS * MAININIT_OXIDE_LARGE_STACK_ITEM_SIZE + 3) / 4];
+
+static void MainInit_JitPoolInitExternal(struct JitPool *pool, int maxItems, int itemSize, void *storage, int storageSize)
+{
+	memset(pool, 0, sizeof(*pool));
+	pool->maxItems = maxItems;
+	pool->itemSize = itemSize;
+	pool->poolSize = maxItems * itemSize;
+
+	if (pool->poolSize > storageSize)
+	{
+		JitPool_Init(pool, maxItems, itemSize, NULL);
+		return;
+	}
+
+	pool->ptrPoolData = storage;
+	JitPool_Clear(pool);
+}
+#endif
+
 void MainInit_JitPoolsNew(struct GameTracker *gGT)
 {
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003b43c-0x8003b6d0 for the retail path.
@@ -248,7 +276,18 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 	JitPool_Init(&gGT->JitPools.thread, (renderBucketSize * 3) >> 7, sizeof(struct Thread), rdata.s_ThreadPool);
 	JitPool_Init(&gGT->JitPools.instance, renderBucketSize >> 5, sizeof(struct Instance) + (sizeof(struct InstDrawPerPlayer) * gGT->numPlyrCurrGame),
 	             rdata.s_InstancePool);
-	JitPool_Init(&gGT->JitPools.smallStack, (poolScale * 0x19) >> 10, 0x48, rdata.s_SmallStackPool);
+	int useOxideExternalPools = ((gameMode & MAIN_MENU) == 0) && (data.characterIDs[0] == NITROS_OXIDE);
+
+	if (useOxideExternalPools)
+	{
+		MainInit_JitPoolInitExternal(&gGT->JitPools.smallStack, (poolScale * 0x19) >> 10, 0x48,
+		                             s_oxideSmallStackPool, sizeof(s_oxideSmallStackPool));
+	}
+	else
+	{
+		JitPool_Init(&gGT->JitPools.smallStack, (poolScale * 0x19) >> 10, 0x48, rdata.s_SmallStackPool);
+	}
+
 	JitPool_Init(&gGT->JitPools.mediumStack, poolScale >> 7, 0x88, rdata.s_MediumStackPool);
 
 	int numDriver = poolScale >> 9;
@@ -256,7 +295,16 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 	{
 		numDriver = 4;
 	}
-	JitPool_Init(&gGT->JitPools.largeStack, numDriver, 0x670, rdata.s_LargeStackPool);
+
+	if (useOxideExternalPools)
+	{
+		MainInit_JitPoolInitExternal(&gGT->JitPools.largeStack, numDriver, 0x670,
+		                             s_oxideLargeStackPool, sizeof(s_oxideLargeStackPool));
+	}
+	else
+	{
+		JitPool_Init(&gGT->JitPools.largeStack, numDriver, 0x670, rdata.s_LargeStackPool);
+	}
 
 	int numParticle = poolScale >> 5;
 	JitPool_Init(&gGT->JitPools.particle, numParticle, sizeof(struct Particle), rdata.s_ParticlePool);
