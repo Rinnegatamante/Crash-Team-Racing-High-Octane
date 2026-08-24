@@ -22,3 +22,9 @@ compile_commands.json
 *~
 *.log
 memcards/
+
+*.velf
+*.elf
+*.sfo
+*.vpk
+*.bin
