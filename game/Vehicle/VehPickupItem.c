@@ -1171,7 +1171,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		tw->ptrNodeNext = RB_Warpball_NewPathNode(tw->ptrNodeCurr, victim);
 
 		tw->vel.y = 0;
-		tw->rotY = d->angle;
+		tw->dir.y = d->angle;
 		tw->parentSafetyFrames = WARPBALL_PARENT_SAFETY_FRAMES;
 
 		// do NOT patch for 60fps,
