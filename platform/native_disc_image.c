@@ -21,6 +21,7 @@
 #define NATIVE_DISC_IMAGE_PVD_LBA           16u
 #define NATIVE_DISC_IMAGE_PVD_ROOT_RECORD   156u
 #define NATIVE_DISC_IMAGE_DIRECTORY_FLAG    0x02u
+#define NATIVE_DISC_IMAGE_READ_AHEAD_SECTORS 64u
 
 // NOTE(aalhendi): This hardcodes only the common NTSC-U raw BIN layout:
 // one MODE2/2352 data track at byte zero. The user still supplies all disc
@@ -40,6 +41,10 @@ global_variable FILE *s_nativeDiscImageFile;
 global_variable struct NativeDiscImageFile s_nativeDiscImageRoot;
 global_variable int s_nativeDiscImageAvailable;
 global_variable SDL_Mutex *s_nativeDiscImageMutex;
+global_variable u32 s_nativeDiscImageSectorCount;
+global_variable u32 s_nativeDiscImageCacheLba;
+global_variable u32 s_nativeDiscImageCacheCount;
+global_variable u8 s_nativeDiscImageCache[NATIVE_DISC_IMAGE_READ_AHEAD_SECTORS * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE];
 
 internal int NativeDiscImage_FindHostImagePath(char *dst, size_t dstSize, NativeStr8 assetsDir)
 {
@@ -108,6 +113,8 @@ internal int NativeDiscImage_CheckRawSectorHeader(const u8 *sector)
 internal int NativeDiscImage_ReadRawSector(u32 lba, u8 *sector)
 {
 	u64 offset;
+	u32 cacheIndex;
+	u32 readCount;
 	int result = 0;
 
 	if (s_nativeDiscImageFile == NULL)
@@ -119,16 +126,33 @@ internal int NativeDiscImage_ReadRawSector(u32 lba, u8 *sector)
 	{
 		SDL_LockMutex(s_nativeDiscImageMutex);
 	}
-	offset = (u64)lba * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE;
-	if ((offset > (u64)LONG_MAX) || (fseek(s_nativeDiscImageFile, (long)offset, SEEK_SET) != 0))
+	if ((lba < s_nativeDiscImageCacheLba) || (lba >= s_nativeDiscImageCacheLba + s_nativeDiscImageCacheCount))
 	{
-		goto done;
+		if (lba >= s_nativeDiscImageSectorCount)
+		{
+			goto done;
+		}
+
+		readCount = s_nativeDiscImageSectorCount - lba;
+		if (readCount > NATIVE_DISC_IMAGE_READ_AHEAD_SECTORS)
+		{
+			readCount = NATIVE_DISC_IMAGE_READ_AHEAD_SECTORS;
+		}
+
+		offset = (u64)lba * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE;
+		if ((offset > (u64)LONG_MAX) || (fseek(s_nativeDiscImageFile, (long)offset, SEEK_SET) != 0) ||
+		    (fread(s_nativeDiscImageCache, NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE, readCount, s_nativeDiscImageFile) != readCount))
+		{
+			s_nativeDiscImageCacheCount = 0;
+			goto done;
+		}
+
+		s_nativeDiscImageCacheLba = lba;
+		s_nativeDiscImageCacheCount = readCount;
 	}
 
-	if (fread(sector, 1, NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE, s_nativeDiscImageFile) != NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE)
-	{
-		goto done;
-	}
+	cacheIndex = lba - s_nativeDiscImageCacheLba;
+	memcpy(sector, &s_nativeDiscImageCache[cacheIndex * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE], NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE);
 
 	result = NativeDiscImage_CheckRawSectorHeader(sector);
 
@@ -381,6 +405,7 @@ internal int NativeDiscImage_LoadRoot(void)
 int NativeDiscImage_Init(const char *assetsDir)
 {
 	char path[NATIVE_DISC_IMAGE_PATH_MAX];
+	long imageSize;
 	if (s_nativeDiscImageMutex == NULL)
 	{
 		s_nativeDiscImageMutex = SDL_CreateMutex();
@@ -388,6 +413,9 @@ int NativeDiscImage_Init(const char *assetsDir)
 
 	s_nativeDiscImageAvailable = 0;
 	s_nativeDiscImagePath[0] = '\0';
+	s_nativeDiscImageSectorCount = 0;
+	s_nativeDiscImageCacheLba = 0;
+	s_nativeDiscImageCacheCount = 0;
 
 	if (s_nativeDiscImageFile != NULL)
 	{
@@ -405,6 +433,14 @@ int NativeDiscImage_Init(const char *assetsDir)
 	{
 		return 0;
 	}
+	if ((fseek(s_nativeDiscImageFile, 0, SEEK_END) != 0) || ((imageSize = ftell(s_nativeDiscImageFile)) <= 0) ||
+	    ((imageSize % NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE) != 0) || (fseek(s_nativeDiscImageFile, 0, SEEK_SET) != 0))
+	{
+		fclose(s_nativeDiscImageFile);
+		s_nativeDiscImageFile = NULL;
+		return 0;
+	}
+	s_nativeDiscImageSectorCount = (u32)((u64)imageSize / NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE);
 
 	if (!NativeDiscImage_LoadRoot())
 	{

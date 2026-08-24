@@ -15,28 +15,11 @@ void MM_Scrapbook_Init(void)
 #ifdef CTR_NATIVE
 #include <platform.h>
 #include <platform/native_audio.h>
-#include <platform/native_renderer.h>
 #include <platform/native_str.h>
 
-#define SCRAPBOOK_NATIVE_XA_PATH       "TEST.STR"
 #define SCRAPBOOK_NATIVE_XA_CHANNEL    1
-#define SCRAPBOOK_NATIVE_FRAME_Y_PAD   4
-#define SCRAPBOOK_NATIVE_DISPLAY_WIDTH SCREEN_WIDTH
 
 global_variable s32 s_scrapbookNativeNextVBlank;
-
-static void MM_Scrapbook_GetNativeSource(s16 *srcX, s16 *srcY, s16 *displayY)
-{
-	struct GameTracker *gGT = sdata->gGT;
-	DRAWENV *drawEnv = &gGT->db[1 - gGT->swapchainIndex].drawEnv;
-
-	// NOTE(aalhendi): Retail decodes Scrapbook into the inactive draw page.
-	// Native then presents that VRAM display page directly instead of drawing
-	// the movie back through a texture primitive.
-	*srcX = drawEnv->ofs[0];
-	*displayY = drawEnv->ofs[1];
-	*srcY = *displayY + SCRAPBOOK_NATIVE_FRAME_Y_PAD;
-}
 #endif
 
 #ifndef CTR_NATIVE
@@ -89,9 +72,10 @@ void MM_Scrapbook_PlayMovie(struct RectMenu *menu)
 #ifdef CTR_NATIVE
 		if (NativeSTR_StartScrapbook() != 0)
 		{
-			// NOTE(aalhendi): Native video decoding skips interleaved XA records;
-			// play the Scrapbook CD-XA channel from the same raw STR file.
-			if (NativeAudio_PlayXAFile(SCRAPBOOK_NATIVE_XA_PATH, SCRAPBOOK_NATIVE_XA_CHANNEL, sdata->vol_Music << 7, sdata->vol_Music << 7) == 0)
+			// Feed interleaved XA records to the audio mixer while the video
+			// decoder reads TEST.STR. Preloading this multi-minute stream would
+			// block the main thread and retain the whole compressed soundtrack.
+			if (NativeAudio_BeginInterleavedXA(SCRAPBOOK_NATIVE_XA_CHANNEL, sdata->vol_Music << 7, sdata->vol_Music << 7) == 0)
 			{
 				NativeSTR_Stop();
 				goto GO_BACK;
@@ -145,15 +129,10 @@ void MM_Scrapbook_PlayMovie(struct RectMenu *menu)
 #else
 		getButtonPress = (sdata->buttonTapPerPlayer[0] & SCRAPBOOK_SKIP_INPUT);
 		s32 nativeUploaded = 0;
-		s16 nativeSrcX;
-		s16 nativeSrcY;
-		s16 nativeDisplayY;
 
-		MM_Scrapbook_GetNativeSource(&nativeSrcX, &nativeSrcY, &nativeDisplayY);
 		if (getButtonPress == 0)
 		{
-			NativeRenderer_ClearVRAM(nativeSrcX, nativeDisplayY, SCRAPBOOK_NATIVE_DISPLAY_WIDTH, SCREEN_HEIGHT, 0, 0, 0);
-			nativeUploaded = NativeSTR_UploadNextFrame(nativeSrcX, nativeSrcY);
+			nativeUploaded = NativeSTR_UploadNextFrameToTexture();
 		}
 
 		if ((getButtonPress != 0) || (nativeUploaded == 0))
@@ -169,7 +148,7 @@ void MM_Scrapbook_PlayMovie(struct RectMenu *menu)
 #ifdef CTR_NATIVE
 		else
 		{
-			Platform_PinVRAMDisplayRect(nativeSrcX, nativeDisplayY, SCRAPBOOK_NATIVE_DISPLAY_WIDTH, SCREEN_HEIGHT, 1);
+			Platform_PinTextureDisplay(NativeSTR_GetFrameTexture(), NativeSTR_GetFrameHeight(), SCREEN_HEIGHT, 1);
 		}
 #endif
 

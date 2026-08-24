@@ -70,6 +70,7 @@
 // decodes them into this bounded PCM ring without callback-time file I/O.
 #define XA_SECTOR_MAX_SAMPLES               (XA_FRAMES_PER_SECTOR * XA_SUBFRAMES_PER_FRAME * XA_SAMPLES_PER_SOUND_UNIT)
 #define NATIVE_AUDIO_XA_RING_FRAMES         8192
+#define NATIVE_AUDIO_XA_STREAM_SECTORS      64
 #define XA_SAMPLE_RATE_37800                37800
 #define XA_SAMPLE_RATE_18900                18900
 
@@ -292,6 +293,9 @@ struct NativeAudioXaStream
 	int sectorCount;
 	int numChannels;
 	int nextSector;
+	int streaming;
+	int sectorCapacity;
+	int channelFilter;
 	u64 decodedFrames;
 	struct NativeAudioXaDecodeState adpcm;
 	s16 ring[NATIVE_AUDIO_XA_RING_FRAMES * NATIVE_AUDIO_CHANNELS];
@@ -1135,6 +1139,32 @@ internal void NativeAudio_GetXAMixSamplesNoLock(int *left, int *right)
 	}
 
 	NativeAudio_InterpolateXALinearStereoNoLock(left, right);
+}
+
+internal int NativeAudio_XaStreamingUnderrunNoLock(void)
+{
+	struct NativeAudioXaStream *xs = &s_audio.xaStream;
+	u64 requiredFrame;
+
+	if (!xs->streaming || (xs->nextSector < xs->sectorCount))
+	{
+		return 0;
+	}
+
+	if ((s_audio.xa.sampleRate == XA_SAMPLE_RATE_37800) || (s_audio.xa.sampleRate == XA_SAMPLE_RATE_18900))
+	{
+		requiredFrame = s_audio.xa.zigzagInputFrame > 0 ? s_audio.xa.zigzagInputFrame - 1 : 0;
+		if (s_audio.xa.sampleRate == XA_SAMPLE_RATE_18900)
+		{
+			requiredFrame >>= 1;
+		}
+	}
+	else
+	{
+		requiredFrame = (s_audio.xa.positionFp >> NATIVE_AUDIO_FP_SHIFT) + 1;
+	}
+
+	return requiredFrame >= xs->decodedFrames;
 }
 
 // NOTE(aalhendi): PS1 SPU ADSR envelope behavior follows PSX-SPX.
@@ -2599,7 +2629,14 @@ internal int NativeAudio_XaStreamDecodeNextSectorNoLock(void)
 		return 0;
 	}
 
-	src = &xs->sectors[(size_t)xs->nextSector * (size_t)xs->sectorSize];
+	if (xs->streaming)
+	{
+		src = &xs->sectors[((size_t)xs->nextSector % (size_t)xs->sectorCapacity) * (size_t)xs->sectorSize];
+	}
+	else
+	{
+		src = &xs->sectors[(size_t)xs->nextSector * (size_t)xs->sectorSize];
+	}
 	xs->nextSector++;
 
 	memset(&tmp, 0, sizeof(tmp));
@@ -3160,8 +3197,10 @@ internal void NativeAudio_MixFrame(s16 *outLeft, s16 *outRight)
 			int srcRight;
 			int left;
 			int right;
+			int streamingUnderrun;
 
 			NativeAudio_GetXAMixSamplesNoLock(&srcLeft, &srcRight);
+			streamingUnderrun = NativeAudio_XaStreamingUnderrunNoLock();
 			left = NativeAudio_ApplyVolume(srcLeft, s_audio.xa.volumeLeft, s_audio.masterVolumeLeft);
 			right = NativeAudio_ApplyVolume(srcRight, s_audio.xa.volumeRight, s_audio.masterVolumeRight);
 
@@ -3171,7 +3210,10 @@ internal void NativeAudio_MixFrame(s16 *outLeft, s16 *outRight)
 				NativeAudio_MixSample(&reverbSendLeft, &reverbSendRight, NativeAudio_ApplyMasterVolume(srcLeft, s_audio.xa.volumeLeft),
 				                      NativeAudio_ApplyMasterVolume(srcRight, s_audio.xa.volumeRight));
 			}
-			NativeAudio_AdvanceXAOutputFrameNoLock();
+			if (!streamingUnderrun)
+			{
+				NativeAudio_AdvanceXAOutputFrameNoLock();
+			}
 		}
 	}
 
@@ -3921,6 +3963,102 @@ int NativeAudio_PlayXAFile(const char *relativePath, int channelFilter, int volu
 	NativeAudio_XaPreparedStreamClose(&prepared);
 
 	return 1;
+}
+
+int NativeAudio_BeginInterleavedXA(int channelFilter, int volumeLeft, int volumeRight)
+{
+	u8 *sectors;
+
+	if (!NativeAudio_SpuInit() || (channelFilter < 0) || (channelFilter > 0xff))
+	{
+		return 0;
+	}
+
+	sectors = (u8 *)malloc((size_t)NATIVE_AUDIO_XA_STREAM_SECTORS * XA_FORM2_SECTOR_SIZE);
+	if (sectors == NULL)
+	{
+		return 0;
+	}
+
+	NativeAudio_CancelXARequest();
+	NativeAudio_LockOutput();
+	NativeAudio_CloseXANoLock();
+
+	s_audio.xaStream.sectors = sectors;
+	s_audio.xaStream.sectorSize = XA_FORM2_SECTOR_SIZE;
+	s_audio.xaStream.sectorBase = 0;
+	s_audio.xaStream.streaming = 1;
+	s_audio.xaStream.sectorCapacity = NATIVE_AUDIO_XA_STREAM_SECTORS;
+	s_audio.xaStream.channelFilter = channelFilter;
+	s_audio.xa.volumeLeft = (s16)volumeLeft;
+	s_audio.xa.volumeRight = (s16)volumeRight;
+	s_audio.commonAttr.cd.volume.left = (s16)volumeLeft;
+	s_audio.commonAttr.cd.volume.right = (s16)volumeRight;
+	s_audio.commonAttr.mask |= SPU_COMMON_CDVOLL | SPU_COMMON_CDVOLR;
+
+	NativeAudio_UnlockOutput();
+	return 1;
+}
+
+int NativeAudio_FeedInterleavedXASector(const void *sector, int sectorSize)
+{
+	struct NativeAudioXaStream *xs;
+	const u8 *src = (const u8 *)sector;
+	const u8 *header;
+	int sampleRate;
+	int numChannels;
+	int accepted = 0;
+
+	if ((src == NULL) || (sectorSize != XA_FORM2_SECTOR_SIZE))
+	{
+		return 0;
+	}
+	if (((src[2] & 0x04) == 0) || (src[0] != 1) || (((src[3] >> 4) & 0x03) != 0))
+	{
+		return 0;
+	}
+
+	NativeAudio_LockOutput();
+	xs = &s_audio.xaStream;
+	if ((xs->sectors == NULL) || !xs->streaming || !NativeAudio_IsXAAudioSector(src, 0, xs->channelFilter))
+	{
+		goto done;
+	}
+
+	header = src;
+	sampleRate = (((header[3] >> 2) & 0x03) == 0) ? XA_SAMPLE_RATE_37800 : XA_SAMPLE_RATE_18900;
+	numChannels = ((header[3] & 0x03) != 0) ? 2 : 1;
+	if (s_audio.xa.active && ((s_audio.xa.sampleRate != sampleRate) || (xs->numChannels != numChannels)))
+	{
+		goto done;
+	}
+
+	if ((xs->sectorCount - xs->nextSector) >= xs->sectorCapacity)
+	{
+		goto done;
+	}
+
+	memcpy(&xs->sectors[((size_t)xs->sectorCount % (size_t)xs->sectorCapacity) * (size_t)xs->sectorSize], src, (size_t)sectorSize);
+	xs->sectorCount++;
+	xs->numChannels = numChannels;
+
+	if (!s_audio.xa.active)
+	{
+		s_audio.xa.frameCount = INT_MAX;
+		s_audio.xa.sampleRate = sampleRate;
+		s_audio.xa.categoryID = 0;
+		s_audio.xa.xaID = 0;
+		s_audio.xa.hasTrackIdentity = 0;
+		s_audio.xa.outputFrame = 0;
+		NativeAudio_RefreshXADerivedStateNoLock();
+		s_audio.xa.active = 1;
+	}
+
+	accepted = 1;
+
+done:
+	NativeAudio_UnlockOutput();
+	return accepted;
 }
 
 int NativeAudio_GetXACurrOffset(void)

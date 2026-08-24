@@ -1,5 +1,6 @@
 #include <macros.h>
 #include <platform/native_assets.h>
+#include <platform/native_audio.h>
 #include <platform/native_disc_image.h>
 #include <platform/native_renderer.h>
 #include <platform/native_str.h>
@@ -10,11 +11,12 @@
 
 #define NATIVE_STR_EXTRACTED_SECTOR_SIZE    0x800
 #define NATIVE_STR_CD_SECTOR_SIZE           0x920
+#define NATIVE_STR_CD_RAW_SECTOR_SIZE       0x930
 #define NATIVE_STR_CD_SUBHEADER_SIZE        0x8
 #define NATIVE_STR_SECTOR_HEADER            0x20
 #define NATIVE_STR_EXTRACTED_SECTOR_PAYLOAD (NATIVE_STR_EXTRACTED_SECTOR_SIZE - NATIVE_STR_SECTOR_HEADER)
 #define NATIVE_STR_CD_SECTOR_PAYLOAD        NATIVE_STR_EXTRACTED_SECTOR_PAYLOAD
-#define NATIVE_STR_MAX_RECORD_SIZE          NATIVE_STR_CD_SECTOR_SIZE
+#define NATIVE_STR_MAX_RECORD_SIZE          NATIVE_STR_CD_RAW_SECTOR_SIZE
 #define NATIVE_STR_MAX_FRAME_SECTORS        10
 #define NATIVE_STR_MAX_FRAME_BYTES          (NATIVE_STR_MAX_FRAME_SECTORS * NATIVE_STR_CD_SECTOR_PAYLOAD)
 #define NATIVE_STR_MAX_WIDTH                512
@@ -23,6 +25,7 @@
 #define NATIVE_STR_ID                       0x80010160u
 #define NATIVE_STR_BS_ID                    0x3800u
 #define NATIVE_STR_END_OF_BLOCK             0xfe00u
+#define NATIVE_STR_SCRAPBOOK_XA_CHANNEL     1
 #define NATIVE_STR_IDCT_SHIFT               14
 #define NATIVE_STR_IDCT_SCALE               (1 << NATIVE_STR_IDCT_SHIFT)
 #define NATIVE_STR_SCRAPBOOK_PATH           "TEST.STR"
@@ -53,6 +56,9 @@ struct NativeSTRState
 	u32 fileBaseOffset;
 	u32 fileBaseSector;
 	u32 currentSector;
+	s32 cdRecordSize;
+	s32 cdVideoHeaderOffset;
+	s32 cdXaSectorOffset;
 	s32 frameIndex;
 	s32 frameLimit;
 	s32 frameSize;
@@ -194,6 +200,55 @@ internal u32 NativeSTR_ReadLE32(const u8 *p)
 	return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
 }
 
+internal s32 NativeSTR_ConfigureHostCdLayout(void)
+{
+	u8 probe[32];
+	long fileSize;
+
+	if ((s_str.file == NULL) || (fseek(s_str.file, 0, SEEK_END) != 0) || ((fileSize = ftell(s_str.file)) <= 0) ||
+	    (fseek(s_str.file, 0, SEEK_SET) != 0) || (fread(probe, 1, sizeof(probe), s_str.file) != sizeof(probe)) ||
+	    (fseek(s_str.file, 0, SEEK_SET) != 0))
+	{
+		return 0;
+	}
+
+	if (((fileSize % NATIVE_STR_EXTRACTED_SECTOR_SIZE) == 0) && (NativeSTR_ReadLE32(&probe[0]) == NATIVE_STR_ID))
+	{
+		s_str.cdRecordSize = NATIVE_STR_EXTRACTED_SECTOR_SIZE;
+		s_str.cdVideoHeaderOffset = 0;
+		s_str.cdXaSectorOffset = -1;
+		return 1;
+	}
+
+	// Full raw sector: sync/header precede the 2336-byte XA payload.
+	if (((fileSize % NATIVE_STR_CD_RAW_SECTOR_SIZE) == 0) && (NativeSTR_ReadLE32(&probe[16 + NATIVE_STR_CD_SUBHEADER_SIZE]) == NATIVE_STR_ID))
+	{
+		s_str.cdRecordSize = NATIVE_STR_CD_RAW_SECTOR_SIZE;
+		s_str.cdVideoHeaderOffset = 16 + NATIVE_STR_CD_SUBHEADER_SIZE;
+		s_str.cdXaSectorOffset = 16;
+		return 1;
+	}
+
+	// Raw Mode2 payload: the eight-byte XA subheader is retained.
+	if ((fileSize % NATIVE_STR_CD_SECTOR_SIZE) == 0)
+	{
+		s_str.cdRecordSize = NATIVE_STR_CD_SECTOR_SIZE;
+		s_str.cdXaSectorOffset = 0;
+		if (NativeSTR_ReadLE32(&probe[NATIVE_STR_CD_SUBHEADER_SIZE]) == NATIVE_STR_ID)
+		{
+			s_str.cdVideoHeaderOffset = NATIVE_STR_CD_SUBHEADER_SIZE;
+			return 1;
+		}
+		if (NativeSTR_ReadLE32(&probe[0]) == NATIVE_STR_ID)
+		{
+			s_str.cdVideoHeaderOffset = 0;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 internal s32 NativeSTR_Sign10(u32 value)
 {
 	value &= 0x3ff;
@@ -221,21 +276,26 @@ internal u16 NativeSTR_NegateMdecCode(u16 code)
 internal u32 NativeSTR_ReadBits(struct NativeSTRBitReader *br, s32 count)
 {
 	u32 value = 0;
-	s32 i;
 
-	for (i = 0; i < count; i++)
+	while (count > 0)
 	{
-		s32 byteOffset = (br->bitOffset >> 4) * 2;
-		s32 bit = 15 - (br->bitOffset & 0xf);
+		const s32 bitInWord = br->bitOffset & 0xf;
+		const s32 byteOffset = (br->bitOffset >> 4) * 2;
+		s32 take = 16 - bitInWord;
 		u32 word = 0;
 
+		if (take > count)
+		{
+			take = count;
+		}
 		if (byteOffset + 1 < br->size)
 		{
 			word = NativeSTR_ReadLE16(&br->data[byteOffset]);
 		}
 
-		value = (value << 1) | ((word >> bit) & 1);
-		br->bitOffset++;
+		value = (value << take) | ((word >> (16 - bitInWord - take)) & ((1u << take) - 1u));
+		br->bitOffset += take;
+		count -= take;
 	}
 
 	return value;
@@ -252,16 +312,17 @@ internal u32 NativeSTR_PeekBits(struct NativeSTRBitReader *br, s32 count)
 
 internal s32 NativeSTR_ReadAcCode(struct NativeSTRBitReader *br, u16 *outCode)
 {
+	const u32 lookahead = NativeSTR_PeekBits(br, 12);
 	u32 i;
 
-	if (NativeSTR_PeekBits(br, 6) == 0x1)
+	if ((lookahead >> 6) == 0x1)
 	{
 		NativeSTR_ReadBits(br, 6);
 		*outCode = (u16)NativeSTR_ReadBits(br, 16);
 		return 1;
 	}
 
-	if (NativeSTR_PeekBits(br, 12) == 0)
+	if (lookahead == 0)
 	{
 		NativeSTR_ReadBits(br, 12);
 		*outCode = NATIVE_STR_END_OF_BLOCK;
@@ -272,7 +333,7 @@ internal s32 NativeSTR_ReadAcCode(struct NativeSTRBitReader *br, u16 *outCode)
 	{
 		const struct NativeSTRAcGroup *group = &s_acGroups[i];
 
-		if (NativeSTR_PeekBits(br, group->prefixBits) == group->prefix)
+		if ((lookahead >> (12 - group->prefixBits)) == group->prefix)
 		{
 			u16 code;
 			u32 index = 0;
@@ -410,15 +471,35 @@ internal s32 NativeSTR_DecodeBlock(struct NativeSTRBitReader *br, s32 quant, s32
 		coefficients[target] = (NativeSTR_Sign10(code) * s_mdecQuantTable[target] * quant + 4) / 8;
 	}
 
+	if (k == 0)
+	{
+		s64 value = (s64)s_idctBasis[0][0] * coefficients[0];
+		value = (s64)s_idctBasis[0][0] * value;
+		if (value >= 0)
+		{
+			value += (s64)NATIVE_STR_IDCT_SCALE * NATIVE_STR_IDCT_SCALE * 2;
+		}
+		else
+		{
+			value -= (s64)NATIVE_STR_IDCT_SCALE * NATIVE_STR_IDCT_SCALE * 2;
+		}
+		const s32 dc = (s32)(value / ((s64)NATIVE_STR_IDCT_SCALE * NATIVE_STR_IDCT_SCALE * 4));
+		for (s32 i = 0; i < 64; i++)
+		{
+			out[i] = dc;
+		}
+		return 1;
+	}
+
 	NativeSTR_IDCT(coefficients, out);
 	return 1;
 }
 
-internal u16 NativeSTR_YCbCrToRGB555(s32 y, s32 cb, s32 cr)
+internal u16 NativeSTR_YCbCrBiasToRGB555(s32 y, s32 rBias, s32 gBias, s32 bBias)
 {
-	s32 r = NativeSTR_Clamp8(y + ((91881 * cr + 32768) >> 16) + 128);
-	s32 g = NativeSTR_Clamp8(y - ((22554 * cb + 46802 * cr + 32768) >> 16) + 128);
-	s32 b = NativeSTR_Clamp8(y + ((116130 * cb + 32768) >> 16) + 128);
+	s32 r = NativeSTR_Clamp8(y + rBias);
+	s32 g = NativeSTR_Clamp8(y + gBias);
+	s32 b = NativeSTR_Clamp8(y + bBias);
 
 	return (u16)((r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10));
 }
@@ -438,35 +519,34 @@ internal s32 NativeSTR_DecodeMacroblock(struct NativeSTRBitReader *br, s32 quant
 		}
 	}
 
-	for (y = 0; y < 16; y++)
+	for (y = 0; y < 16; y += 2)
 	{
-		for (x = 0; x < 16; x++)
+		for (x = 0; x < 16; x += 2)
 		{
-			s32 dstX = baseX + x;
-			s32 dstY = baseY + y;
-			s32 yBlockIndex;
-			s32 luma;
-			s32 cb;
-			s32 cr;
+			const s32 cr = blocks[0][(y >> 1) * 8 + (x >> 1)];
+			const s32 cb = blocks[1][(y >> 1) * 8 + (x >> 1)];
+			const s32 rBias = ((91881 * cr + 32768) >> 16) + 128;
+			const s32 gBias = -((22554 * cb + 46802 * cr + 32768) >> 16) + 128;
+			const s32 bBias = ((116130 * cb + 32768) >> 16) + 128;
+			const s32 yBlockIndex = (y < 8) ? ((x < 8) ? 2 : 3) : ((x < 8) ? 4 : 5);
 
-			if ((dstX >= s_str.width) || (dstY >= s_str.height))
+			for (s32 dy = 0; dy < 2; dy++)
 			{
-				continue;
+				const s32 dstY = baseY + y + dy;
+				if (dstY >= s_str.height)
+				{
+					continue;
+				}
+				for (s32 dx = 0; dx < 2; dx++)
+				{
+					const s32 dstX = baseX + x + dx;
+					if (dstX < s_str.width)
+					{
+						const s32 luma = blocks[yBlockIndex][((y + dy) & 7) * 8 + ((x + dx) & 7)];
+						s_str.rgb555[dstY * s_str.width + dstX] = NativeSTR_YCbCrBiasToRGB555(luma, rBias, gBias, bBias);
+					}
+				}
 			}
-
-			if (y < 8)
-			{
-				yBlockIndex = (x < 8) ? 2 : 3;
-			}
-			else
-			{
-				yBlockIndex = (x < 8) ? 4 : 5;
-			}
-
-			luma = blocks[yBlockIndex][(y & 7) * 8 + (x & 7)];
-			cr = blocks[0][(y >> 1) * 8 + (x >> 1)];
-			cb = blocks[1][(y >> 1) * 8 + (x >> 1)];
-			s_str.rgb555[dstY * s_str.width + dstX] = NativeSTR_YCbCrToRGB555(luma, cb, cr);
 		}
 	}
 
@@ -574,7 +654,7 @@ internal s32 NativeSTR_ReadCdRecord(u8 *sector)
 {
 	if (s_str.source == NATIVE_STR_SOURCE_HOST_FILE)
 	{
-		return fread(sector, 1, NATIVE_STR_CD_SECTOR_SIZE, s_str.file) == NATIVE_STR_CD_SECTOR_SIZE;
+		return fread(sector, 1, (size_t)s_str.cdRecordSize, s_str.file) == (size_t)s_str.cdRecordSize;
 	}
 
 	if (s_str.source == NATIVE_STR_SOURCE_DISC)
@@ -639,12 +719,12 @@ internal s32 NativeSTR_ReadNextCdRecord(u8 *sector, struct NativeSTRSectorHeader
 {
 	while (NativeSTR_ReadCdRecord(sector))
 	{
-		// NOTE(aalhendi): TEST.STR is the raw CD/XA scrapbook stream. Each
-		// 0x920-byte record has an XA subheader before the STR chunk header,
-		// unlike extracted track-preview STR files. The video chunk still only
-		// carries the logical 0x800-byte STR sector, so payload copies stay at
-		// 0x7e0 after that header.
-		if (NativeSTR_ParseSectorHeader(sector, NATIVE_STR_CD_SUBHEADER_SIZE, header) != 0)
+		if (s_str.cdXaSectorOffset >= 0)
+		{
+			NativeAudio_FeedInterleavedXASector(&sector[s_str.cdXaSectorOffset], NATIVE_STR_CD_SECTOR_SIZE);
+		}
+
+		if (NativeSTR_ParseSectorHeader(sector, s_str.cdVideoHeaderOffset, header) != 0)
 		{
 			return 1;
 		}
@@ -671,7 +751,7 @@ internal s32 NativeSTR_ReadNextFrameFromCdStream(void)
 	s_str.width = firstHeader.width;
 	s_str.height = firstHeader.height;
 	s_str.frameSize = (s32)firstHeader.frameSize;
-	NativeSTR_CopySectorPayload(sector, NATIVE_STR_CD_SUBHEADER_SIZE, &firstHeader, NATIVE_STR_CD_SECTOR_PAYLOAD, &copied);
+	NativeSTR_CopySectorPayload(sector, s_str.cdVideoHeaderOffset, &firstHeader, NATIVE_STR_CD_SECTOR_PAYLOAD, &copied);
 
 	for (expectedChunk = 1; expectedChunk < firstHeader.chunkCount; expectedChunk++)
 	{
@@ -686,7 +766,7 @@ internal s32 NativeSTR_ReadNextFrameFromCdStream(void)
 
 			if ((header.frameIndex == firstHeader.frameIndex) && (header.frameSize == firstHeader.frameSize) && (header.chunkIndex == expectedChunk))
 			{
-				NativeSTR_CopySectorPayload(sector, NATIVE_STR_CD_SUBHEADER_SIZE, &header, NATIVE_STR_CD_SECTOR_PAYLOAD, &copied);
+				NativeSTR_CopySectorPayload(sector, s_str.cdVideoHeaderOffset, &header, NATIVE_STR_CD_SECTOR_PAYLOAD, &copied);
 				break;
 			}
 
@@ -821,11 +901,19 @@ s32 NativeSTR_StartScrapbook(void)
 	if (s_str.file != NULL)
 	{
 		s_str.source = NATIVE_STR_SOURCE_HOST_FILE;
+		if (NativeSTR_ConfigureHostCdLayout() == 0)
+		{
+			NativeSTR_Stop();
+			return 0;
+		}
 	}
 	else if (NativeDiscImage_FindFile(NATIVE_STR_SCRAPBOOK_PATH, &discFile))
 	{
 		s_str.source = NATIVE_STR_SOURCE_DISC;
 		s_str.discFile = discFile;
+		s_str.cdRecordSize = NATIVE_STR_CD_SECTOR_SIZE;
+		s_str.cdVideoHeaderOffset = NATIVE_STR_CD_SUBHEADER_SIZE;
+		s_str.cdXaSectorOffset = 0;
 	}
 	else
 	{
@@ -860,6 +948,9 @@ void NativeSTR_Stop(void)
 	s_str.fileBaseOffset = 0;
 	s_str.fileBaseSector = 0;
 	s_str.currentSector = 0;
+	s_str.cdRecordSize = 0;
+	s_str.cdVideoHeaderOffset = 0;
+	s_str.cdXaSectorOffset = -1;
 	s_str.frameIndex = 0;
 	s_str.frameLimit = 0;
 	s_str.width = 0;
@@ -876,22 +967,17 @@ void NativeSTR_Shutdown(void)
 
 internal s32 NativeSTR_ReadDecodeNextFrame(void)
 {
-	s32 readOk;
-	s32 decodeOk;
-
 	if ((s_str.active == 0) || (s_str.source == NATIVE_STR_SOURCE_NONE))
 	{
 		return 0;
 	}
 
-	readOk = NativeSTR_ReadNextFrame();
-	if (readOk == 0)
+	if (NativeSTR_ReadNextFrame() == 0)
 	{
 		return 0;
 	}
 
-	decodeOk = NativeSTR_DecodeFrame();
-	if (decodeOk == 0)
+	if (NativeSTR_DecodeFrame() == 0)
 	{
 		return 0;
 	}
@@ -939,9 +1025,19 @@ s32 NativeSTR_UploadNextFrameToTexture(void)
 		const u8 g5 = (u8)((pixel >> 5) & 31);
 		const u8 b5 = (u8)((pixel >> 10) & 31);
 		u8 *dst = &s_str.rgba8888[i * 4];
-		dst[0] = (u8)((r5 << 3) | (r5 >> 2));
-		dst[1] = (u8)((g5 << 3) | (g5 >> 2));
-		dst[2] = (u8)((b5 << 3) | (b5 >> 2));
+		if (s_str.format == NATIVE_STR_FORMAT_CD_STREAM)
+		{
+			// Match the present-VRAM LUT exactly for Scrapbook playback.
+			dst[0] = (u8)(r5 << 3);
+			dst[1] = (u8)(g5 << 3);
+			dst[2] = (u8)(b5 << 3);
+		}
+		else
+		{
+			dst[0] = (u8)((r5 << 3) | (r5 >> 2));
+			dst[1] = (u8)((g5 << 3) | (g5 >> 2));
+			dst[2] = (u8)((b5 << 3) | (b5 >> 2));
+		}
 		dst[3] = 255;
 	}
 
