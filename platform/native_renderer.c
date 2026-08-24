@@ -863,18 +863,22 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 }
 
 #ifdef __vita__
-#define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                                                 \
+#define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                                                \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
-	"		float texelX = floor(tc.x + 0.0001);\n"                                                             \
+	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
+	"		float texelX = texel.x;\n"                                                                            \
 	"		float lanePhase = fract(texelX * 0.25);\n"                                                        \
-	"		vec2 packedRg = VRAM((vec2(tc.x * 0.25, tc.y) + v_page_clut.xy) * c_VRAMTexel);\n"             \
-	"		vec2 nibblePair = packedRg * (255.0 / 16.0);\n"                                               \
-	"		vec2 lowNibble = fract(nibblePair) * 16.0;\n"                                                    \
-	"		vec2 highNibble = floor(nibblePair + vec2(0.001));\n"                                          \
+	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                                           \
+	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.25), texel.y);\n"                         \
+	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
+	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
+	"		vec2 highNibble = floor(packedByte * (1.0 / 16.0));\n"                                       \
+	"		vec2 lowNibble = packedByte - highNibble * 16.0;\n"                                           \
 	"		float oddTexel = step(0.25, fract(lanePhase * 2.0));\n"                                         \
 	"		vec2 nibbleCandidates = mix(lowNibble, highNibble, oddTexel);\n"                             \
 	"		float paletteIndex = mix(nibbleCandidates.x, nibbleCandidates.y, step(0.5, lanePhase));\n"    \
-	"		return VRAM(v_page_clut.zw + vec2(paletteIndex * c_VRAMTexel.x, 0.0));\n"                       \
+	"		vec2 clutPixel = floor(v_page_clut.zw / c_VRAMTexel + vec2(0.5));\n"                           \
+	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
 	"	}\n"
 #else
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                              \
@@ -894,13 +898,18 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #endif
 
 #ifdef __vita__
-#define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                                                 \
+#define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                                                \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
-	"		float texelX = floor(tc.x + 0.0001);\n"                                                             \
-	"		vec2 packedRg = VRAM((vec2(tc.x * 0.5, tc.y) + v_page_clut.xy) * c_VRAMTexel);\n"              \
+	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
+	"		float texelX = texel.x;\n"                                                                            \
+	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                                           \
+	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.5), texel.y);\n"                          \
+	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
 	"		float highByte = step(0.25, fract(texelX * 0.5));\n"                                                \
-	"		float paletteIndex = mix(packedRg.x, packedRg.y, highByte) * 255.0;\n"                            \
-	"		return VRAM(v_page_clut.zw + vec2(paletteIndex * c_VRAMTexel.x, 0.0));\n"                       \
+	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
+	"		float paletteIndex = mix(packedByte.x, packedByte.y, highByte);\n"                                  \
+	"		vec2 clutPixel = floor(v_page_clut.zw / c_VRAMTexel + vec2(0.5));\n"                           \
+	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
 	"	}\n"
 #else
 #define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                              \
@@ -916,11 +925,20 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"	}\n"
 #endif
 
+#ifdef __vita__
+#define GPU_SAMPLE_TEXTURE_16BIT_FUNC                                                       \
+	"	vec2 samplePSX(vec2 tc) {\n"                                                          \
+	"		vec2 texel = floor(tc + vec2(0.5));\n"                                        \
+	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                      \
+	"		return VRAM((pagePixel + texel + vec2(0.5)) * c_VRAMTexel);\n"            \
+	"	}\n"
+#else
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                    \
 	"	vec2 samplePSX(vec2 tc) {\n"                       \
 	"		vec2 uv = (tc + v_page_clut.xy) * c_VRAMTexel;\n" \
 	"		return VRAM(uv);\n"                               \
 	"	}\n"
+#endif
 
 #define GPU_FETCH_VRAM_FUNC                                        \
 	"	const vec2 c_VRAMTexel = vec2(1.0 / 1024.0, 1.0 / 512.0);\n" \
