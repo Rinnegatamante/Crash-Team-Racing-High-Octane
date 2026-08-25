@@ -732,6 +732,60 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 			}
 		}
 
+#ifdef CTR_NATIVE
+		// HACK: Crash Cove's ship can place the camera and driver in different PVS
+		// records even though the camera record contains the driver's quad. That
+		// record still omits parts of the ship, so merge these two local PVS sets
+		// instead of disabling visibility for the whole level.
+		if (gGT->levelID == CRASH_COVE)
+		{
+			int hadDriverPVS = (camDC->flags & 0x2000) != 0;
+			int needsDriverPVS =
+			    (driverPVS != NULL) && (driverPVS->visLeafSrc != NULL) && (driverPVS->visFaceSrc != NULL) && (driverPVS->visInstSrc != NULL) &&
+			    (camDC->visLeafSrc != NULL) && (camDC->visFaceSrc != NULL) &&
+			    ((camDC->visLeafSrc != driverPVS->visLeafSrc) || (camDC->visFaceSrc != driverPVS->visFaceSrc));
+
+			if (needsDriverPVS)
+			{
+				camDC->flags |= 0x2000;
+			}
+			else
+			{
+				camDC->flags &= ~0x2000;
+
+				if (hadDriverPVS)
+				{
+					void *leafSrc = camDC->visLeafSrc;
+					void *faceSrc = camDC->visFaceSrc;
+
+					if ((leafSrc == NULL) && (driverPVS != NULL))
+					{
+						leafSrc = driverPVS->visLeafSrc;
+					}
+					if ((faceSrc == NULL) && (driverPVS != NULL))
+					{
+						faceSrc = driverPVS->visFaceSrc;
+					}
+
+					if (leafSrc != NULL)
+					{
+						MainFrame_ReplacePackedVisList(visMem->visLeafList[playerIndex], leafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+					}
+					if (faceSrc != NULL)
+					{
+						MainFrame_ReplacePackedVisList(visMem->visFaceList[playerIndex], faceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+					}
+				}
+			}
+
+			if (needsDriverPVS && ((camDC->flags & 0x4000) == 0))
+			{
+				MainFrame_VisMemAddDriverPVS(gGT, playerIndex);
+				camDC->flags |= 0x4000;
+			}
+		}
+#endif
+
 		if ((camDC->flags & 0x5000) == 0x1000)
 		{
 			MainFrame_VisMemAddDriverPVS(gGT, playerIndex);
