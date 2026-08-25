@@ -14,6 +14,7 @@ It focuses on new features, enhancements and optimization.
 - Customizable Cups (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/CustomCups)
 - Splitscreen support via MiniVitaTV or natively on PSTV.
 - Multilanguage support.
+- Super and Ultra Difficulty modes for Arcade mode.
 
 ## How to Install
 

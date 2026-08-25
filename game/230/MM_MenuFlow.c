@@ -19,6 +19,45 @@ static const s16 s_nativeLanguageFileIndex[MM_NATIVE_LANGUAGE_COUNT] =
 	7, // Dutch
 };
 
+
+enum MMNativeExtraDifficultyConstants
+{
+	MM_NATIVE_DIFFICULTY_EASY = 0,
+	MM_NATIVE_DIFFICULTY_MEDIUM,
+	MM_NATIVE_DIFFICULTY_HARD,
+	MM_NATIVE_DIFFICULTY_SUPER_HARD,
+	MM_NATIVE_DIFFICULTY_ULTRA_HARD,
+	MM_NATIVE_DIFFICULTY_COUNT,
+};
+
+static const char *s_nativeExtraDifficultyText[MM_NATIVE_LANGUAGE_COUNT][2] =
+{
+	{"SUPER HARD", "ULTRA HARD"},
+	{"SUPER DIFFICILE", "ULTRA DIFFICILE"},
+	{"SUPER SCHWER", "ULTRA SCHWER"},
+	{"SUPER DIFFICILE", "ULTRA DIFFICILE"},
+	{"SUPER DIFICIL", "ULTRA DIFICIL"},
+	{"SUPER MOEILIJK", "ULTRA MOEILIJK"},
+};
+
+static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1] =
+{
+	{LNG_EASY, 0, 1, 0, 0},
+	{LNG_MEDIUM, 0, 2, 1, 1},
+	{LNG_HARD, 1, 3, 2, 2},
+	{LNG_NA_241, 2, 4, 3, 3},
+	{LNG_NA_242, 3, 4, 4, 4},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct RectMenu s_nativeExtraDifficultyMenu =
+{
+	.stringIndexTitle = LNG_DIFFICULTY,
+	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeExtraDifficultyRows,
+	.funcPtr = MM_MenuProc_Difficulty,
+};
+
 static struct MenuRow s_nativeLanguageRows[MM_NATIVE_LANGUAGE_COUNT + 1] =
 {
 	{LNG_ENGLISH, 0, 1, 0, 0},
@@ -85,6 +124,35 @@ static s16 s_nativeLanguageRow;
 extern int cfg_language;
 extern void save_config();
 
+static void MM_NativeExtraDifficultyApplyText(void)
+{
+	s16 languageRow = 0;
+
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		languageRow = (s16)(cfg_language - 2);
+	}
+
+	if ((sdata->lngStrings != NULL) && (sdata->numLngStrings > LNG_NA_242))
+	{
+		sdata->lngStrings[LNG_NA_241] = (char *)s_nativeExtraDifficultyText[languageRow][0];
+		sdata->lngStrings[LNG_NA_242] = (char *)s_nativeExtraDifficultyText[languageRow][1];
+	}
+}
+
+static void MM_NativeExtraDifficultyPrepare(void)
+{
+	MM_NativeExtraDifficultyApplyText();
+
+	s_nativeExtraDifficultyMenu = (struct RectMenu)
+	{
+		.stringIndexTitle = LNG_DIFFICULTY,
+		.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+		.rows = s_nativeExtraDifficultyRows,
+		.funcPtr = MM_MenuProc_Difficulty,
+	};
+}
+
 static void MM_NativeLanguageLoad(s16 row)
 {
 	if ((u16)row >= MM_NATIVE_LANGUAGE_COUNT)
@@ -94,6 +162,8 @@ static void MM_NativeLanguageLoad(s16 row)
 
 	cfg_language = s_nativeLanguageFileIndex[row];
 	LOAD_LangFile((int)sdata->ptrBigfile1, cfg_language);
+	MM_NativeExtraDifficultyApplyText();
+
 	s_nativeLanguageRow = row;
 	s_nativeLanguageChosen = 1;
 	save_config();
@@ -489,7 +559,12 @@ void MM_MenuProc_1p2p(struct RectMenu *menu)
 			gGT->numPlyrNextGame = menu->rowSelected + 1;
 
 			// go to difficulty box
+#if defined(CTR_NATIVE)
+			MM_NativeExtraDifficultyPrepare();
+			menu->ptrNextBox_InHierarchy = &s_nativeExtraDifficultyMenu;
+#else
 			menu->ptrNextBox_InHierarchy = &D230.menuDifficulty;
+#endif
 
 			menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
 			return;
@@ -588,6 +663,17 @@ void MM_ToggleRows_Difficulty(void)
 		// save new value
 		D230.rowsDifficulty[difficultyIndex].stringIndex = lngIndex;
 	}
+
+#if defined(CTR_NATIVE)
+	for (s32 difficultyIndex = 0; difficultyIndex < MM_DIFFICULTY_COUNT; difficultyIndex++)
+	{
+		s_nativeExtraDifficultyRows[difficultyIndex].stringIndex = D230.rowsDifficulty[difficultyIndex].stringIndex;
+	}
+
+	u16 hardLockFlag = D230.rowsDifficulty[MM_NATIVE_DIFFICULTY_HARD].stringIndex & MENU_ROW_LOCKED;
+	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_SUPER_HARD].stringIndex = LNG_NA_241 | hardLockFlag;
+	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_ULTRA_HARD].stringIndex = LNG_NA_242 | hardLockFlag;
+#endif
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800ad7a4-0x800ad828.
@@ -604,10 +690,29 @@ void MM_MenuProc_Difficulty(struct RectMenu *menu)
 	else
 	{
 		// if you are on a valid row
-		if ((row >= 0) && (row < MM_DIFFICULTY_COUNT))
+		if ((row >= 0) &&
+#if defined(CTR_NATIVE)
+		    (row < MM_NATIVE_DIFFICULTY_COUNT)
+#else
+		    (row < MM_DIFFICULTY_COUNT)
+#endif
+		)
 		{
-			// set difficulty to value, from array of fixed difficulty values
-			sdata->gGT->arcadeDifficulty = D230.cupDifficulty.speed[row];
+#if defined(CTR_NATIVE)
+			if (row == MM_NATIVE_DIFFICULTY_SUPER_HARD)
+			{
+				sdata->gGT->arcadeDifficulty = 0x140;
+			}
+			else if (row == MM_NATIVE_DIFFICULTY_ULTRA_HARD)
+			{
+				sdata->gGT->arcadeDifficulty = 0x280;
+			}
+			else
+#endif
+			{
+				// set difficulty to value, from array of fixed difficulty values
+				sdata->gGT->arcadeDifficulty = D230.cupDifficulty.speed[row];
+			}
 
 			D230.titleMenuState = TITLE_MENU_STATE_EXITING;
 			D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
