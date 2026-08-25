@@ -445,6 +445,97 @@ void BOTS_Adv_AdjustDifficulty(void)
 	}
 }
 
+#if defined(CTR_NATIVE)
+enum
+{
+	BLUE_FIRE_SPEED_CAP = 0x4800,
+};
+
+static u32 s_blueFireRedFlamesClut[8] = {
+	0x80DA809A, 0x805A80BA, 0x811A803A, 0x819A81DA,
+	0x813A817A, 0x829A821A, 0x835A839A, 0x82DA831A,
+};
+
+static u32 s_blueFireBlueFlamesClut[8] = {
+	0xFF25FF65, 0xFFA5FF45, 0xFEE5FFC5, 0xFE65FE25,
+	0xFEC5FE85, 0xFD65FDE5, 0xFCA5FC65, 0xFD25FCE5,
+};
+
+static u32 s_blueFireRedPlumesClut[8] = {
+	0x000083FF, 0x821B833E, 0x829D81B8, 0x80F6800D,
+	0x819A8054, 0x80D98011, 0x80078019, 0x84008015,
+};
+
+static u32 s_blueFireBluePlumesClut[8] = {
+	0x7FFFF260, 0xFC20F980, 0xF400FC20, 0xF980AC00,
+	0xF260F980, 0xB400FCA0, 0x8800FC20, 0x8800FC20,
+};
+
+static RECT16 s_blueFireFlamesRect = {
+	.x = 176,
+	.y = 256,
+	.w = 16,
+	.h = 1,
+};
+
+static RECT16 s_blueFirePlumesRect = {
+	.x = 464,
+	.y = 257,
+	.w = 16,
+	.h = 1,
+};
+
+static u8 s_blueFireActive = 0;
+
+static void BOTS_BlueFireSetState(u8 active)
+{
+	if (active == s_blueFireActive)
+	{
+		return;
+	}
+
+	if (active != 0)
+	{
+		LoadImage(&s_blueFireFlamesRect, s_blueFireBlueFlamesClut);
+		LoadImage(&s_blueFirePlumesRect, s_blueFireBluePlumesClut);
+		s_blueFireActive = 1;
+	}
+	else
+	{
+		LoadImage(&s_blueFireFlamesRect, s_blueFireRedFlamesClut);
+		LoadImage(&s_blueFirePlumesRect, s_blueFireRedPlumesClut);
+		s_blueFireActive = 0;
+	}
+}
+
+static void BOTS_UpdateBlueFire(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	if ((gGT->gameMode1 & (START_OF_RACE | MAIN_MENU | END_OF_RACE | GAME_CUTSCENE | LOADING)) != 0)
+	{
+		if ((gGT->gameMode1 & LOADING) != 0)
+		{
+			s_blueFireActive = 0;
+		}
+		else
+		{
+			BOTS_BlueFireSetState(0);
+		}
+		return;
+	}
+
+	struct Driver *driver = gGT->drivers[0];
+	if (driver == NULL)
+	{
+		BOTS_BlueFireSetState(0);
+		return;
+	}
+
+	BOTS_BlueFireSetState((driver->reserves != 0) && (driver->fireSpeedCap == BLUE_FIRE_SPEED_CAP));
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80013374-0x80013444.
 void BOTS_UpdateGlobals(void)
 {
@@ -489,6 +580,10 @@ void BOTS_UpdateGlobals(void)
 	}
 
 	sdata->aiCollisionDelayFrameCount++;
+
+#if defined(CTR_NATIVE)
+	BOTS_UpdateBlueFire();
+#endif
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80013444-0x800135d8
