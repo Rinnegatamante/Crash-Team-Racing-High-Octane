@@ -1967,16 +1967,24 @@ void NativeAdhoc_ProcessPadSnapshots(struct PlatformInputPadSnapshot *pads, int 
 		}
 		NativeAdhoc_SendFrameInputs();
 
-		if (NativeAdhoc_GetInput(0, s_nativeAdhoc.simulationFrame, &p0) && NativeAdhoc_GetInput(1, s_nativeAdhoc.simulationFrame, &p1))
+		int haveP0 = NativeAdhoc_GetInput(0, s_nativeAdhoc.simulationFrame, &p0);
+		int haveP1 = NativeAdhoc_GetInput(1, s_nativeAdhoc.simulationFrame, &p1);
+		if (!haveP0)
 		{
-			pads[0] = p0;
-			pads[1] = p1;
-			s_nativeAdhoc.installedFrame = s_nativeAdhoc.simulationFrame;
+			NativeAdhoc_MakeNeutralPad(&p0);
 		}
-		else
+		if (!haveP1)
 		{
-			s_nativeAdhoc.installedFrame = NATIVE_ADHOC_INVALID_FRAME;
+			NativeAdhoc_MakeNeutralPad(&p1);
 		}
+
+		// Once lockstep is active, never expose the physical Vita controller
+		// directly on canonical slot 0. On a joining client the physical pad
+		// belongs to P2; leaking it through pads[0] makes it control P1 while
+		// waiting for the peer input and contaminates the next simulation tick.
+		pads[0] = p0;
+		pads[1] = p1;
+		s_nativeAdhoc.installedFrame = (haveP0 && haveP1) ? s_nativeAdhoc.simulationFrame : NATIVE_ADHOC_INVALID_FRAME;
 		return;
 	}
 
