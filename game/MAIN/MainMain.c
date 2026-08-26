@@ -75,6 +75,13 @@ u32 main(void)
 	struct GamepadSystem *gGS;
 	gGS = sdata->gGamepads;
 
+#ifdef CTR_NATIVE
+	int nativeAdhocRunSimulation = 1;
+#endif
+#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
+	int nativeReplayFrameActive = 0;
+#endif
+
 	// NOTE(aalhendi): Retail main calls __main before the state loop. Native has
 	// no linked __main body, so keep this as a CTR_NATIVE-only divergence.
 #ifndef CTR_NATIVE
@@ -147,7 +154,7 @@ u32 main(void)
 			// Arcade-Style track starts with intro cutscene
 			uVar12 = 9;
 
-			if (
+				if (
 			    // If Level ID is less than 18, it's one of the race tracks
 			    (gGT->levelID < NITRO_COURT) || (
 			                                        // Battle-Style track starts with traffic lights
@@ -155,10 +162,13 @@ u32 main(void)
 			                                        // Level ID >= 18 and < 23
 			                                        // Battle tracks
 			                                        gGT->levelID - NITRO_COURT < 7))
-			{
-				Audio_SetState_Safe(uVar12);
-			}
-			sdata->mainGameState = 3;
+				{
+					Audio_SetState_Safe(uVar12);
+				}
+#ifdef CTR_NATIVE
+				NativeAdhoc_NotifyLevelReady(gGT);
+#endif
+				sdata->mainGameState = 3;
 			gGT->clockEffectEnabled &= 0xfffe;
 			break;
 
@@ -298,9 +308,26 @@ u32 main(void)
 				}
 			}
 
-			// =========== Main Game Loop ======================
+				// =========== Main Game Loop ======================
 
-			if ((
+#ifdef CTR_NATIVE
+				nativeAdhocRunSimulation = NativeAdhoc_BeginSimulationFrame(gGT);
+#endif
+#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
+				nativeReplayFrameActive = 0;
+				{
+					struct NativePerfFrameInfo perfFrameInfo = MainPerf_FrameInfo(gGT);
+
+					NativePerf_BeginFrame(&perfFrameInfo);
+				}
+#endif
+
+#ifdef CTR_NATIVE
+				if (nativeAdhocRunSimulation)
+				{
+#endif
+
+				if ((
 			        // Check value of traffic lights
 			        (-960 < gGT->trafficLightsTimer) &&
 			        // if not drawing intro race cutscene and if not paused
@@ -329,22 +356,26 @@ u32 main(void)
 				{
 					return 0;
 				}
-				NativeSaveState_BeginFrame();
-				gGT = sdata->gGT;
-				gGS = sdata->gGamepads;
-			}
-			{
-				struct NativePerfFrameInfo perfFrameInfo = MainPerf_FrameInfo(gGT);
-
-				NativePerf_BeginFrame(&perfFrameInfo);
-			}
+					NativeSaveState_BeginFrame();
+					gGT = sdata->gGT;
+					gGS = sdata->gGamepads;
+					nativeReplayFrameActive = 1;
+				}
 #endif
-			GAMEPAD_ProcessAnyoneVars(gGS);
+					GAMEPAD_ProcessAnyoneVars(gGS);
 
-			// Start new frame (ClearOTagR)
-			MainFrame_ResetDB(gGT);
+#ifdef CTR_NATIVE
+				}
+#endif
 
-			if (
+					// Start new frame (ClearOTagR)
+				MainFrame_ResetDB(gGT);
+
+#ifdef CTR_NATIVE
+				if (nativeAdhocRunSimulation)
+				{
+#endif
+				if (
 			    // If you're in Demo Mode
 			    (gGT->boolDemoMode != 0) &&
 
@@ -408,9 +439,14 @@ u32 main(void)
 #endif
 				MainFrame_GameLogic(gGT, gGS);
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
-				NativePerf_EndScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
+					NativePerf_EndScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
 #endif
-			}
+				}
+
+#ifdef CTR_NATIVE
+					NativeAdhoc_EndSimulationFrame(gGT);
+				}
+#endif
 
 			// If you are in demo mode
 			if (gGT->boolDemoMode != '\0')
@@ -444,8 +480,9 @@ u32 main(void)
 				AH_MaskHint_Update();
 			}
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
-			{
-				struct NativeReplaySchedulerFrameInfo replayFrameInfo = MainReplayScheduler_FrameInfo(gGT);
+				if (nativeReplayFrameActive)
+				{
+					struct NativeReplaySchedulerFrameInfo replayFrameInfo = MainReplayScheduler_FrameInfo(gGT);
 
 				if (NativeReplayScheduler_EndFrame(&replayFrameInfo) != 0)
 				{

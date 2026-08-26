@@ -1,6 +1,7 @@
 #include <platform/native_input.h>
 
 #include <macros.h>
+#include "platform/native_adhoc.h"
 #include "psx/libpad.h"
 
 #include <SDL3/SDL.h>
@@ -867,11 +868,14 @@ void Platform_InputUpdate(void)
 {
 	u16 keyboardButtons;
 	s32 slot;
+	struct PlatformInputPadSnapshot adhocPads[NATIVE_INPUT_MAX_CONTROLLERS];
 
 	if (s_inputInitialized == 0)
 	{
 		return;
 	}
+
+	NativeAdhoc_Update();
 
 	if (s_installedSnapshotsActive != 0)
 	{
@@ -900,6 +904,13 @@ void Platform_InputUpdate(void)
 #ifndef __vita__
 		NativeInput_ApplyKeyboard(slot, keyboardButtons);
 #endif
+		adhocPads[slot] = s_controllers[slot].snapshot;
+	}
+
+	NativeAdhoc_ProcessPadSnapshots(adhocPads, NATIVE_INPUT_MAX_CONTROLLERS);
+	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
+	{
+		s_controllers[slot].snapshot = adhocPads[slot];
 	}
 	NativeInput_WritePadBus();
 }

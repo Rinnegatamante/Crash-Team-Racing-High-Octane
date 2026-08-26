@@ -1,6 +1,8 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+
 static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 {
 	static const char *const primLabels[2] = {"db0 prim", "db1 prim"};
@@ -203,13 +205,19 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 		{
 			gGT->elapsedTimeMS = 0x20;
 		}
-#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
-		// NOTE(aalhendi): Replay playback must not let host RCNT timing decide
-		// cutscene/gameplay advancement. Use the recorded PS1-shaped frame delta
-		// before msInThisLEV and elapsedEventTime consume it.
-		NativeReplayScheduler_ConsumeFrameElapsedTimeMS(&gGT->elapsedTimeMS);
-#endif
-		gGT->msInThisLEV += gGT->elapsedTimeMS;
+	#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
+			// NOTE(aalhendi): Replay playback must not let host RCNT timing decide
+			// cutscene/gameplay advancement. Use the recorded PS1-shaped frame delta
+			// before msInThisLEV and elapsedEventTime consume it.
+			NativeReplayScheduler_ConsumeFrameElapsedTimeMS(&gGT->elapsedTimeMS);
+	#endif
+	#if defined(__vita__)
+			if (NativeAdhoc_IsSimulationActive())
+			{
+				gGT->elapsedTimeMS = 0x20;
+			}
+	#endif
+			gGT->msInThisLEV += gGT->elapsedTimeMS;
 		if (gGT->trafficLightsTimer < 1)
 		{
 			if ((gGT->gameMode1 & DEBUG_MENU) == 0)
@@ -560,6 +568,13 @@ b32 MainFrame_HaveAllPads(s16 numPlyrNextGame)
 	if (sdata->Loading.stage == LOAD_IDLE)
 	{
 		struct GamepadBuffer *gb = &sdata->gGamepads->gamepad[0];
+#if defined(__vita__)
+		int adhocRemotePlayer = -1;
+			if (NativeAdhoc_IsActive() && (numPlyrNextGame == 2))
+		{
+			adhocRemotePlayer = NativeAdhoc_GetRemotePlayerIndex();
+		}
+#endif
 
 		if (numPlyrNextGame == 0)
 		{
@@ -568,6 +583,14 @@ b32 MainFrame_HaveAllPads(s16 numPlyrNextGame)
 
 		for (int i = 0; i < numPlyrNextGame; i++)
 		{
+		#if defined(__vita__)
+			if (i == adhocRemotePlayer)
+			{
+				gb++;
+				continue;
+			}
+		#endif
+
 			struct ControllerPacket *packet = gb->ptrControllerPacket;
 
 			if (packet == NULL)
@@ -655,6 +678,8 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 	struct VisMem *visMem;
 	struct mesh_info *mesh;
 	int playerIndex;
+	int playerStart;
+	int playerEnd;
 
 	visMem = gGT->visMem1;
 	if (visMem == NULL)
@@ -673,8 +698,18 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 	}
 
 	mesh = level->ptr_mesh_info;
+	playerStart = 0;
+	playerEnd = gGT->numPlyrCurrGame;
 
-	for (playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		playerStart = NativeAdhoc_GetLocalPlayerIndex();
+		playerEnd = playerStart + 1;
+	}
+#endif
+
+	for (playerIndex = playerStart; playerIndex < playerEnd; playerIndex++)
 	{
 		struct CameraDC *camDC = &gGT->cameraDC[playerIndex];
 		struct Driver *driver = gGT->drivers[playerIndex];

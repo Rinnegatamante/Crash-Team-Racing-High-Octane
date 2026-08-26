@@ -1,6 +1,7 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
 extern int gNativeMirrorModeRenderActive;
 extern int gNativeMirrorModeDoubleFlipActive;
 #endif
@@ -2065,6 +2066,15 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
 	pb = idpp->pushBuffer;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() &&
+	    (playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+	    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+	{
+		pb = NativeAdhoc_GetRenderPushBuffer();
+	}
+#endif
+
 	if ((queuedFlags & lodMask) == 0)
 	{
 		// NOTE(aalhendi): Retail 0x80070950-0x80070964 exits through the common
@@ -2130,7 +2140,19 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	}
 #endif
 
-	RenderBucket_AdvanceInstanceAnimWord(inst, gameMode1, playerIndex, lastFrameAdvance, &queuedFlags);
+	{
+		int animationPlayerIndex = playerIndex;
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive())
+		{
+			// Retail advances shared Instance animation only during the P1 draw.
+			// Single-view adhoc still needs exactly one advance on both consoles,
+			// even when the client is rendering canonical player 2.
+			animationPlayerIndex = 0;
+		}
+#endif
+		RenderBucket_AdvanceInstanceAnimWord(inst, gameMode1, animationPlayerIndex, lastFrameAdvance, &queuedFlags);
+	}
 	idpp->ptrCurrFrame = frame;
 	idpp->ptrNextFrame = nextFrame;
 	RenderBucket_StoreMatrixWords(&idpp->m3x3, matrixState.m0, matrixState.m1, matrixState.m2, matrixState.m3, matrixState.m4);
@@ -2176,6 +2198,22 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 		queueState.otEndMinusOne = otState->end - 1;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int player = NativeAdhoc_GetLocalPlayerIndex();
+		struct Instance **visInstSrc = cDC[player].visInstSrc;
+
+		if (visInstSrc != 0)
+		{
+			for (; *visInstSrc != 0; visInstSrc++)
+			{
+				entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
+			}
+		}
+	}
+	else
+#endif
 	for (int player = count - 1; player >= 0; player--)
 	{
 		struct Instance **visInstSrc = cDC[player].visInstSrc;
@@ -2220,6 +2258,17 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 		queueState.otEndMinusOne = otState->end - 1;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int player = NativeAdhoc_GetLocalPlayerIndex();
+		for (struct Item *curr = item; curr != 0; curr = curr->next)
+		{
+			entry = RenderBucket_QueueDraw((struct Instance *)curr, entry, player, lodMask, gameMode1, &queueState);
+		}
+	}
+	else
+#endif
 	for (int player = count - 1; player >= 0; player--)
 	{
 		for (struct Item *curr = item; curr != 0; curr = curr->next)
@@ -5224,6 +5273,17 @@ static int RenderBucket_PrepareDrawContext(struct RenderBucketDrawContext *ctx, 
 
 	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
 	pb = idpp->pushBuffer;
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int playerIndex = (int)(((u8 *)instPlayerBase - (u8 *)inst) / sizeof(struct InstDrawPerPlayer));
+		if ((playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+		    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+		{
+			pb = NativeAdhoc_GetRenderPushBuffer();
+		}
+	}
+#endif
 	if (pb == 0)
 	{
 		return 0;

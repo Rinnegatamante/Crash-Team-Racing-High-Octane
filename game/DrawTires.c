@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 static const u32 sDrawTiresSolidJumpTable[8] = {
     0x8006ed7c, 0x8006ed98, 0x8006edb4, 0x8006edcc, 0x8006ede4, 0x8006ee00, 0x8006ee1c, 0x8006ee3c,
 };
@@ -566,6 +570,15 @@ static int DrawTiresSolid_StagePlayer(struct DrawTiresScratch *scratch, struct D
 	struct PushBuffer *pb = idpp->pushBuffer;
 	int flags = idpp->instFlags;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() &&
+	    (playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+	    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+	{
+		pb = NativeAdhoc_GetRenderPushBuffer();
+	}
+#endif
+
 	scratch->playerCounter = scratch->numPlyr - playerIndex;
 	scratch->vertSplit = inst->vertSplit;
 	scratch->depthOffsetStartBytes = idpp->depthOffset[0] << 2;
@@ -626,6 +639,16 @@ void DrawTires_Solid(struct Thread *thread, struct PrimMem *primMem, u8 numPlyr)
 
 	int primCount = primMem->primitiveCount;
 	DrawTiresSolid_InitScratch(&scratch, numPlyr);
+	int playerStart = 0;
+	int playerEnd = (int)(u8)numPlyr;
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		playerStart = NativeAdhoc_GetLocalPlayerIndex();
+		playerEnd = playerStart + 1;
+	}
+#endif
 
 	for (struct Thread *currThread = thread; currThread != 0; currThread = currThread->siblingThread)
 	{
@@ -637,7 +660,7 @@ void DrawTires_Solid(struct Thread *thread, struct PrimMem *primMem, u8 numPlyr)
 			continue;
 		}
 
-		for (int playerIndex = 0; playerIndex < (int)(u8)numPlyr; playerIndex++)
+		for (int playerIndex = playerStart; playerIndex < playerEnd; playerIndex++)
 		{
 			if (DrawTiresSolid_StagePlayer(&scratch, driver, inst, playerIndex, primMem, &primCount) == 0)
 			{
@@ -1128,6 +1151,15 @@ static int DrawTiresReflection_StagePlayer(struct DrawTiresScratch *scratch, str
 	struct PushBuffer *pb = idpp->pushBuffer;
 	int flags = idpp->instFlags;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() &&
+	    (playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+	    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+	{
+		pb = NativeAdhoc_GetRenderPushBuffer();
+	}
+#endif
+
 	scratch->playerCounter = scratch->numPlyr - playerIndex;
 	scratch->vertSplit = inst->vertSplit;
 	scratch->depthOffsetStartBytes = idpp->depthOffset[0] << 2;
@@ -1183,6 +1215,16 @@ void DrawTires_Reflection(struct Thread *thread, struct PrimMem *primMem, u8 num
 
 	int primCount = primMem->primitiveCount;
 	DrawTiresReflection_InitScratch(&scratch, numPlyr);
+	int playerStart = 0;
+	int playerEnd = (int)(u8)numPlyr;
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		playerStart = NativeAdhoc_GetLocalPlayerIndex();
+		playerEnd = playerStart + 1;
+	}
+#endif
 
 	for (struct Thread *currThread = thread; currThread != 0; currThread = currThread->siblingThread)
 	{
@@ -1194,7 +1236,7 @@ void DrawTires_Reflection(struct Thread *thread, struct PrimMem *primMem, u8 num
 			continue;
 		}
 
-		for (int playerIndex = 0; playerIndex < (int)(u8)numPlyr; playerIndex++)
+		for (int playerIndex = playerStart; playerIndex < playerEnd; playerIndex++)
 		{
 			if (DrawTiresReflection_StagePlayer(&scratch, driver, inst, playerIndex, primMem, &primCount) == 0)
 			{

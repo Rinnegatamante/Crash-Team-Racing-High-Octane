@@ -3,6 +3,7 @@
 #include <macros.h>
 
 #include "platform/native_audio.h"
+#include "platform/native_adhoc.h"
 #include "platform/native_cd.h"
 #include "platform/native_glad.h"
 #include "platform/native_gpu.h"
@@ -286,6 +287,7 @@ void Platform_Shutdown(void)
 	NativePerf_Shutdown();
 	NativeReplayScheduler_Shutdown();
 #endif
+	NativeAdhoc_Shutdown();
 	Platform_InputShutdown();
 	NativeCD_Shutdown();
 	NativeAudio_Shutdown();
