@@ -1,5 +1,10 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern int gNativeMirrorModeRenderActive;
+extern int gNativeMirrorModeDoubleFlipActive;
+#endif
+
 
 struct RenderBucketEntry
 {
@@ -1092,9 +1097,16 @@ static int RenderBucket_FrameZ(struct ModelFrame *frame, struct ModelFrame *next
 	return RenderBucket_MipsAdd(frame->pos.z, nextFrame->pos.z) >> 1;
 }
 
-static void RenderBucket_ProjectFrameBounds(struct ModelFrame *frame, struct ModelFrame *nextFrame, struct PushBuffer *pb, const MATRIX *projectionMvp,
-                                            struct RenderBucketBounds *bounds, int *geomScreenHalf)
+static void RenderBucket_ProjectFrameBounds(struct Instance *inst, struct ModelFrame *frame, struct ModelFrame *nextFrame, struct PushBuffer *pb,
+                                            const MATRIX *projectionMvp, struct RenderBucketBounds *bounds, int *geomScreenHalf)
 {
+#if defined(CTR_NATIVE)
+	int nativeMirrorState = gNativeMirrorModeRenderActive;
+	if ((inst->flags & SCREENSPACE_INSTANCE) != 0)
+	{
+		gNativeMirrorModeRenderActive = 0;
+	}
+#endif
 	u32 minXY = RenderBucket_MipsSll(RenderBucket_PackedFrameXY(frame, nextFrame), 2) & 0xfff8ffff;
 	u32 minZ = RenderBucket_MipsSll(RenderBucket_FrameZ(frame, nextFrame), 2);
 	u32 maxXMinY = RenderBucket_MipsAdd(minXY, 0x3fc) & 0xfff8ffff;
@@ -1135,6 +1147,9 @@ static void RenderBucket_ProjectFrameBounds(struct ModelFrame *frame, struct Mod
 	RenderBucket_BoundsUpdate_80071524(bounds, MFC2(12), MFC2(17));
 	*geomScreenHalf = (int)CFC2(26) >> 1;
 	RenderBucket_BoundsUpdate_80071524(bounds, MFC2(13), MFC2(18));
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = nativeMirrorState;
+#endif
 }
 
 static int RenderBucket_AcceptProjectedBounds(const struct RenderBucketBounds *bounds, struct PushBuffer *pb, int geomScreenHalf)
@@ -1801,7 +1816,7 @@ static int RenderBucket_BuildDepthRange(struct Instance *inst, struct ModelFrame
 	int minDepth;
 	int maxDepth;
 
-	RenderBucket_ProjectFrameBounds(frame, nextFrame, pb, projectionMvp, &bounds, &geomScreenHalf);
+	RenderBucket_ProjectFrameBounds(inst, frame, nextFrame, pb, projectionMvp, &bounds, &geomScreenHalf);
 	RenderBucket_UpdatePushBufferMetadata(pb, &bounds, instFlags);
 	if (RenderBucket_AcceptProjectedBounds(&bounds, pb, geomScreenHalf) == 0)
 	{
@@ -2226,7 +2241,16 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 static u32 RenderBucket_PackModelVertexXY(struct RenderBucketDrawContext *ctx, const RenderBucketVertex *vertex)
 {
 	u32 frameOriginXY = (u16)(ctx->mf->pos.x & 0x7fff) | ((u32)(u16)ctx->mf->pos.y << 16);
-	u32 vertexXZ = ((u32)vertex->x) | ((u32)vertex->z << 16);
+	u8 drawX = vertex->x;
+
+#if defined(CTR_NATIVE)
+	if (gNativeMirrorModeDoubleFlipActive != 0)
+	{
+		drawX = (u8)(0xff - drawX);
+	}
+#endif
+
+	u32 vertexXZ = ((u32)drawX) | ((u32)vertex->z << 16);
 
 	// NOTE(aalhendi): Retail does a single packed 32-bit add:
 	// `((vertex & 0x00ff00ff) + frameOriginXY) << 2`, so preserve possible
@@ -2239,8 +2263,19 @@ static u32 RenderBucket_PackInterpolatedModelVertexXY(struct RenderBucketDrawCon
 {
 	struct ModelFrame *nextFrame = ctx->idpp->ptrNextFrame;
 	u32 frameOriginXY = (u16)(ctx->mf->pos.x + nextFrame->pos.x);
-	u32 currXZ = ((u32)curr->x) | ((u32)curr->z << 16);
-	u32 nextXZ = ((u32)next->x) | ((u32)next->z << 16);
+	u8 currX = curr->x;
+	u8 nextX = next->x;
+
+#if defined(CTR_NATIVE)
+	if (gNativeMirrorModeDoubleFlipActive != 0)
+	{
+		currX = (u8)(0xff - currX);
+		nextX = (u8)(0xff - nextX);
+	}
+#endif
+
+	u32 currXZ = ((u32)currX) | ((u32)curr->z << 16);
+	u32 nextXZ = ((u32)nextX) | ((u32)next->z << 16);
 
 	frameOriginXY |= (u32)(u16)(ctx->mf->pos.y + nextFrame->pos.y) << 16;
 
@@ -5305,6 +5340,21 @@ void RenderBucket_Execute(void *param_1, struct PrimMem *param_2)
 			continue;
 		}
 
+#if defined(CTR_NATIVE)
+		int nativeMirrorState = gNativeMirrorModeRenderActive;
+		int nativeMirrorDoubleFlipState = gNativeMirrorModeDoubleFlipActive;
+		if ((ctx.inst->flags & SCREENSPACE_INSTANCE) != 0)
+		{
+			gNativeMirrorModeRenderActive = 0;
+		}
+		gNativeMirrorModeDoubleFlipActive =
+			(gNativeMirrorModeRenderActive != 0) &&
+			(ctx.inst->model == sdata->gGT->modelPtr[STATIC_STARTBANNERWAVE]);
+#endif
 		RenderBucket_DispatchDrawFunc(&ctx);
+#if defined(CTR_NATIVE)
+		gNativeMirrorModeDoubleFlipActive = nativeMirrorDoubleFlipState;
+		gNativeMirrorModeRenderActive = nativeMirrorState;
+#endif
 	}
 }

@@ -13,10 +13,32 @@
 volatile int gCtrDebugSkipLevelGeometry = 0;
 #endif
 
+#if defined(CTR_NATIVE)
+extern int gNativeMirrorModeEnabled;
+extern int gNativeMirrorModeRenderActive;
+
+static int MainFrame_NativeMirrorWorldActive(struct GameTracker *gGT)
+{
+	return
+		gNativeMirrorModeEnabled &&
+		(gGT != NULL) &&
+		(gGT->boolDemoMode == 0) &&
+		((gGT->gameMode1 & (GAME_CUTSCENE | MAIN_MENU | LOADING)) == 0) &&
+		(gGT->levelID >= DINGO_CANYON) &&
+		(gGT->levelID < INTRO_RACE_TODAY) &&
+		LOAD_IsOpen_RacingOrBattle() &&
+		(sdata->Loading.stage == LOAD_IDLE);
+}
+#endif
+
 void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamepads)
 {
 	struct Level *lev = gGT->level1;
 	struct mesh_info *ptr_mesh_info = 0;
+#if defined(CTR_NATIVE)
+	int nativeMirrorWorldActive = MainFrame_NativeMirrorWorldActive(gGT);
+	gNativeMirrorModeRenderActive = 0;
+#endif
 
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_SETUP);
 	DrawUnpluggedMsg(gGT, gGamepads);
@@ -64,6 +86,10 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	MenuHighlight();
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_SETUP);
 
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
+#endif
+
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
 	RenderAllWeather(gGT);
 	RenderAllConfetti(gGT);
@@ -79,9 +105,17 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	}
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
 
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = 0;
+#endif
+
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_HUD);
 	RenderAllHUD(gGT);
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_HUD);
+
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
+#endif
 
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
 	RenderAllBeakerRain(gGT);
@@ -137,7 +171,13 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 
 		if (((gGT->hudFlags & HUD_FLAG_RACE_HUD) != 0) && (gGT->numPlyrCurrGame > 1))
 		{
+#if defined(CTR_NATIVE)
+			gNativeMirrorModeRenderActive = 0;
+#endif
 			UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
+#if defined(CTR_NATIVE)
+			gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
+#endif
 		}
 
 		if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
@@ -186,6 +226,10 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 		}
 		MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_POST_LEVEL);
 	}
+
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = 0;
+#endif
 
 	// If in main menu, or in adventure arena,
 	// or in End-Of-Race menu

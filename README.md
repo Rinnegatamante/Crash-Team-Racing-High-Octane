@@ -16,6 +16,7 @@ It focuses on new features, enhancements and optimization.
 - Multilanguage support.
 - Super and Ultra Difficulty modes for Arcade mode.
 - USF will show as blue fire (similar to CTR: Nitro Fueled). [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/BlueFire)
+- Mirror mode option.
 
 ## How to Install
 

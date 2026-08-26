@@ -10,6 +10,11 @@
 
 GTERegisters gteRegs;
 
+#if defined(CTR_NATIVE)
+extern int gNativeMirrorModeRenderActive;
+extern int gNativeMirrorModeDoubleFlipActive;
+#endif
+
 #define GTE_SF(op)    ((op >> 19) & 1)
 #define GTE_MX(op)    ((op >> 17) & 3)
 #define GTE_V(op)     ((op >> 15) & 3)
@@ -316,7 +321,16 @@ internal int GTE_RotTransPers(int idx, int lm)
 	h_over_sz3 = Lm_E(gte_divide(C2_H, C2_SZ3));
 	C2_SXY0 = C2_SXY1;
 	C2_SXY1 = C2_SXY2;
-	C2_SX2 = Lm_G1(F((s64)C2_OFX + ((s64)C2_IR1 * h_over_sz3)) >> 16);
+
+	int screenX = Lm_G1(F((s64)C2_OFX + ((s64)C2_IR1 * h_over_sz3)) >> 16);
+#if defined(CTR_NATIVE)
+	if (gNativeMirrorModeRenderActive)
+	{
+		const int centerX = C2_OFX >> 16;
+		screenX = (centerX << 1) - screenX;
+	}
+#endif
+	C2_SX2 = screenX;
 	C2_SY2 = Lm_G2(F((s64)C2_OFY + ((s64)C2_IR2 * h_over_sz3)) >> 16);
 
 	return h_over_sz3;
@@ -347,9 +361,19 @@ int GTE_operator(int op)
 		return 1;
 
 	case 0x06:
-		C2_MAC0 = (int)(F((s64)(C2_SX0 * C2_SY1) + (C2_SX1 * C2_SY2) + (C2_SX2 * C2_SY0) - (C2_SX0 * C2_SY2) - (C2_SX1 * C2_SY0) - (C2_SX2 * C2_SY1)));
+	{
+		s64 nclip = (s64)(C2_SX0 * C2_SY1) + (C2_SX1 * C2_SY2) + (C2_SX2 * C2_SY0) -
+		            (C2_SX0 * C2_SY2) - (C2_SX1 * C2_SY0) - (C2_SX2 * C2_SY1);
+#if defined(CTR_NATIVE)
+			if (gNativeMirrorModeRenderActive && !gNativeMirrorModeDoubleFlipActive)
+			{
+				nclip = -nclip;
+			}
+#endif
+		C2_MAC0 = (int)F(nclip);
 		C2_FLAG = 0;
 		return 1;
+	}
 
 	case 0x0c:
 

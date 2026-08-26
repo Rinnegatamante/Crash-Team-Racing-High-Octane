@@ -185,6 +185,7 @@ int main(int argc, char *argv[]) {
 }
 
 extern s32 s_nativeLanguageChosen; // Flag if language has been selected on first boot
+extern int gNativeMirrorModeEnabled;
 int cfg_language = 2; // Default: PAL UK language
 
 void load_config() {
@@ -196,6 +197,8 @@ void load_config() {
 			if (strcmp("language", buffer) == 0) {
 				cfg_language = value;
 				s_nativeLanguageChosen = 1;
+			} else if (strcmp("mirror_mode", buffer) == 0) {
+				gNativeMirrorModeEnabled = (value != 0);
 			}
 		}
 		fclose(config);
@@ -206,6 +209,7 @@ void save_config() {
 	FILE *config = fopen("ux0:data/ctr/config.ini", "w+");
 	if (config != NULL) {
 		fprintf(config, "%s=%d\n", "language", cfg_language);
+		fprintf(config, "%s=%d\n", "mirror_mode", gNativeMirrorModeEnabled != 0);
 		fclose(config);
 	}
 }

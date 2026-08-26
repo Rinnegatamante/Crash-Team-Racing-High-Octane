@@ -1,11 +1,102 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+int gNativeMirrorModeEnabled = 0;
+int gNativeMirrorModeRenderActive = 0;
+int gNativeMirrorModeDoubleFlipActive = 0;
+
+static int s_nativeMirrorModeInputActive = 0;
+
+static u32 GAMEPAD_NativeMirrorSwapLeftRight(u32 buttons)
+{
+	u32 swapped = buttons & ~(BTN_LEFT | BTN_RIGHT);
+
+	if ((buttons & BTN_LEFT) != 0)
+	{
+		swapped |= BTN_RIGHT;
+	}
+
+	if ((buttons & BTN_RIGHT) != 0)
+	{
+		swapped |= BTN_LEFT;
+	}
+
+	return swapped;
+}
+
+static s16 GAMEPAD_NativeMirrorAxisX(s16 axis)
+{
+	int mirrored = 0x100 - axis;
+
+	if (mirrored < 0)
+	{
+		mirrored = 0;
+	}
+	else if (mirrored > 0xff)
+	{
+		mirrored = 0xff;
+	}
+
+	return (s16)mirrored;
+}
+
+static void GAMEPAD_NativeMirrorRebaseInputState(struct GamepadSystem *gGamepads)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		struct GamepadBuffer *pad = &gGamepads->gamepad[i];
+
+		pad->buttonsHeldPrevFrame = GAMEPAD_NativeMirrorSwapLeftRight(pad->buttonsHeldPrevFrame);
+		pad->buttonsHeldCurrFrame = GAMEPAD_NativeMirrorSwapLeftRight(pad->buttonsHeldCurrFrame);
+		pad->buttonsTapped = GAMEPAD_NativeMirrorSwapLeftRight(pad->buttonsTapped);
+		pad->buttonsReleased = GAMEPAD_NativeMirrorSwapLeftRight(pad->buttonsReleased);
+		pad->stickLX = GAMEPAD_NativeMirrorAxisX(pad->stickLX);
+	}
+}
+
+static void GAMEPAD_NativeMirrorRefreshState(struct GamepadSystem *gGamepads)
+{
+	int wasInputActive = s_nativeMirrorModeInputActive;
+	int trackActive = 0;
+	int inputActive = 0;
+
+	if ((sdata != NULL) && (sdata->gGT != NULL))
+	{
+		struct GameTracker *gGT = sdata->gGT;
+
+		trackActive =
+			(gGT->levelID >= DINGO_CANYON) &&
+			(gGT->levelID < INTRO_RACE_TODAY);
+
+		inputActive =
+			gNativeMirrorModeEnabled &&
+			(gGT->boolDemoMode == 0) &&
+			trackActive &&
+			(sdata->Loading.stage == LOAD_IDLE) &&
+			((gGT->gameMode1 & (PAUSE_ALL | END_OF_RACE | MAIN_MENU | LOADING | GAME_CUTSCENE)) == 0);
+	}
+
+	s_nativeMirrorModeInputActive = inputActive;
+
+	if (wasInputActive != s_nativeMirrorModeInputActive)
+	{
+		GAMEPAD_NativeMirrorRebaseInputState(gGamepads);
+	}
+}
+
+#endif
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800251ac-0x80025208.
 void GAMEPAD_Init(struct GamepadSystem *gGamepads)
 {
 	int i;
 	struct GamepadBuffer *pad;
+
+#if defined(CTR_NATIVE)
+	gNativeMirrorModeRenderActive = 0;
+	s_nativeMirrorModeInputActive = 0;
+#endif
 
 	PadInitMtap((u8 *)&gGamepads->slotBuffer[0], (u8 *)&gGamepads->slotBuffer[1]);
 	PadStartCom();
@@ -278,6 +369,9 @@ int GAMEPAD_ProcessHold(struct GamepadSystem *gGamepads)
 	struct GamepadBuffer *pad;
 	struct ControllerPacket *ptrControllerPacket;
 
+#if defined(CTR_NATIVE)
+	GAMEPAD_NativeMirrorRefreshState(gGamepads);
+#endif
 
 	// loop through all 8 gamepadBuffers
 	for (pad = &gGamepads->gamepad[0]; pad < &gGamepads->gamepad[8]; pad++)
@@ -339,6 +433,13 @@ int GAMEPAD_ProcessHold(struct GamepadSystem *gGamepads)
 					mappedButtons |= buttonMap->buttons;
 				}
 			}
+
+#if defined(CTR_NATIVE)
+			if (s_nativeMirrorModeInputActive)
+			{
+				mappedButtons = GAMEPAD_NativeMirrorSwapLeftRight(mappedButtons);
+			}
+#endif
 
 			// record buttons held this frame
 			pad->buttonsHeldCurrFrame = mappedButtons;
@@ -623,7 +724,15 @@ void GAMEPAD_ProcessSticks(struct GamepadSystem *gGamepads)
 		iVar4 = GAMEPAD_ProcessSticks_IsAnalogLike(controllerData);
 		iVar7 = pad->buttonsHeldCurrFrame;
 
-		pad->stickLX = GAMEPAD_ProcessSticks_ResolveAxis(pad->stickLX, pad->stickLX_dontUse1, iVar7, BTN_LEFT, BTN_RIGHT, iVar4);
+		s16 resolvedRawLX = pad->stickLX_dontUse1;
+#if defined(CTR_NATIVE)
+		if (s_nativeMirrorModeInputActive && iVar4)
+		{
+			resolvedRawLX = GAMEPAD_NativeMirrorAxisX(resolvedRawLX);
+		}
+#endif
+
+		pad->stickLX = GAMEPAD_ProcessSticks_ResolveAxis(pad->stickLX, resolvedRawLX, iVar7, BTN_LEFT, BTN_RIGHT, iVar4);
 		pad->stickLY = GAMEPAD_ProcessSticks_ResolveAxis(pad->stickLY, pad->stickLY_dontUse1, iVar7, BTN_UP, BTN_DOWN, iVar4);
 	}
 }

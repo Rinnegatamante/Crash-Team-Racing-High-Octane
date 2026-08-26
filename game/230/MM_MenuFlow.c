@@ -40,6 +40,16 @@ static const char *s_nativeExtraDifficultyText[MM_NATIVE_LANGUAGE_COUNT][2] =
 	{"SUPER MOEILIJK", "ULTRA MOEILIJK"},
 };
 
+static const char *s_nativeMirrorModeText[MM_NATIVE_LANGUAGE_COUNT][2] =
+{
+	{"MIRROR: OFF", "MIRROR: ON"},
+	{"MIROIR: NON", "MIROIR: OUI"},
+	{"SPIEGEL: AUS", "SPIEGEL: EIN"},
+	{"SPECCHIO: NO", "SPECCHIO: SI"},
+	{"ESPEJO: NO", "ESPEJO: SI"},
+	{"SPIEGEL: UIT", "SPIEGEL: AAN"},
+};
+
 static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1] =
 {
 	{LNG_EASY, 0, 1, 0, 0},
@@ -77,7 +87,8 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{LNG_HIGH_SCORE, 4, 6, 5, 5},
-	{LNG_LANGUAGE, 5, 6, 6, 6},
+	{LNG_LANGUAGE, 5, 7, 6, 6},
+	{LNG_NA_243, 6, 7, 7, 7},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -90,7 +101,8 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{LNG_HIGH_SCORE, 4, 6, 5, 5},
 	{LNG_LANGUAGE, 5, 7, 6, 6},
-	{LNG_SCRAPBOOK, 6, 7, 7, 7},
+	{LNG_NA_243, 6, 8, 7, 7},
+	{LNG_SCRAPBOOK, 7, 8, 8, 8},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -122,7 +134,24 @@ s32 s_nativeLanguageChosen = 0;
 static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
 extern int cfg_language;
+extern int gNativeMirrorModeEnabled;
 extern void save_config();
+
+static void MM_NativeMirrorModeApplyText(void)
+{
+	s16 languageRow = 0;
+
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		languageRow = (s16)(cfg_language - 2);
+	}
+
+	if ((sdata->lngStrings != NULL) && (sdata->numLngStrings > LNG_NA_243))
+	{
+		sdata->lngStrings[LNG_NA_243] =
+			(char *)s_nativeMirrorModeText[languageRow][gNativeMirrorModeEnabled != 0];
+	}
+}
 
 static void MM_NativeExtraDifficultyApplyText(void)
 {
@@ -163,6 +192,7 @@ static void MM_NativeLanguageLoad(s16 row)
 	cfg_language = s_nativeLanguageFileIndex[row];
 	LOAD_LangFile((int)sdata->ptrBigfile1, cfg_language);
 	MM_NativeExtraDifficultyApplyText();
+	MM_NativeMirrorModeApplyText();
 
 	s_nativeLanguageRow = row;
 	s_nativeLanguageChosen = 1;
@@ -269,6 +299,8 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	struct GameTracker *gGT = sdata->gGT;
 
 #if defined(CTR_NATIVE)
+	MM_NativeMirrorModeApplyText();
+
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
 		mainMenu->rows = s_nativeMainMenuWithScrapbook;
@@ -485,6 +517,16 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 		mainMenu->ptrNextBox_InHierarchy = &s_nativeLanguageMainMenu;
 		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+
+	// Mirror Mode
+	if (choose == LNG_NA_243)
+	{
+		gNativeMirrorModeEnabled ^= 1;
+		MM_NativeMirrorModeApplyText();
+		save_config();
+		mainMenu->state &= ~ONLY_DRAW_TITLE;
 		return;
 	}
 #endif
