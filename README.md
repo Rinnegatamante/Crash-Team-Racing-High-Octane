@@ -1,5 +1,5 @@
 # Crash Team Racing: High Octane
-
+<img src="screenshots/game1.jpg"></img><br>
 Crash Team Racing: High Octane is a sourceport for PSVita of Crash Team Racing based on the [ctr-native](https://github.com/CTR-tools/ctr-native) project.
 It focuses on new features, enhancements and optimization.
 
@@ -12,7 +12,6 @@ It focuses on new features, enhancements and optimization.
 - Playable Nitrous Oxide (Unlockable via the original Spyro 2 Demo cheatcode). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/OxideFix))
 - Reserves Meter (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/ReservesMeter))
 - Customizable Cups (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/CustomCups)
-- Splitscreen support via MiniVitaTV or natively on PSTV.
 - Multilanguage support.
 - Super and Ultra Difficulty modes for Arcade mode.
 - USF will show as blue fire (similar to CTR: Nitro Fueled). [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/BlueFire)
