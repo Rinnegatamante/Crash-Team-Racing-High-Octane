@@ -5,6 +5,9 @@
 #include <platform/native_perf.h>
 
 #include <SDL3/SDL.h>
+#if defined(__vita__)
+#include <psp2/io/fcntl.h>
+#endif
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -239,10 +242,19 @@ enum NativeAudioXaSourceKind
 	NATIVE_AUDIO_XA_SOURCE_DISC,
 };
 
+struct NativeAudioReadFile
+{
+#if defined(__vita__)
+	SceUID fd;
+#else
+	FILE *file;
+#endif
+};
+
 // Temporary source used while building the selected track's compressed cache.
 struct NativeAudioXaSource
 {
-	FILE *file;
+	struct NativeAudioReadFile file;
 	struct NativeDiscImageFile discFile;
 	int kind;
 	int sectorSize;
@@ -395,8 +407,71 @@ struct NativeAudioSnapshot
 
 global_variable struct NativeAudioState s_audio;
 global_variable struct NativeAudioXaLoader s_xaLoader;
+global_variable struct NativeAudioByteBuffer s_xaXnfCache;
 global_variable SDL_AtomicInt s_xaPendingPlayback;
 global_variable s32 s_reverbOffsetSamples[NATIVE_AUDIO_REV_REG_COUNT];
+
+internal void NativeAudio_ReadFileInit(struct NativeAudioReadFile *file)
+{
+	memset(file, 0, sizeof(*file));
+#if defined(__vita__)
+	file->fd = -1;
+#endif
+}
+
+internal int NativeAudio_ReadFileOpen(struct NativeAudioReadFile *file, const char *path)
+{
+	NativeAudio_ReadFileInit(file);
+#if defined(__vita__)
+	file->fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+	return file->fd >= 0;
+#else
+	file->file = fopen(path, "rb");
+	return file->file != NULL;
+#endif
+}
+
+internal void NativeAudio_ReadFileClose(struct NativeAudioReadFile *file)
+{
+#if defined(__vita__)
+	if (file->fd >= 0)
+	{
+		sceIoClose(file->fd);
+	}
+#else
+	if (file->file != NULL)
+	{
+		fclose(file->file);
+	}
+#endif
+	NativeAudio_ReadFileInit(file);
+}
+
+internal s64 NativeAudio_ReadFileSize(struct NativeAudioReadFile *file)
+{
+#if defined(__vita__)
+	return (s64)sceIoLseek(file->fd, 0, SCE_SEEK_END);
+#else
+	long size;
+
+	if ((fseek(file->file, 0, SEEK_END) != 0) || ((size = ftell(file->file)) < 0))
+	{
+		return -1;
+	}
+	return (s64)size;
+#endif
+}
+
+internal int NativeAudio_ReadFileAt(struct NativeAudioReadFile *file, void *dst, size_t size, u64 offset)
+{
+#if defined(__vita__)
+	return (size <= UINT32_MAX) && (offset <= (u64)INT64_MAX) &&
+	       (sceIoPread(file->fd, dst, (SceSize)size, (SceOff)offset) == (int)size);
+#else
+	return (offset <= (u64)LONG_MAX) && (fseek(file->file, (long)offset, SEEK_SET) == 0) &&
+	       (fread(dst, 1, size, file->file) == size);
+#endif
+}
 
 internal b32 NativeAudio_OutputOpen(void)
 {
@@ -1853,6 +1928,27 @@ internal int NativeAudio_BuildXAPath(char *path, size_t pathSize, int categoryID
 	return (written > 0) && ((size_t)written < pathSize);
 }
 
+internal int NativeAudio_GetXnfCache(struct NativeAudioByteBuffer *xnf)
+{
+	int loaded = 1;
+
+	if (s_xaLoader.mutex != NULL)
+	{
+		SDL_LockMutex(s_xaLoader.mutex);
+	}
+	if (s_xaXnfCache.data == NULL)
+	{
+		loaded = NativeAudio_ReadFileBytes("XA/ENG.XNF", &s_xaXnfCache);
+	}
+	*xnf = s_xaXnfCache;
+	if (s_xaLoader.mutex != NULL)
+	{
+		SDL_UnlockMutex(s_xaLoader.mutex);
+	}
+
+	return loaded && (xnf->data != NULL);
+}
+
 internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct NativeAudioXaTrackInfo *info)
 {
 	struct NativeAudioByteBuffer xnf;
@@ -1870,21 +1966,19 @@ internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct Nati
 		return 0;
 	}
 
-	if (!NativeAudio_ReadFileBytes("XA/ENG.XNF", &xnf))
+	if (!NativeAudio_GetXnfCache(&xnf))
 	{
 		return 0;
 	}
 
 	if (xnf.size < XA_HEADER_SIZE)
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
 	if ((NativeAudio_ReadLE32(&xnf.data[0]) != 0x464e4958) || (NativeAudio_ReadLE32(&xnf.data[4]) != 102) ||
 	    (NativeAudio_ReadLE32(&xnf.data[8]) != XA_NUM_TYPES))
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
@@ -1892,21 +1986,18 @@ internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct Nati
 	numTracksTotal = NativeAudio_ReadLE32(&xnf.data[XA_NUM_TRACKS_TOTAL_OFFSET]);
 	if ((numXasTotal < 0) || (numTracksTotal < 0) || (numXasTotal > ((INT_MAX - XA_HEADER_SIZE) / 4)))
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
 	xaSizeOffset = XA_HEADER_SIZE + numXasTotal * 4;
 	if (numTracksTotal > ((INT_MAX - xaSizeOffset) / XA_SIZE_ENTRY_BYTES))
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
 	xaSizeEnd = xaSizeOffset + numTracksTotal * XA_SIZE_ENTRY_BYTES;
 	if ((xaSizeEnd < xaSizeOffset) || (xaSizeEnd > xnf.size))
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
@@ -1914,14 +2005,12 @@ internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct Nati
 	firstSongIndex = NativeAudio_ReadLE32(&xnf.data[XA_FIRST_SONG_INDEX_OFFSET + categoryID * 4]);
 	if (xaID >= numSongs)
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
 	entryIndex = firstSongIndex + xaID;
 	if ((entryIndex < 0) || (entryIndex >= numTracksTotal))
 	{
-		NativeAudio_FreeByteBuffer(&xnf);
 		return 0;
 	}
 
@@ -1930,7 +2019,6 @@ internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct Nati
 	info->fileNumber = entry[1];
 	info->numSectors = NativeAudio_ReadLE16Signed(entry + 2);
 
-	NativeAudio_FreeByteBuffer(&xnf);
 	return info->numSectors > 0;
 }
 
@@ -2118,11 +2206,9 @@ internal int NativeAudio_DecodeXASectorStereo(const u8 *sector, int sectorBase, 
 
 internal void NativeAudio_XaSourceClose(struct NativeAudioXaSource *src)
 {
-	if (src->file != NULL)
-	{
-		fclose(src->file);
-	}
+	NativeAudio_ReadFileClose(&src->file);
 	memset(src, 0, sizeof(*src));
+	NativeAudio_ReadFileInit(&src->file);
 }
 
 // Open the temporary preparation source: a host handle or disc-image extent.
@@ -2131,17 +2217,18 @@ internal int NativeAudio_XaSourceOpen(const char *path, struct NativeAudioXaSour
 	char resolved[512];
 
 	memset(src, 0, sizeof(*src));
+	NativeAudio_ReadFileInit(&src->file);
 
 	if (NativeAssets_ResolvePath(path, resolved, sizeof(resolved)))
 	{
-		long fileSize;
+		s64 fileSize;
 
-		src->file = fopen(resolved, "rb");
-		if (src->file == NULL)
+		if (!NativeAudio_ReadFileOpen(&src->file, resolved))
 		{
 			return 0;
 		}
-		if ((fseek(src->file, 0, SEEK_END) != 0) || ((fileSize = ftell(src->file)) <= 0) || (fileSize > 0x7fffffffL) ||
+		fileSize = NativeAudio_ReadFileSize(&src->file);
+		if ((fileSize <= 0) || (fileSize > 0x7fffffffL) ||
 		    !NativeAudio_GetXASectorLayout((int)fileSize, &src->sectorSize, &src->sectorBase, &src->totalSectors))
 		{
 			NativeAudio_XaSourceClose(src);
@@ -2183,11 +2270,7 @@ internal int NativeAudio_XaSourceReadSector(struct NativeAudioXaSource *src, int
 
 	if (src->kind == NATIVE_AUDIO_XA_SOURCE_HOST_FILE)
 	{
-		if ((src->nextSector != sector) && (fseek(src->file, (long)sector * (long)src->sectorSize, SEEK_SET) != 0))
-		{
-			return 0;
-		}
-		if (fread(dst, 1, (size_t)src->sectorSize, src->file) != (size_t)src->sectorSize)
+		if (!NativeAudio_ReadFileAt(&src->file, dst, (size_t)src->sectorSize, (u64)(u32)sector * (u32)src->sectorSize))
 		{
 			return 0;
 		}
@@ -3044,14 +3127,10 @@ int NativeAudio_CaptureState(void *dst, int dstSize)
 int NativeAudio_RestoreState(const void *src, int srcSize)
 {
 	const struct NativeAudioSnapshot *snapshot = (const struct NativeAudioSnapshot *)src;
-	struct NativeAudioXaSource xaSource;
 	struct NativeAudioXaPreparedStream xaPrepared;
-	struct NativeAudioXaTrackInfo xaInfo;
-	char xaPath[128];
 	int i;
 	int restoreInit;
 
-	memset(&xaSource, 0, sizeof(xaSource));
 	memset(&xaPrepared, 0, sizeof(xaPrepared));
 
 	if ((src == NULL) || (srcSize < (int)sizeof(*snapshot)))
@@ -3095,17 +3174,10 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 
 	if (snapshot->xa.active && snapshot->xa.hasTrackIdentity)
 	{
-		if (!NativeAudio_LookupXATrackInfo(snapshot->xa.categoryID, snapshot->xa.xaID, &xaInfo) ||
-		    !NativeAudio_BuildXAPath(xaPath, sizeof(xaPath), snapshot->xa.categoryID, xaInfo.fileNumber) || !NativeAudio_XaSourceOpen(xaPath, &xaSource))
+		if (!NativeAudio_PrepareXATrack(snapshot->xa.categoryID, snapshot->xa.xaID, &xaPrepared))
 		{
 			return 0;
 		}
-		if (!NativeAudio_PrepareXAStream(&xaSource, xaInfo.channelFilter, xaInfo.numSectors, &xaPrepared))
-		{
-			NativeAudio_XaSourceClose(&xaSource);
-			return 0;
-		}
-		NativeAudio_XaSourceClose(&xaSource);
 	}
 
 	NativeAudio_LockOutput();
@@ -3442,6 +3514,7 @@ internal int NativeAudio_OpenDevice(void)
 void NativeAudio_Shutdown(void)
 {
 	NativeAudio_XaLoaderShutdown();
+	NativeAudio_FreeByteBuffer(&s_xaXnfCache);
 
 	if (s_audio.output.stream != NULL)
 	{

@@ -273,6 +273,7 @@ internal s32 NativeCD_ReadSectorsAt(s32 fileIndex, s32 firstSector, s32 sectors,
 internal int SDLCALL NativeCD_ReadWorkerThread(void *unused)
 {
 	(void)unused;
+	SDL_SetCurrentThreadPriority(SDL_THREAD_PRIORITY_LOW);
 
 	for (;;)
 	{
