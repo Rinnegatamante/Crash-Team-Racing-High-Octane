@@ -56,6 +56,7 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 	s16 mapTopHeight;
 	struct UIMapSpawnMetadata *mapMetadata;
 	POLY_FT4 *p;
+	b32 drawTopHalf;
 	u32 color;
 	u32 transparency;
 	struct GameTracker *gGT;
@@ -97,10 +98,9 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	// if these conditions are met, then draw the top half of the minimap; otherwise, only draw the bottom half
 	// not sure when the game ever draws only the bottom half
-	if (((mapMetadata != NULL) && (mapMetadata->topHalfMode == 0)) ||
-
-	    // if in main menu (character selection, track selection, any part of it)
-	    ((gGT->gameMode1 & MAIN_MENU) != 0))
+	drawTopHalf = ((mapMetadata != NULL) && (mapMetadata->topHalfMode == 0)) ||
+	              ((gGT->gameMode1 & MAIN_MENU) != 0);
+	if (drawTopHalf)
 	{
 		// r0, g0, b0 (vertex color)
 		CtrGpu_WriteColorCode(&p->r0, color);
@@ -126,6 +126,11 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 	p->y2 = posY;
 	p->y3 = posY;
 
+	if (drawTopHalf)
+	{
+		p->y0--;
+		p->y1--;
+	}
 	UI_Map_DrawMap_ExtraFunc(mapBottom, p, posX, 0, primMem, otMem, transparency);
 
 	primMem->cursor = p + 1;
