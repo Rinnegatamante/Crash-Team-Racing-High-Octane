@@ -215,6 +215,17 @@ void save_config() {
 }
 
 void *real_main(void *_argv) {
+	scePowerSetArmClockFrequency(444);
+	scePowerSetBusClockFrequency(222);
+	scePowerSetGpuClockFrequency(222);
+	scePowerSetGpuXbarClockFrequency(166);
+	sceAppUtilInit(&(SceAppUtilInitParam){}, &(SceAppUtilBootParam){});
+	SceCommonDialogConfigParam cmnDlgCfgParam;
+	sceCommonDialogConfigParamInit(&cmnDlgCfgParam);
+	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, (int *)&cmnDlgCfgParam.language);
+	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_ENTER_BUTTON, (int *)&cmnDlgCfgParam.enterButtonAssign);
+	sceCommonDialogSetConfigParam(&cmnDlgCfgParam);
+	
 	load_config();
 	sceIoMkdir("ux0:data/ctr/shader_cache", 0777);
 	vglSetShaderCachePath("ux0:data/ctr/shader_cache");

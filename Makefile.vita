@@ -9,7 +9,7 @@ LIBS = -lSDL3 -lvitaGL -lvitashark -lSceShaccCgExt -ltaihen_stub -lvorbisfile -l
 	-lSceNet_stub -lSceNetCtl_stub -lpng -lSceDisplay_stub -lSceGxm_stub -lSceAudioIn_stub \
 	-Wl,--whole-archive -lSceSysmodule_stub -Wl,--no-whole-archive -lSceIme_stub -lSceCamera_stub \
 	-lSceCtrl_stub -lSceTouch_stub -lSceMotion_stub -lm -lSceAppMgr_stub -lSceHid_stub \
-	-lSceAppUtil_stub -lScePgf_stub -ljpeg -lSceRtc_stub -lScePower_stub -lcurl -lssl -lcrypto -lz
+	-lSceAppUtil_stub -lScePgf_stub -ljpeg -lSceRtc_stub -lScePower_stub -lSceIofilemgr_stub -lcurl -lssl -lcrypto -lz
 
 COMMON_OBJS = main.c
 
