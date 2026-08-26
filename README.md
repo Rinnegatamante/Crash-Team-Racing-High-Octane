@@ -17,6 +17,17 @@ It focuses on new features, enhancements and optimization.
 - USF will show as blue fire (similar to CTR: Nitro Fueled). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/BlueFire))
 - Mirror mode option.
 
+## Known Issues
+
+- The primitives clipper sometimes erases primitives that should instead be present (Was an issue also in Vanilla game but it's more evident with widescreen on).
+- When missiles are used, framerate can tank due to its effect.
+- Splitscreen is disabled (this is due to the fact it runs at 10 FPS in 2P mode right now due to GPU pipeline being still pretty heavy).
+- The demo cutscene gets slightly de-synced during Oxide speech.
+
+## Special controls bindings
+
+- L2 and R2 are also mapped on right analog left/right to let PSVita use those controls.
+
 ## How to Install
 
 - Install the .vpk.
