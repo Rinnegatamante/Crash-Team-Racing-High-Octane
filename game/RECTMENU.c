@@ -41,6 +41,33 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"ULTRA DIFICIL",
 		"ULTRA MOEILIJK",
 	};
+	static const char *bossFight[6] =
+	{
+		"BOSS FIGHT",
+		"COMBAT DE BOSS",
+		"BOSS-KAMPF",
+		"SFIDA BOSS",
+		"BATALLA DE JEFE",
+		"BAASGEVECHT",
+	};
+	static const char *oxideFinal[6] =
+	{
+		"N. OXIDE - HARD",
+		"N. OXIDE - DIFFICILE",
+		"N. OXIDE - SCHWER",
+		"N. OXIDE - DIFFICILE",
+		"N. OXIDE - DIFICIL",
+		"N. OXIDE - MOEILIJK",
+	};
+	static const char *changeBoss[6] =
+	{
+		"CHANGE BOSS",
+		"CHANGER DE BOSS",
+		"BOSS WECHSELN",
+		"CAMBIA BOSS",
+		"CAMBIAR JEFE",
+		"BAAS WIJZIGEN",
+	};
 
 	int languageRow = 0;
 	if ((cfg_language >= 2) && (cfg_language <= 7))
@@ -58,6 +85,12 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)superHard[languageRow];
 	case NATIVE_MENU_STRING_ULTRA_HARD:
 		return (char *)ultraHard[languageRow];
+	case NATIVE_MENU_STRING_BOSS_FIGHT:
+		return (char *)bossFight[languageRow];
+	case NATIVE_MENU_STRING_OXIDE_FINAL:
+		return (char *)oxideFinal[languageRow];
+	case NATIVE_MENU_STRING_CHANGE_BOSS:
+		return (char *)changeBoss[languageRow];
 	default:
 		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
 	}

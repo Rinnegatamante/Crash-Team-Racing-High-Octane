@@ -1,6 +1,10 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook, MM_NativeBossFight_JumpToBossSelect};
+#else
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook};
+#endif
 
 #ifdef CTR_NATIVE
 int gNativeBootSkipRequested = 0;
@@ -235,6 +239,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		else if ((gGT->gameMode1 & TIME_TRIAL) != 0)
 		{
 			ovrRegion1 = 3;
+		}
+		else if (gNativeBossFightMode != 0)
+		{
+			ovrRegion1 = 1;
 		}
 		else if ((gGT->gameMode1 & ARCADE_MODE) != 0)
 		{

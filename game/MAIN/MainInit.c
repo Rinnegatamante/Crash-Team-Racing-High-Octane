@@ -391,8 +391,10 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	        // numPlyrCurrGame requires AIs
 	        (numPlyrCurrGame < 3)) &&
 	    (
-	        // in Arcade or Adventure
-	        (gameMode & (ARCADE_MODE | ADVENTURE_MODE)) != 0))
+	        // in Arcade or Adventure, or native Boss Fight
+	        ((gameMode & (ARCADE_MODE | ADVENTURE_MODE)) != 0
+	         || (gNativeBossFightMode != 0)
+	        )))
 	{
 		// If you're in Boss Mode
 		// 0x80000000

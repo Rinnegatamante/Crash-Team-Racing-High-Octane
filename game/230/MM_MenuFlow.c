@@ -66,7 +66,8 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{LNG_ARCADE, 1, 3, 2, 2},
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
-	{LNG_OPTIONS, 4, 5, 5, 5},
+	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
+	{LNG_OPTIONS, 5, 6, 6, 6},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -77,8 +78,9 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{LNG_ARCADE, 1, 3, 2, 2},
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
-	{LNG_OPTIONS, 4, 6, 5, 5},
-	{LNG_SCRAPBOOK, 5, 6, 6, 6},
+	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
+	{LNG_OPTIONS, 5, 7, 6, 6},
+	{LNG_SCRAPBOOK, 6, 7, 7, 7},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -97,10 +99,22 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{RECTMENU_STRING_NONE},
 };
 
+static struct MenuRow s_nativeBossFightRows[] =
+{
+	{LNG_RIPPER_ROO, 0, 1, 0, 0},
+	{LNG_PAPU_PAPU, 0, 2, 1, 1},
+	{LNG_KOMODO_JOE, 1, 3, 2, 2},
+	{LNG_PINSTRIPE, 2, 4, 3, 3},
+	{LNG_N_OXIDE_FULL, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_OXIDE_FINAL, 4, 5, 5, 5},
+	{RECTMENU_STRING_NONE},
+};
+
 static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
 static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
 static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu);
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu);
+static void MM_NativeBossFightMenuProc(struct RectMenu *menu);
 
 static struct RectMenu s_nativeLanguageBootMenu =
 {
@@ -137,6 +151,16 @@ static struct RectMenu s_nativeOptionsMenu =
 	.state = CENTER_ON_X,
 	.rows = s_nativeOptionsRows,
 	.funcPtr = MM_NativeOptionsMenuProc,
+};
+
+static struct RectMenu s_nativeBossFightMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_BOSS_FIGHT,
+	.posX_curr = 256,
+	.posY_curr = 82,
+	.state = RECTMENU_STATE_EXEC_CENTERED | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeBossFightRows,
+	.funcPtr = MM_NativeBossFightMenuProc,
 };
 
 s32 s_nativeLanguageChosen = 0;
@@ -321,6 +345,50 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 			save_config();
 	}
 }
+
+static void MM_NativeBossFightPrepareMenu(void)
+{
+	s_nativeBossFightMenu.stringIndexTitle = NATIVE_MENU_STRING_BOSS_FIGHT;
+	s_nativeBossFightMenu.posX_curr = 256;
+	s_nativeBossFightMenu.posY_curr = 82;
+	s_nativeBossFightMenu.state = RECTMENU_STATE_EXEC_CENTERED | USE_SMALL_FONT | BIG_TEXT_IN_TITLE;
+	s_nativeBossFightMenu.rows = s_nativeBossFightRows;
+	s_nativeBossFightMenu.funcPtr = MM_NativeBossFightMenuProc;
+	s_nativeBossFightMenu.rowSelected = (s16)gNativeBossFightBossID;
+	s_nativeBossFightMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeBossFightMenu.ptrPrevBox_InHierarchy = NULL;
+}
+
+void MM_NativeBossFight_OpenBossSelect(void)
+{
+	MM_NativeBossFightPrepareMenu();
+	sdata->ptrDesiredMenu = &s_nativeBossFightMenu;
+}
+
+void MM_NativeBossFight_JumpToBossSelect(void)
+{
+	MM_NativeBossFightPrepareMenu();
+	sdata->ptrActiveMenu = &s_nativeBossFightMenu;
+}
+
+static void MM_NativeBossFightMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	if (menu->rowSelected < 0)
+	{
+		sdata->ptrDesiredMenu = &D230.menuCharacterSelect;
+		MM_Characters_RestoreIDs();
+		return;
+	}
+
+	NativeBossFight_SelectBoss(menu->rowSelected);
+	sdata->ptrDesiredMenu = &D230.menuTrackSelect;
+	MM_TrackSelect_Init();
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified against retail 230 0x800abaf0-0x800abcac.
@@ -491,6 +559,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 	gNativeGhostReplayMode = 0;
 	NativeGhostInput_ClearSelection();
+	NativeBossFight_Clear();
 
 	// Adventure Mode
 	if (choose == LNG_ADVENTURE)
@@ -557,6 +626,18 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		// next menu is choosing single+cup
 		mainMenu->ptrNextBox_InHierarchy = &D230.menuRaceType;
 		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_BOSS_FIGHT)
+	{
+		gNativeBossFightMode = 1;
+		NativeBossFight_SelectBoss(0);
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 |= ADVENTURE_BOSS;
+		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
 		return;
 	}
 

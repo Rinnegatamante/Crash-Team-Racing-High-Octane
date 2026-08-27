@@ -265,13 +265,18 @@ void BOTS_Adv_AdjustDifficulty(void)
 	else if ((gameMode1 & ADVENTURE_BOSS) != 0)
 	{
 		s32 bossID = gGT->bossID;
-		s32 lostModifier = BOTS_Adv_NumTimesLostEvent(sdata->advProgress.timesLostBossRace[bossID]) - BOTS_ADV_HIGH_TIER_LOSS_BASE;
+		s32 numLost = 0;
+		if (gNativeBossFightMode == 0)
+		{
+			numLost = sdata->advProgress.timesLostBossRace[bossID];
+		}
+		s32 lostModifier = BOTS_Adv_NumTimesLostEvent(numLost) - BOTS_ADV_HIGH_TIER_LOSS_BASE;
 		s32 maxDifficulty = bossID * BOTS_ADV_NORMAL_SCALE;
 
 		if ((gameMode2 & CHEAT_ADV) != 0)
 		{
 			maxDifficulty = bossID * BOTS_ADV_CHEAT_SCALE;
-			lostModifier = BOTS_Adv_NumTimesLostEvent(sdata->advProgress.timesLostBossRace[bossID]) - BOTS_ADV_HIGH_TIER_CHEAT_LOSS_BASE;
+			lostModifier = BOTS_Adv_NumTimesLostEvent(numLost) - BOTS_ADV_HIGH_TIER_CHEAT_LOSS_BASE;
 		}
 
 		currDifficulty = maxDifficulty - lostModifier;

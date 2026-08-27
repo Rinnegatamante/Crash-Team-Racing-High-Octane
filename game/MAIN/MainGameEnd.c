@@ -589,6 +589,11 @@ void MainGameEnd_Initialize(void)
 			MainGameEnd_SoloRaceGetReward(1);
 			MainGameEnd_CheckTimeTrialGhost(gGT, player);
 		}
+
+		if (gNativeBossFightMode != 0)
+		{
+			NativeBossFight_BeginPostRace();
+		}
 	}
 
 	Podium_InitModels(gGT);

@@ -1067,6 +1067,12 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 			MM_Characters_HideDrivers();
 
+			if (gNativeBossFightMode != 0)
+			{
+				MM_NativeBossFight_OpenBossSelect();
+				return;
+			}
+
 			// if you are in a cup
 			if ((gGT->gameMode2 & CUP_ANY_KIND) != 0)
 			{

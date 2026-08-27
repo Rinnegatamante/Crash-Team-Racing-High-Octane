@@ -47,6 +47,7 @@ enum ArcadeAdventureEndMenuConstants
 global_variable s32 s_driverRankString222 = 0x20; // " \0"
 extern struct RectMenu menu222;
 extern struct RectMenu menu222_2P;
+extern struct RectMenu menu222BossFight;
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8009f704-0x800a06f8.
 void AA_EndEvent_DrawMenu(void)
@@ -407,6 +408,13 @@ void AA_EndEvent_DrawMenu(void)
 		return;
 	}
 
+	if (gNativeBossFightMode != 0)
+	{
+		RECTMENU_Show(&menu222BossFight);
+		sdata->menuReadyToPass |= AA_MENU_READY_FLAG;
+		return;
+	}
+
 	// If you're in Arcade mode
 	if ((gGT->gameMode1 & ARCADE_MODE) != 0)
 	{
@@ -734,6 +742,27 @@ struct MenuRow rows222[5] = {
         .rowOnPressLeft = 0,
         .rowOnPressRight = 0,
     }};
+
+static struct MenuRow rows222BossFight[] =
+{
+    {LNG_RESTART, 0, 1, 0, 0},
+    {LNG_CHANGE_CHARACTER, 0, 2, 1, 1},
+    {NATIVE_MENU_STRING_CHANGE_BOSS, 1, 3, 2, 2},
+    {LNG_CHANGE_LEVEL, 2, 4, 3, 3},
+    {LNG_QUIT, 3, 4, 4, 4},
+    {RECTMENU_STRING_NONE, 0, 0, 0, 0},
+};
+
+struct RectMenu menu222BossFight =
+{
+    .stringIndexTitle = RECTMENU_STRING_NONE,
+    .posX_curr = 256,
+    .posY_curr = 154,
+    .state = RECTMENU_STATE_SMALL_CENTERED,
+    .rows = rows222BossFight,
+    .funcPtr = UI_RaceEnd_MenuProc,
+    .drawStyle = 4,
+};
 
 struct RectMenu menu222 = {
     .stringIndexTitle = RECTMENU_STRING_NONE,

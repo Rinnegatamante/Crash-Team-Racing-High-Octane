@@ -1170,7 +1170,11 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 	// In Boss race
 	if (gGT->gameMode1 & ADVENTURE_BOSS)
 	{
-		s8 bossFails = sdata->advProgress.timesLostBossRace[gGT->bossID];
+		s8 bossFails = 0;
+		if (gNativeBossFightMode == 0)
+		{
+			bossFails = sdata->advProgress.timesLostBossRace[gGT->bossID];
+		}
 
 		if (bossFails < ITEMSET_BOSS_LOSSES_REPLACE_MASK_CLOCK_WARPBALL)
 		{
@@ -1197,7 +1201,12 @@ void VehPhysGeneral_SetHeldItem(struct Driver *driver)
 		}
 
 		// Replace 3 Missiles with 1 Missile if racing Komodo Joe
-		if (gGT->levelID == DRAGON_MINES && driver->heldItemID == HELD_ITEM_MISSILE_3X)
+		b32 racingKomodoJoe = (gGT->levelID == DRAGON_MINES);
+		if (gNativeBossFightMode != 0)
+		{
+			racingKomodoJoe = (gGT->bossID == 2);
+		}
+		if (racingKomodoJoe && driver->heldItemID == HELD_ITEM_MISSILE_3X)
 		{
 			driver->heldItemID = HELD_ITEM_MISSILE_1X;
 		}

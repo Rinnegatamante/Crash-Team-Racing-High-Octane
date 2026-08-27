@@ -6,6 +6,11 @@ void QueueLoadTrack_MenuProc(struct RectMenu *menu)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+	if (gNativeBossFightMode != 0)
+	{
+		NativeBossFight_ArmGameplay();
+	}
+
 	// If you're in Time Trial,
 	// set P3 to N Tropy, and P4 to N Oxide
 	if ((gGT->gameMode1 & TIME_TRIAL) != 0)

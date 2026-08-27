@@ -811,6 +811,11 @@ void MainFreeze_MenuPtrQuit(struct RectMenu *menu)
 
 			// Remove bit for "In Adventure Arena" when loading is done
 			sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_ARENA;
+			if (gNativeBossFightMode != 0)
+			{
+				sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_BOSS;
+				NativeBossFight_Clear();
+			}
 
 			// Unpause game
 			gGT->gameMode1 &= ~PAUSE_1;

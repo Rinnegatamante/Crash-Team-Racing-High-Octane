@@ -365,6 +365,11 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800aff58-0x800affd0.
 b32 MM_TrackSelect_boolTrackOpen(struct MainMenu_LevelRow *menuSelect)
 {
+	if (gNativeBossFightMode != 0)
+	{
+		return true;
+	}
+
 	s16 flag = menuSelect->unlock;
 
 	if (flag == MM_TRACK_UNLOCK_ALWAYS)
@@ -485,6 +490,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 					{
 						gNativeGhostReplayMode = 0;
 						MM_JumpTo_Title_Returning();
+						return;
+					}
+					if (gNativeBossFightMode != 0)
+					{
+						MM_NativeBossFight_OpenBossSelect();
 						return;
 					}
 					// return to character selection
@@ -632,8 +642,10 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0434-0x800b0444 for track-select confirm SFX.
 				OtherFX_Play(1, 1);
 
-				// if not Battle or Time Trial, open LapSelectMenu
-				if ((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL)) == 0)
+				// if not Battle, Time Trial, or native Boss Fight, open LapSelectMenu
+				if (((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL)) == 0)
+				    && (gNativeBossFightMode == 0)
+				)
 				{
 					// open lap select menu
 					D230.trackSelect.lapBoxOpen = D230.trackSelect.transition.state;

@@ -26,6 +26,8 @@
 
 #include "CAM.c"
 
+#include "NativeBossFight.c"
+
 #include "BOTS.c"
 #include "CDSYS.c"
 

@@ -141,6 +141,17 @@ void GhostTape_WriteMoves(s16 raceFinished);
 extern int gNativeGhostReplayMode;
 #if defined(CTR_NATIVE)
 extern int gNativeBootSkipRequested;
+extern int gNativeBossFightMode;
+extern int gNativeBossFightBossID;
+int NativeBossFight_GetBossCharacter(int bossID);
+void NativeBossFight_SelectBoss(int bossID);
+void NativeBossFight_ArmGameplay(void);
+void NativeBossFight_BeginPostRace(void);
+void NativeBossFight_Clear(void);
+struct MetaDataBOSS *NativeBossFight_GetWeaponMeta(int bossID);
+int NativeBossFight_GetWeaponMetaCount(int bossID);
+void MM_NativeBossFight_OpenBossSelect(void);
+void MM_NativeBossFight_JumpToBossSelect(void);
 #endif
 b32 NativeGhostInput_IsModernGhost(const char *ghostName);
 void NativeGhostInput_ClearSelection(void);

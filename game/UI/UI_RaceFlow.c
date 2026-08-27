@@ -366,7 +366,9 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 	}
 
 	option = menu->rows[row].stringIndex;
-	if ((gNativeGhostReplayMode != 0) && (option == LNG_RESTART))
+	if (((gNativeGhostReplayMode != 0)
+	     || (gNativeBossFightMode != 0)
+	    ) && (option == LNG_RESTART))
 	{
 		option = UI_RACE_END_OPTION_RETRY;
 	}
@@ -380,6 +382,15 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 
 	sdata->framesSinceRaceEnded = 0;
 	sdata->numIconsEOR = UI_RACE_END_INITIAL_ICON_COUNT;
+
+	if ((gNativeBossFightMode != 0) && (option == NATIVE_MENU_STRING_CHANGE_BOSS))
+	{
+		GhostTape_Destroy();
+		sdata->mainMenuState = MAIN_MENU_BOSS_SELECT;
+		sdata->Loading.OnBegin.AddBitsConfig0 |= MAIN_MENU;
+		MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+		return;
+	}
 
 	// Press * To Continue
 	// do not put this in the switch,
@@ -398,6 +409,11 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 	{
 		// Erase ghost of previous race from RAM
 		GhostTape_Destroy();
+		if (gNativeBossFightMode != 0)
+		{
+			sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_BOSS;
+			NativeBossFight_Clear();
+		}
 
 		// go back to main menu
 		sdata->mainMenuState = MAIN_MENU_TITLE;
@@ -409,6 +425,11 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 
 	case UI_RACE_END_OPTION_RETRY:
 	{
+		if (gNativeBossFightMode != 0)
+		{
+			NativeBossFight_ArmGameplay();
+		}
+
 		// Turn off HUD
 		gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 

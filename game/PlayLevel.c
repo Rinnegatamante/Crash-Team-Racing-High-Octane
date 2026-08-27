@@ -134,7 +134,9 @@ void PlayLevel_UpdateLapStats(void)
 				    // If you're in Arcade, or
 				    // If you're in Adventure, or
 				    // If you're in Time Trial
-				    ((gGT->gameMode1 & GAME_MODE_SAVE_LAP_TIME_MASK) != 0) &&
+				    (((gGT->gameMode1 & GAME_MODE_SAVE_LAP_TIME_MASK) != 0)
+				     || (gNativeBossFightMode != 0)
+				    ) &&
 
 				    // player of any kind
 				    (currDriver->instSelf->thread->modelIndex == DYNAMIC_PLAYER))

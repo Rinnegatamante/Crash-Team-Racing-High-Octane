@@ -6,6 +6,12 @@ void PickupBots_Init(void)
 	int hub;
 	int lev = sdata->gGT->levelID;
 
+	if (gNativeBossFightMode != 0)
+	{
+		sdata->bossWeaponMeta = NativeBossFight_GetWeaponMeta(sdata->gGT->bossID);
+		return;
+	}
+
 	// get hubID of level
 	hub = data.metaDataLEV[lev].hubID;
 
@@ -251,14 +257,24 @@ static void PickupBots_SetBossCooldown(struct MetaDataBOSS *bossMeta)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+	s32 timesLost = 0;
+	if (gNativeBossFightMode == 0)
+	{
+		timesLost = sdata->advProgress.timesLostBossRace[gGT->bossID];
+	}
 	sdata->bossWeaponCooldown = (RngDeadCoed(&sdata->advRng) & PICKUPBOTS_BOSS_COOLDOWN_RANDOM_MASK) + bossMeta->weaponCooldown +
 	                            PICKUPBOTS_BOSS_COOLDOWN_BASE_FRAMES +
-	                            ((s8)sdata->advProgress.timesLostBossRace[gGT->bossID] * PICKUPBOTS_BOSS_LOSS_COOLDOWN_STEP);
+	                            ((s8)timesLost * PICKUPBOTS_BOSS_LOSS_COOLDOWN_STEP);
 }
 
 static struct MetaDataBOSS *PickupBots_GetInitialBossMeta(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
+
+	if (gNativeBossFightMode != 0)
+	{
+		return NativeBossFight_GetWeaponMeta(gGT->bossID);
+	}
 
 	if (gGT->levelID == OXIDE_STATION)
 	{
@@ -272,6 +288,41 @@ static void PickupBots_AdvanceBossMeta(struct Driver *boss)
 {
 	struct GameTracker *gGT = sdata->gGT;
 	struct MetaDataBOSS *bossMeta = sdata->bossWeaponMeta;
+
+	if (gNativeBossFightMode != 0)
+	{
+		struct MetaDataBOSS *baseMeta = NativeBossFight_GetWeaponMeta(gGT->bossID);
+		int metaCount = NativeBossFight_GetWeaponMetaCount(gGT->bossID);
+		int metaIndex = (int)(bossMeta - baseMeta);
+
+		if ((metaIndex < 0) || (metaIndex >= metaCount))
+		{
+			bossMeta = baseMeta;
+			metaIndex = 0;
+		}
+
+		int totalDistance = gGT->level1->ptr_restart_points[0].distToFinish << PICKUPBOTS_BOSS_CHECKPOINT_DISTANCE_SHIFT;
+		if (totalDistance > 0)
+		{
+			if (metaIndex + 1 < metaCount)
+			{
+				int nextSegment = metaIndex + 1;
+				int threshold = (int)(((s64)totalDistance * (metaCount - nextSegment)) / metaCount);
+				if ((int)boss->distanceToFinish_curr < threshold)
+				{
+					bossMeta = &baseMeta[nextSegment];
+				}
+			}
+			else if ((int)boss->distanceToFinish_curr > ((totalDistance * 3) / 4))
+			{
+				bossMeta = baseMeta;
+			}
+		}
+
+		sdata->bossWeaponMeta = bossMeta;
+		return;
+	}
+
 	struct MetaDataBOSS *nextMeta = &bossMeta[1];
 
 	if (nextMeta->throwFlag == 0)
@@ -324,6 +375,11 @@ static void PickupBots_AdvanceBossMeta(struct Driver *boss)
 
 static void PickupBots_UpdateBossPathRequest(struct Driver *boss)
 {
+	if (gNativeBossFightMode != 0)
+	{
+		return;
+	}
+
 	if (sdata->bossWeaponMeta->pathChangeDisabled != 0)
 	{
 		return;
