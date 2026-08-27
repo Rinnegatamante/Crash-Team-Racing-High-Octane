@@ -899,18 +899,12 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 
 #ifdef __vita__
 #define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                                                \
-	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
-	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
-	"		float texelX = texel.x;\n"                                                                            \
-	"		vec2 pagePixel = v_page_clut.xy;\n"                                           \
-	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.5), texel.y);\n"                          \
-	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
-	"		float highByte = step(0.25, fract(texelX * 0.5));\n"                                                \
-	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
-	"		float paletteIndex = mix(packedByte.x, packedByte.y, highByte);\n"                                  \
-	"		vec2 clutPixel = v_page_clut.zw;\n"                           \
-	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
-	"	}\n"
+	"\tvec2 samplePSX(vec2 tc) {\n"                                                                               \
+	"\t\tfloat highByte = step(0.5, fract(tc.x * 0.5 + 0.25));\n"                                      \
+	"\t\tvec2 packedRg = VRAM((v_page_clut.xy + vec2(tc.x * 0.5 + 0.25, tc.y + 0.5)) * c_VRAMTexel);\n" \
+	"\t\tfloat paletteIndex = floor(mix(packedRg.x, packedRg.y, highByte) * 255.0 + 0.5);\n"              \
+	"\t\treturn VRAM((v_page_clut.zw + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"              \
+	"\t}\n"
 #else
 #define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                                              \
 	"	// returns 16 bit colour\n"                                                                 \
