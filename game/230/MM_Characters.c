@@ -71,7 +71,263 @@ enum
 	MM_CHARACTER_SELECT_COLOR_PULSE_THRESHOLD = 0xc00,
 	MM_CHARACTER_SELECT_COLOR_PULSE_SCALE_SHIFT = 7,
 	MM_CHARACTER_SELECT_COLOR_PULSE_FP_SHIFT = 0xc,
+	MM_CHARACTER_SELECT_1P_WINDOW_X = 0x18,
+	MM_CHARACTER_SELECT_1P_WINDOW_W = 0xe0,
+	MM_CHARACTER_SELECT_STATS_BOX_X = 0x128,
+	MM_CHARACTER_SELECT_STATS_BOX_Y = 0xb,
+	MM_CHARACTER_SELECT_STATS_BOX_W = 0xcc,
+	MM_CHARACTER_SELECT_STATS_BOX_H = 0x44,
+	MM_CHARACTER_SELECT_STATS_CLASS_X = 0x190,
+	MM_CHARACTER_SELECT_STATS_CLASS_Y = 0xf,
+	MM_CHARACTER_SELECT_STATS_LABEL_X = 0x17e,
+	MM_CHARACTER_SELECT_STATS_SPEED_Y = 0x1e,
+	MM_CHARACTER_SELECT_STATS_ACCEL_Y = 0x2d,
+	MM_CHARACTER_SELECT_STATS_TURN_Y = 0x3c,
+	MM_CHARACTER_SELECT_STATS_BAR_X = 0x188,
+	MM_CHARACTER_SELECT_STATS_BAR_START_Y = 0x21,
+	MM_CHARACTER_SELECT_STATS_BAR_END_Y = 0x28,
+	MM_CHARACTER_SELECT_STATS_BAR_SHADOW_Y = 0x22,
+	MM_CHARACTER_SELECT_STATS_BAR_HEIGHT = 7,
+	MM_CHARACTER_SELECT_STATS_BAR_SHADOW_HEIGHT = 5,
+	MM_CHARACTER_SELECT_STATS_BAR_ROW_STEP = 0xf,
+	MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_COUNT = 6,
+	MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH = 0xd,
+	MM_CHARACTER_SELECT_STATS_BAR_RATE = 3,
+	MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE = 0x38000000,
 };
+
+static const s16 s_nativeCharacterSelectStatTargets[NUM_CLASSES][3] =
+{
+	{0x37, 0x37, 0x37},
+	{0x30, 0x50, 0x20},
+	{0x50, 0x20, 0x0a},
+	{0x1c, 0x30, 0x50},
+};
+
+static const u32 s_nativeCharacterSelectStatColors[7] =
+{
+	0xc80000,
+	0x0a8700,
+	0x00b428,
+	0x00b4b4,
+	0x0064dc,
+	0x0028dc,
+	0x0000eb,
+};
+
+static const s16 s_nativeCharacterSelectClassStrings[3] =
+{
+	LNG_BEGINNER,
+	LNG_INTERMEDIATE,
+	LNG_ADVANCED,
+};
+
+static SVec2 s_nativeCharacterSelect1PWindowPos;
+static s16 s_nativeCharacterSelectStatLengths[3];
+static s16 s_nativeCharacterSelectStatCharacterID = -1;
+
+static void MM_Characters_NativeResetStats(void)
+{
+	s_nativeCharacterSelectStatCharacterID = -1;
+	for (s32 i = 0; i < 3; i++)
+	{
+		s_nativeCharacterSelectStatLengths[i] = 0;
+	}
+}
+
+static void MM_Characters_NativeDrawStats(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	if (gGT->numPlyrNextGame != 1)
+	{
+		return;
+	}
+
+	s16 characterID = data.characterIDs[0];
+	struct MetaDataCHAR *mdc = &data.MetaDataCharacters[characterID];
+	s32 engineID = mdc->engineID;
+	if ((u32)engineID >= NUM_CLASSES)
+	{
+		engineID = BALANCED;
+	}
+
+	if (s_nativeCharacterSelectStatCharacterID != characterID)
+	{
+		s_nativeCharacterSelectStatCharacterID = characterID;
+		for (s32 i = 0; i < 3; i++)
+		{
+			s_nativeCharacterSelectStatLengths[i] = 0;
+		}
+	}
+
+	for (s32 i = 0; i < 3; i++)
+	{
+		s16 target = (characterID == PENTA_PENGUIN) ? 0x50 : s_nativeCharacterSelectStatTargets[engineID][i];
+		s16 *length = &s_nativeCharacterSelectStatLengths[i];
+		if (*length < target)
+		{
+			*length += MM_CHARACTER_SELECT_STATS_BAR_RATE;
+			if (*length > target)
+			{
+				*length = target;
+			}
+		}
+		else if (*length > target)
+		{
+			*length = target;
+		}
+	}
+
+	struct TransitionMeta *driverTransition =
+		&D230.characterSelectTransitionMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST];
+	s16 transitionX = driverTransition->currX;
+	s16 labelX = MM_CHARACTER_SELECT_STATS_LABEL_X + transitionX;
+	s16 barX = MM_CHARACTER_SELECT_STATS_BAR_X + transitionX;
+
+	s32 classIndex = 0;
+	if ((characterID == PENTA_PENGUIN) || (engineID == SPEED))
+	{
+		classIndex = 2;
+	}
+	else if (engineID < SPEED)
+	{
+		classIndex = 1;
+	}
+
+	char *classText = sdata->lngStrings[s_nativeCharacterSelectClassStrings[classIndex]];
+	char *statTexts[3] =
+	{
+		sdata->lngStrings[LNG_SPEED],
+		sdata->lngStrings[LNG_ACCEL],
+		sdata->lngStrings[LNG_TURN],
+	};
+
+	s32 contentLeft = barX;
+	s32 contentRight = barX + CTR_WIDESCREEN_SCALE_X(0x50);
+	for (s32 i = 0; i < 3; i++)
+	{
+		s32 statWidth = DecalFont_GetLineWidth(statTexts[i], FONT_BIG);
+		s32 statLeft = labelX - statWidth;
+		if (statLeft < contentLeft)
+		{
+			contentLeft = statLeft;
+		}
+		if (labelX > contentRight)
+		{
+			contentRight = labelX;
+		}
+	}
+
+	s16 classX = (s16)((contentLeft + contentRight) >> 1);
+	s32 classWidth = DecalFont_GetLineWidth(classText, FONT_BIG);
+	s32 classLeft = classX - (classWidth >> 1);
+	s32 classRight = classLeft + classWidth;
+	if (classLeft < contentLeft)
+	{
+		contentLeft = classLeft;
+	}
+	if (classRight > contentRight)
+	{
+		contentRight = classRight;
+	}
+
+	DecalFont_DrawLine(classText,
+	                   classX, MM_CHARACTER_SELECT_STATS_CLASS_Y, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+	DecalFont_DrawLine(statTexts[0], labelX, MM_CHARACTER_SELECT_STATS_SPEED_Y,
+	                   FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
+	DecalFont_DrawLine(statTexts[1], labelX, MM_CHARACTER_SELECT_STATS_ACCEL_Y,
+	                   FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
+	DecalFont_DrawLine(statTexts[2], labelX, MM_CHARACTER_SELECT_STATS_TURN_Y,
+	                   FONT_BIG, JUSTIFY_RIGHT | BLUE);
+
+	struct PrimMem *primMem = &gGT->backBuffer->primMem;
+	Color white = MakeColor(0xff, 0xff, 0xff);
+	Color black = MakeColor(0, 0, 0);
+	s16 barStartY = MM_CHARACTER_SELECT_STATS_BAR_START_Y;
+	s16 barEndY = MM_CHARACTER_SELECT_STATS_BAR_END_Y;
+	s16 shadowY = MM_CHARACTER_SELECT_STATS_BAR_SHADOW_Y;
+
+	for (s32 statIndex = 0; statIndex < 3; statIndex++)
+	{
+		s16 statLength = s_nativeCharacterSelectStatLengths[statIndex];
+		s16 drawLength = (s16)CTR_WIDESCREEN_SCALE_X(statLength);
+		RECT r;
+		r.x = barX;
+		r.y = barStartY;
+		r.w = drawLength;
+		r.h = MM_CHARACTER_SELECT_STATS_BAR_HEIGHT;
+		CTR_Box_DrawWireBox(&r, &white, gGT->pushBuffer_UI.ptrOT, primMem);
+
+		r.x = barX + 1;
+		r.y = shadowY;
+		r.w = drawLength - 2;
+		r.h = MM_CHARACTER_SELECT_STATS_BAR_SHADOW_HEIGHT;
+		if (r.w > 0)
+		{
+			CTR_Box_DrawWireBox(&r, &black, gGT->pushBuffer_UI.ptrOT, primMem);
+		}
+
+		s32 segmentStart = 0;
+		s32 segmentEnd = MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH;
+		for (s32 segmentIndex = 0;
+		     segmentIndex < MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_COUNT;
+		     segmentIndex++)
+		{
+			s16 currSegmentLen = MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH;
+			if (statLength <= segmentEnd)
+			{
+				currSegmentLen = statLength - segmentStart;
+			}
+			if (currSegmentLen < 0)
+			{
+				currSegmentLen = 0;
+			}
+
+			if ((segmentStart + currSegmentLen <= statLength) && (currSegmentLen > 0))
+			{
+				POLY_G4 *poly = primMem->cursor;
+				if (primMem->end < (void *)poly)
+				{
+					return;
+				}
+				primMem->cursor = poly + 1;
+
+				u32 color0 = s_nativeCharacterSelectStatColors[segmentIndex];
+				u32 color1 = s_nativeCharacterSelectStatColors[segmentIndex + 1];
+				CtrGpu_WriteColorCode(&poly->r0, color0 | MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE);
+				CtrGpu_WriteColorCode(&poly->r1, color1 | MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE);
+				CtrGpu_WriteColorCode(&poly->r2, color0 | MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE);
+				CtrGpu_WriteColorCode(&poly->r3, color1 | MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE);
+
+				s16 left = barX + CTR_WIDESCREEN_SCALE_X(segmentStart);
+				s16 right = barX + CTR_WIDESCREEN_SCALE_X(segmentStart + currSegmentLen);
+				poly->x0 = left;
+				poly->y0 = barStartY;
+				poly->x1 = right;
+				poly->y1 = barStartY;
+				poly->x2 = left;
+				poly->y2 = barEndY;
+				poly->x3 = right;
+				poly->y3 = barEndY;
+				addPolyG4(gGT->pushBuffer_UI.ptrOT, poly);
+			}
+
+			segmentStart += MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH;
+			segmentEnd += MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH;
+		}
+
+		barStartY += MM_CHARACTER_SELECT_STATS_BAR_ROW_STEP;
+		barEndY += MM_CHARACTER_SELECT_STATS_BAR_ROW_STEP;
+		shadowY += MM_CHARACTER_SELECT_STATS_BAR_ROW_STEP;
+	}
+
+	RECT box;
+	box.x = contentLeft - 6;
+	box.y = MM_CHARACTER_SELECT_STATS_BOX_Y;
+	box.w = (contentRight - contentLeft) + 12;
+	box.h = MM_CHARACTER_SELECT_STATS_BOX_H;
+	RECTMENU_DrawInnerRect(&box, 4, gGT->backBuffer->otMem.uiOT);
+}
 
 #if defined(__vita__)
 static struct CharacterSelectMeta s_oxideCharacterSelectMeta1P2P[0x10] =
@@ -560,6 +816,14 @@ void MM_Characters_SetMenuLayout(void)
 
 	D230.activeCharacterSelectWindowPos = D230.characterSelectWindowPosByLayout[layoutIndex];
 
+	if (numPlyrNextGame == 1)
+	{
+		s_nativeCharacterSelect1PWindowPos = D230.activeCharacterSelectWindowPos[0];
+		s_nativeCharacterSelect1PWindowPos.x = MM_CHARACTER_SELECT_1P_WINDOW_X;
+		D230.activeCharacterSelectWindowPos = &s_nativeCharacterSelect1PWindowPos;
+		D230.characterSelectWindowWidth = MM_CHARACTER_SELECT_1P_WINDOW_W;
+	}
+
 #if defined(__vita__)
 	D230.activeCharacterSelectMeta = MM_Characters_GetOxideMetaForLayout(layoutIndex);
 #else
@@ -644,6 +908,8 @@ void MM_Characters_PreventOverlap(void)
 void MM_Characters_RestoreIDs(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
+
+	MM_Characters_NativeResetStats();
 
 	// erase select bits
 	sdata->characterSelectFlags = 0;
@@ -1183,6 +1449,8 @@ dontDrawSelectCharacter:
 	{
 		data.characterIDs[playerIndex] = activeCharacterSelectMeta[(int)iconPerPlayer[playerIndex]].characterID;
 	}
+
+	MM_Characters_NativeDrawStats();
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
