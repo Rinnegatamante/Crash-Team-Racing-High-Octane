@@ -864,22 +864,19 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 
 #ifdef __vita__
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                                                \
-	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
-	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
-	"		float texelX = texel.x;\n"                                                                            \
-	"		float lanePhase = fract(texelX * 0.25);\n"                                                        \
-	"		vec2 pagePixel = v_page_clut.xy;\n"                                           \
-	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.25), texel.y);\n"                         \
-	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
-	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
-	"		vec2 highNibble = floor(packedByte * (1.0 / 16.0));\n"                                       \
-	"		vec2 lowNibble = packedByte - highNibble * 16.0;\n"                                           \
-	"		float oddTexel = step(0.25, fract(lanePhase * 2.0));\n"                                         \
-	"		vec2 nibbleCandidates = mix(lowNibble, highNibble, oddTexel);\n"                             \
-	"		float paletteIndex = mix(nibbleCandidates.x, nibbleCandidates.y, step(0.5, lanePhase));\n"    \
-	"		vec2 clutPixel = v_page_clut.zw;\n"                           \
-	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
-	"	}\n"
+	"\tvec2 samplePSX(vec2 tc) {\n"                                                                               \
+	"\t\tvec2 texel = floor(tc + vec2(0.5));\n"                                                             \
+	"\t\tfloat texelX = texel.x;\n"                                                                            \
+	"\t\tfloat lanePhase = fract(texelX * 0.25);\n"                                                        \
+	"\t\tfloat highByte = step(0.5, lanePhase);\n"                                                        \
+	"\t\tfloat highNibbleSel = step(0.5, fract(texelX * 0.5));\n"                                     \
+	"\t\tvec2 packedPixel = v_page_clut.xy + vec2(floor(texelX * 0.25), texel.y);\n"                      \
+	"\t\tvec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
+	"\t\tfloat packedByte = floor(mix(packedRg.x, packedRg.y, highByte) * 255.0 + 0.5);\n"                 \
+	"\t\tfloat highNibble = floor(packedByte * (1.0 / 16.0));\n"                                     \
+	"\t\tfloat paletteIndex = mix(packedByte - highNibble * 16.0, highNibble, highNibbleSel);\n"       \
+	"\t\treturn VRAM((v_page_clut.zw + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"              \
+	"\t}\n"
 #else
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                                              \
 	"	// returns 16 bit colour\n"                                                                 \
