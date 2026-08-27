@@ -1,6 +1,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include "platform/native_adhoc.h"
+
 struct PlatformMempackArena
 {
 	void *base;

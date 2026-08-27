@@ -1037,6 +1037,24 @@ int Platform_InputCapturePadSnapshots(struct PlatformInputPadSnapshot *dst, int 
 	return NATIVE_INPUT_MAX_CONTROLLERS;
 }
 
+int Platform_InputApplyPadSnapshots(const struct PlatformInputPadSnapshot *src, int count)
+{
+	s32 slot;
+
+	if ((src == NULL) || (count < NATIVE_INPUT_MAX_CONTROLLERS))
+	{
+		return 0;
+	}
+
+	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
+	{
+		s_controllers[slot].snapshot = src[slot];
+	}
+
+	NativeInput_WritePadBus();
+	return NATIVE_INPUT_MAX_CONTROLLERS;
+}
+
 int Platform_InputInstallPadSnapshots(const struct PlatformInputPadSnapshot *src, int count)
 {
 	s32 slot;

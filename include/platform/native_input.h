@@ -27,6 +27,7 @@ void Platform_InputPadInit(int slot, unsigned char *padData);
 int Platform_InputPadGetState(int port);
 void Platform_InputPadVibrate(int port, unsigned char *table, int len);
 int Platform_InputCapturePadSnapshots(struct PlatformInputPadSnapshot *dst, int count);
+int Platform_InputApplyPadSnapshots(const struct PlatformInputPadSnapshot *src, int count);
 int Platform_InputInstallPadSnapshots(const struct PlatformInputPadSnapshot *src, int count);
 void Platform_InputClearInstalledPadSnapshots(void);
 int Platform_InputGetStateSize(void);

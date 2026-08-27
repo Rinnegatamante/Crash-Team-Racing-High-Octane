@@ -2830,7 +2830,16 @@ void NativeRenderer_PresentVRAMDisplay(void)
 void NativeRenderer_SwapWindow(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
-	SDL_GL_SwapWindow(g_window);
+#ifdef __vita__
+	if (NativeAdhoc_IsCommonDialogActive())
+	{
+		vglSwapBuffers(GL_TRUE);
+	}
+	else
+#endif
+	{
+		SDL_GL_SwapWindow(g_window);
+	}
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
 }
 

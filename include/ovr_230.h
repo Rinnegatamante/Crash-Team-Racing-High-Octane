@@ -1758,4 +1758,9 @@ CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponPanelColor) == 0x
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highscore_iconColor) == 0x146c);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectPlayerState) == 0x1504);
 
+#if defined(CTR_NATIVE)
+void MM_NativeAdhoc_Update(void);
+void MM_NativeAdhoc_ResetAfterFailure(void);
+#endif
+
 #endif

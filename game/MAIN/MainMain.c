@@ -83,6 +83,28 @@ u32 main(void)
 
 	do
 	{
+#if defined(CTR_NATIVE)
+		NativeAdhoc_Update();
+		MM_NativeAdhoc_Update();
+		gGT = sdata->gGT;
+		gGS = sdata->gGamepads;
+
+		if (NativeAdhoc_ConsumeGameplayFailure())
+		{
+			NativeAdhoc_Cancel();
+			gGT->numPlyrNextGame = 1;
+			sdata->mainMenuState = MAIN_MENU_TITLE;
+			if ((gGT->levelID == MAIN_MENU_LEVEL) && (sdata->Loading.stage == LOAD_IDLE))
+			{
+				gGT->numPlyrCurrGame = 1;
+				MM_NativeAdhoc_ResetAfterFailure();
+			}
+			else
+			{
+				MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+			}
+		}
+#endif
 #ifndef CTR_NATIVE
 		// wont happen under normal conditions
 		if (sdata->mainGameState == 5)
@@ -313,6 +335,17 @@ u32 main(void)
 			}
 
 			// =========== Main Game Loop ======================
+
+#if defined(CTR_NATIVE)
+			if (!NativeAdhoc_BeginGameFrame())
+			{
+				break;
+			}
+			if (NativeAdhoc_IsSessionActive())
+			{
+				GAMEPAD_PollVsync(gGS);
+			}
+#endif
 
 			if ((
 			        // Check value of traffic lights

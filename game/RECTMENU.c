@@ -68,6 +68,52 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"CAMBIAR JEFE",
 		"BAAS WIJZIGEN",
 	};
+	static const char *localArcade[6] =
+	{
+		"LOCAL ARCADE",
+		"ARCADE LOCALE",
+		"LOKALES ARCADE",
+		"ARCADE LOCALE",
+		"ARCADE LOCAL",
+		"LOKALE ARCADE",
+	};
+	static const char *hostGame[6] =
+	{
+		"HOST GAME",
+		"CREER PARTIE",
+		"SPIEL ERSTELLEN",
+		"CREA PARTITA",
+		"CREAR PARTIDA",
+		"SPEL MAKEN",
+	};
+	static const char *joinGame[6] =
+	{
+		"JOIN GAME",
+		"REJOINDRE",
+		"SPIEL BEITRETEN",
+		"UNISCITI",
+		"UNIRSE",
+		"DEELNEMEN",
+	};
+	static const char *cancel[6] =
+	{
+		"CANCEL",
+		"ANNULER",
+		"ABBRECHEN",
+		"ANNULLA",
+		"CANCELAR",
+		"ANNULEREN",
+	};
+	static const char *adhocStatus[7][6] =
+	{
+		{"AD HOC MULTIPLAYER", "MULTIJOUEUR AD HOC", "AD-HOC-MEHRSPIELER", "MULTIGIOCATORE AD HOC", "MULTIJUGADOR AD HOC", "AD-HOC MULTIPLAYER"},
+		{"CONNECTING...", "CONNEXION...", "VERBINDEN...", "CONNESSIONE...", "CONECTANDO...", "VERBINDEN..."},
+		{"SEARCHING FOR HOST...", "RECHERCHE HOTE...", "SUCHE HOST...", "CERCA HOST...", "BUSCANDO HOST...", "HOST ZOEKEN..."},
+		{"WAITING FOR PLAYER...", "ATTENTE JOUEUR...", "WARTE AUF SPIELER...", "ATTESA GIOCATORE...", "ESPERANDO JUGADOR...", "WACHT OP SPELER..."},
+		{"SYNCHRONIZING...", "SYNCHRONISATION...", "SYNCHRONISIEREN...", "SINCRONIZZAZIONE...", "SINCRONIZANDO...", "SYNCHRONISEREN..."},
+		{"CONNECTED", "CONNECTE", "VERBUNDEN", "CONNESSO", "CONECTADO", "VERBONDEN"},
+		{"CONNECTION ERROR", "ERREUR CONNEXION", "VERBINDUNGSFEHLER", "ERRORE CONNESSIONE", "ERROR DE CONEXION", "VERBINDINGSFOUT"},
+	};
 
 	int languageRow = 0;
 	if ((cfg_language >= 2) && (cfg_language <= 7))
@@ -91,6 +137,23 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)oxideFinal[languageRow];
 	case NATIVE_MENU_STRING_CHANGE_BOSS:
 		return (char *)changeBoss[languageRow];
+	case NATIVE_MENU_STRING_LOCAL_ARCADE:
+		return (char *)localArcade[languageRow];
+	case NATIVE_MENU_STRING_HOST_GAME:
+		return (char *)hostGame[languageRow];
+	case NATIVE_MENU_STRING_JOIN_GAME:
+		return (char *)joinGame[languageRow];
+	case NATIVE_MENU_STRING_CANCEL:
+		return (char *)cancel[languageRow];
+	case NATIVE_MENU_STRING_ADHOC_STATUS:
+	{
+		int status = NativeAdhoc_GetStatus();
+		if ((status < NATIVE_ADHOC_STATUS_IDLE) || (status > NATIVE_ADHOC_STATUS_ERROR))
+		{
+			status = NATIVE_ADHOC_STATUS_ERROR;
+		}
+		return (char *)adhocStatus[status][languageRow];
+	}
 	default:
 		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
 	}
@@ -1063,7 +1126,14 @@ void RECTMENU_ProcessState()
 	if ((state & DISABLE_INPUT_ALLOW_FUNCPTRS) == 0)
 	{
 		// process button input for menu
+#if defined(CTR_NATIVE)
+		if (!NativeAdhoc_IsMenuInputBlocked())
+		{
+			RECTMENU_ProcessInput(currMenu);
+		}
+#else
 		RECTMENU_ProcessInput(currMenu);
+#endif
 
 		// check if ProcessInput changed "state"
 		currMenu = sdata->ptrActiveMenu;

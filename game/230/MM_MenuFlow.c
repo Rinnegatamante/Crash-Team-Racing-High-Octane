@@ -99,6 +99,20 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{RECTMENU_STRING_NONE},
 };
 
+static struct MenuRow s_nativeArcadeRows[] =
+{
+	{NATIVE_MENU_STRING_LOCAL_ARCADE, 2, 1, 0, 0},
+	{NATIVE_MENU_STRING_HOST_GAME, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_JOIN_GAME, 1, 0, 2, 2},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeAdhocStatusRows[] =
+{
+	{NATIVE_MENU_STRING_CANCEL, 0, 0, 0, 0},
+	{RECTMENU_STRING_NONE},
+};
+
 static struct MenuRow s_nativeBossFightRows[] =
 {
 	{LNG_RIPPER_ROO, 0, 1, 0, 0},
@@ -115,6 +129,8 @@ static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
 static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu);
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu);
 static void MM_NativeBossFightMenuProc(struct RectMenu *menu);
+static void MM_NativeArcadeMenuProc(struct RectMenu *menu);
+static void MM_NativeAdhocStatusMenuProc(struct RectMenu *menu);
 
 static struct RectMenu s_nativeLanguageBootMenu =
 {
@@ -153,6 +169,22 @@ static struct RectMenu s_nativeOptionsMenu =
 	.funcPtr = MM_NativeOptionsMenuProc,
 };
 
+static struct RectMenu s_nativeArcadeMenu =
+{
+	.stringIndexTitle = LNG_ARCADE,
+	.state = CENTER_ON_X,
+	.rows = s_nativeArcadeRows,
+	.funcPtr = MM_NativeArcadeMenuProc,
+};
+
+static struct RectMenu s_nativeAdhocStatusMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_ADHOC_STATUS,
+	.state = CENTER_ON_X,
+	.rows = s_nativeAdhocStatusRows,
+	.funcPtr = MM_NativeAdhocStatusMenuProc,
+};
+
 static struct RectMenu s_nativeBossFightMenu =
 {
 	.stringIndexTitle = NATIVE_MENU_STRING_BOSS_FIGHT,
@@ -166,6 +198,8 @@ static struct RectMenu s_nativeBossFightMenu =
 s32 s_nativeLanguageChosen = 0;
 static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
+static int s_nativeAdhocMenuOpen;
+static int s_nativeAdhocCancelPending;
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNativeGhostReplayMode;
@@ -180,6 +214,201 @@ static void MM_NativeExtraDifficultyPrepare(void)
 		.rows = s_nativeExtraDifficultyRows,
 		.funcPtr = MM_MenuProc_Difficulty,
 	};
+}
+
+static void MM_NativeArcadePrepareMode(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+	gGT->gameMode2 &= ~CUP_ANY_KIND;
+	gGT->numLaps = MM_DEFAULT_LAP_COUNT;
+	NativeBossFight_Clear();
+	if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
+	{
+		gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
+	}
+	gGT->gameMode1 |= ARCADE_MODE;
+	gNativeGhostReplayMode = 0;
+	NativeGhostInput_ClearSelection();
+}
+
+static void MM_NativeAdhocCloseStatusMenu(void)
+{
+	struct RectMenu *parent = s_nativeAdhocStatusMenu.ptrPrevBox_InHierarchy;
+
+	if (parent != NULL)
+	{
+		parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		parent->ptrNextBox_InHierarchy = NULL;
+	}
+	s_nativeAdhocStatusMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeAdhocStatusMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocStatusMenu.rowSelected = 0;
+	s_nativeAdhocMenuOpen = 0;
+	s_nativeAdhocCancelPending = 0;
+}
+
+static void MM_NativeAdhocOpenStatusMenu(struct RectMenu *parent, int host)
+{
+	MM_NativeArcadePrepareMode();
+	sdata->gGT->numPlyrNextGame = 2;
+
+	s_nativeAdhocStatusMenu.state = CENTER_ON_X;
+	s_nativeAdhocStatusMenu.rowSelected = 0;
+	s_nativeAdhocStatusMenu.ptrPrevBox_InHierarchy = parent;
+	s_nativeAdhocStatusMenu.ptrNextBox_InHierarchy = NULL;
+	parent->ptrNextBox_InHierarchy = &s_nativeAdhocStatusMenu;
+	parent->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+	s_nativeAdhocMenuOpen = 1;
+	s_nativeAdhocCancelPending = 0;
+
+	if (host)
+	{
+		NativeAdhoc_StartHost();
+	}
+	else
+	{
+		NativeAdhoc_StartClient();
+	}
+}
+
+static void MM_NativeArcadeMenuProc(struct RectMenu *menu)
+{
+	struct RectMenu *parent;
+	s16 choose;
+
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	parent = menu->ptrPrevBox_InHierarchy;
+	if (menu->rowSelected < 0)
+	{
+		if (parent != NULL)
+		{
+			parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+			parent->ptrNextBox_InHierarchy = NULL;
+		}
+		return;
+	}
+
+	choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+	if (choose == NATIVE_MENU_STRING_LOCAL_ARCADE)
+	{
+		NativeAdhoc_Cancel();
+		MM_NativeArcadePrepareMode();
+		D230.menuRaceType.state = CENTER_ON_X;
+		D230.menuRaceType.rowSelected = 0;
+		D230.menuRaceType.ptrPrevBox_InHierarchy = menu;
+		D230.menuRaceType.ptrNextBox_InHierarchy = NULL;
+		menu->ptrNextBox_InHierarchy = &D230.menuRaceType;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_HOST_GAME)
+	{
+		MM_NativeAdhocOpenStatusMenu(menu, 1);
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_JOIN_GAME)
+	{
+		MM_NativeAdhocOpenStatusMenu(menu, 0);
+	}
+}
+
+static void MM_NativeAdhocStatusMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	NativeAdhoc_Cancel();
+	s_nativeAdhocCancelPending = 1;
+}
+
+static void MM_NativeAdhocPrepareHostState(void)
+{
+	struct RectMenu *mainMenu = &D230.menuMainMenu;
+	struct RectMenu *raceType = &D230.menuRaceType;
+
+	MM_NativeArcadePrepareMode();
+	sdata->gGT->numPlyrNextGame = 2;
+	D230.characterSelectTransitionState = IN_MENU;
+
+	mainMenu->state = EXECUTE_FUNCPTR | CENTER_ON_COORDS | ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+	mainMenu->ptrPrevBox_InHierarchy = NULL;
+	mainMenu->ptrNextBox_InHierarchy = raceType;
+
+	raceType->state = CENTER_ON_X;
+	raceType->rowSelected = 0;
+	raceType->ptrPrevBox_InHierarchy = mainMenu;
+	raceType->ptrNextBox_InHierarchy = NULL;
+
+	sdata->ptrDesiredMenu = NULL;
+	sdata->ptrActiveMenu = mainMenu;
+	sdata->activeSubMenu = NULL;
+	sdata->framesRemainingInMenu = 0;
+	s_nativeAdhocMenuOpen = 0;
+	s_nativeAdhocCancelPending = 0;
+}
+
+void MM_NativeAdhoc_Update(void)
+{
+	if (NativeAdhoc_HostNeedsState())
+	{
+		MM_NativeAdhocPrepareHostState();
+		NativeAdhoc_HostStateReady();
+		return;
+	}
+
+	if (NativeAdhoc_IsSessionActive())
+	{
+		s_nativeAdhocMenuOpen = 0;
+		s_nativeAdhocCancelPending = 0;
+		return;
+	}
+
+	if (s_nativeAdhocMenuOpen && (NativeAdhoc_GetStatus() == NATIVE_ADHOC_STATUS_IDLE))
+	{
+		MM_NativeAdhocCloseStatusMenu();
+		return;
+	}
+
+	if (s_nativeAdhocCancelPending && (NativeAdhoc_GetStatus() == NATIVE_ADHOC_STATUS_ERROR))
+	{
+		NativeAdhoc_Cancel();
+		MM_NativeAdhocCloseStatusMenu();
+	}
+}
+
+void MM_NativeAdhoc_ResetAfterFailure(void)
+{
+	struct RectMenu *mainMenu = &D230.menuMainMenu;
+	struct GameTracker *gGT = sdata->gGT;
+
+	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+	gGT->gameMode2 &= ~CUP_ANY_KIND;
+	gGT->numLaps = MM_DEFAULT_LAP_COUNT;
+	D230.titleMenuState = TITLE_MENU_STATE_IN_MENU;
+	mainMenu->state = EXECUTE_FUNCPTR | CENTER_ON_COORDS;
+	mainMenu->rowSelected = 0;
+	mainMenu->ptrPrevBox_InHierarchy = NULL;
+	mainMenu->ptrNextBox_InHierarchy = NULL;
+	s_nativeArcadeMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeArcadeMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocStatusMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeAdhocStatusMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocMenuOpen = 0;
+	s_nativeAdhocCancelPending = 0;
+	sdata->ptrActiveMenu = NULL;
+	sdata->activeSubMenu = NULL;
+	sdata->framesRemainingInMenu = 0;
+	sdata->ptrDesiredMenu = mainMenu;
 }
 
 static void MM_NativeLanguageLoad(s16 row)
@@ -599,17 +828,21 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// Arcade Mode
 	if (choose == LNG_ARCADE)
 	{
-		// DONT change, should only work in Arcade, and VS
+	#if defined(__vita__)
+		MM_NativeArcadePrepareMode();
+		s_nativeArcadeMenu.state = CENTER_ON_X;
+		s_nativeArcadeMenu.rowSelected = 0;
+		s_nativeArcadeMenu.ptrPrevBox_InHierarchy = mainMenu;
+		s_nativeArcadeMenu.ptrNextBox_InHierarchy = NULL;
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeArcadeMenu;
+	#else
 		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
 		{
 			gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
 		}
-
-		// set game mode to Arcade Mode
 		gGT->gameMode1 |= ARCADE_MODE;
-
-		// set next menu
 		mainMenu->ptrNextBox_InHierarchy = &D230.menuRaceType;
+	#endif
 		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
 		return;
 	}
@@ -926,6 +1159,13 @@ void MM_MenuProc_SingleCup(struct RectMenu *menu)
 	if (row == -1)
 	{
 		menu->ptrPrevBox_InHierarchy->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+	#if defined(__vita__)
+		if (NativeAdhoc_IsSessionActive())
+		{
+			NativeAdhoc_Cancel();
+			gGT->numPlyrNextGame = 1;
+		}
+	#endif
 		return;
 	}
 
@@ -946,6 +1186,17 @@ void MM_MenuProc_SingleCup(struct RectMenu *menu)
 		// if mode is Arcade
 		if ((gGT->gameMode1 & ARCADE_MODE) != 0)
 		{
+	#if defined(__vita__)
+			if (NativeAdhoc_IsSessionActive())
+			{
+				gGT->numPlyrNextGame = 2;
+				MM_NativeExtraDifficultyPrepare();
+				menu->ptrNextBox_InHierarchy = &s_nativeExtraDifficultyMenu;
+				D230.characterSelectTransitionState = IN_MENU;
+				return;
+			}
+	#endif
+
 			// set next menu to 1P+2P select
 			menu->ptrNextBox_InHierarchy = &D230.menuPlayers1P2P;
 			D230.characterSelectTransitionState = IN_MENU;

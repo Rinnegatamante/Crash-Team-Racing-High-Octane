@@ -4,7 +4,7 @@ GIT_VERSION := $(shell git describe --abbrev=6 --dirty --always --tags)
 SHADERS     := shaders
 
 LIBS = -lSDL3 -lvitaGL -lvitashark -lSceShaccCgExt -ltaihen_stub -lvorbisfile -lvorbis -logg \
-	-lspeexdsp -lmpg123 -lScePspnetAdhoc_stub -lSceShaccCg_stub -lSceKernelDmacMgr_stub -lpthread \
+	-lspeexdsp -lmpg123 -lScePspnetAdhoc_stub -lSceNetAdhocMatching_stub -lSceShaccCg_stub -lSceKernelDmacMgr_stub -lpthread \
 	-lc -lSceCommonDialog_stub -lSceAudio_stub -lSceLibKernel_stub -lmathneon -lkubridge_stub \
 	-lSceNet_stub -lSceNetCtl_stub -lpng -lSceDisplay_stub -lSceGxm_stub -lSceAudioIn_stub \
 	-Wl,--whole-archive -lSceSysmodule_stub -Wl,--no-whole-archive -lSceIme_stub -lSceCamera_stub \
@@ -22,7 +22,7 @@ CXX      = $(PREFIX)-g++
 CFLAGS  = -fsigned-char -fshort-enums -Wl,-q -O3 -g -fno-optimize-sibling-calls \
 	-ffast-math -mtune=cortex-a9 -mfpu=neon -fsigned-char -DCTR_NATIVE \
 	-DBUILD=926 -DCTR_INTERNAL -DCTR_NATIVE_VERSION="\"0.1.0-beta.5\"" \
-	-DCTR_NATIVE_BUILD_ID="\"vita\"" -I. -Iinclude -fno-short-enums
+	-DCTR_NATIVE_BUILD_ID="\"$(GIT_VERSION)\"" -I. -Iinclude -fno-short-enums
 CXXFLAGS  = $(CFLAGS) -fno-exceptions -std=gnu++11
 ASFLAGS = $(CFLAGS)
 

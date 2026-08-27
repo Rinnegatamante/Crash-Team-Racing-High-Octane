@@ -281,6 +281,7 @@ void Platform_Shutdown(void)
 	}
 
 	s_platformInitialized = 0;
+	NativeAdhoc_Shutdown();
 #if defined(CTR_INTERNAL)
 	NativeRenderer_FinishGpuMeasurements();
 	NativePerf_Shutdown();
@@ -582,6 +583,32 @@ global_variable u64 s_nextVBlankCounter = 0;
 global_variable u64 s_vblankRemainder = 0;
 global_variable int s_nativeVBlankCount = 0;
 
+void NativeAdhocTiming_Capture(struct NativeAdhocTimingState *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	state->rootCounterValue = s_rootCounterValue;
+	state->rootCounterBase = s_rootCounterBase;
+	state->vblankCount = s_nativeVBlankCount;
+}
+
+void NativeAdhocTiming_Restore(const struct NativeAdhocTimingState *state)
+{
+	if (state == NULL)
+	{
+		return;
+	}
+
+	s_rootCounterValue = state->rootCounterValue;
+	s_rootCounterBase = state->rootCounterBase;
+	s_nativeVBlankCount = state->vblankCount;
+	s_nextVBlankCounter = 0;
+	s_vblankRemainder = 0;
+}
+
 internal u64 Native_CounterFromMicroseconds(u64 freq, u64 microseconds)
 {
 	return (freq * microseconds) / 1000000;
@@ -613,6 +640,13 @@ internal void Native_EnsureVBlankTarget(void)
 		s_vblankRemainder = 0;
 		Native_AdvanceVBlankTarget();
 	}
+}
+
+internal void Native_RebaseVBlankTarget(void)
+{
+	s_nextVBlankCounter = SDL_GetPerformanceCounter();
+	s_vblankRemainder = 0;
+	Native_AdvanceVBlankTarget();
 }
 
 internal void Native_WaitUntilVBlankTarget(void)
@@ -760,7 +794,14 @@ int VSync(int mode)
 	}
 #endif
 
-	emittedVBlanks += Native_CatchUpDueVBlanks();
+	if (NativeAdhoc_IsTimingControlled())
+	{
+		Native_RebaseVBlankTarget();
+	}
+	else
+	{
+		emittedVBlanks += Native_CatchUpDueVBlanks();
+	}
 
 	for (s32 i = 0; i < requestedVBlanks; i++)
 	{
@@ -802,7 +843,14 @@ void Platform_WaitUntilVBlank(int targetVBlank)
 	}
 #endif
 
-	emittedVBlanks += Native_CatchUpDueVBlanks();
+	if (NativeAdhoc_IsTimingControlled())
+	{
+		Native_RebaseVBlankTarget();
+	}
+	else
+	{
+		emittedVBlanks += Native_CatchUpDueVBlanks();
+	}
 
 	while (s_nativeVBlankCount < targetVBlank)
 	{

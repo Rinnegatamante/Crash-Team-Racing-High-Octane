@@ -76,6 +76,7 @@ DIR *__wrap_opendir(const char *fname) {
 #include "platform/native_memory.c"
 #include "platform/native_checkpoint.c"
 #include "platform/native_checkpoint_file.c"
+#include "platform/native_adhoc.c"
 #include "platform/native_cd.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
