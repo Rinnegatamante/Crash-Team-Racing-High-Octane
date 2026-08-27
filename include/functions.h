@@ -505,6 +505,8 @@ void RaceConfig_SaveGameOptions(void);
 
 void RefreshCard_Entry(void);
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID);
+void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID);
+void RefreshCard_InvalidateGhostProfileIndex(void);
 void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID, int time, char *name);
 int RefreshCard_GhostDecodeByte(int value);
 void RefreshCard_GhostDecodeProfile(struct GhostProfile *profile, char *fileName);

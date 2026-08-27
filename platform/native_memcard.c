@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NATIVE_MEMCARD_MAX_FOUND_FILES 64
+#define NATIVE_MEMCARD_MAX_FOUND_FILES 256
 #define NATIVE_MEMCARD_MAX_NAME        64
 #define NATIVE_MEMCARD_MAX_PATH        512
 #define NATIVE_MEMCARD_COPY_BUFFER     8192

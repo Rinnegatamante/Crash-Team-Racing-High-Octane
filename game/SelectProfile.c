@@ -473,6 +473,11 @@ void SelectProfile_ToggleMode(u32 mode)
 
 	// High nibble selects the profile screen, low nibble selects the action.
 	*SelectProfile_Mode() = mode & SELECT_PROFILE_SCREEN_MASK;
+	if (*SelectProfile_Mode() == SELECT_PROFILE_SCREEN_GHOST)
+	{
+		u16 trackID = ((mode & SELECT_PROFILE_ACTION_MASK) == SELECT_PROFILE_ACTION_SAVE) ? sdata->gGT->levelID : sdata->gGT->currLEV;
+		RefreshCard_ActivateGhostProfilesForLEV(trackID);
+	}
 	sdata->selectProfileState.exitToPrevious = 0;
 	sdata->selectProfileState.actionDone = 0;
 	sdata->selectProfileState.overwritePrompt = 0;

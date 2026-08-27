@@ -1,9 +1,77 @@
 #include <common.h>
 
+#define REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT 32
+
+static struct GhostProfile s_nativeGhostProfiles[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
+static u8 s_nativeGhostProfileCounts[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT];
+static b32 s_nativeGhostProfileIndexValid;
+
+static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
+{
+	char *fileName;
+
+	if (sdata->memcard_stage != MC_STAGE_IDLE)
+	{
+		return false;
+	}
+
+	memset(s_nativeGhostProfileCounts, 0, sizeof(s_nativeGhostProfileCounts));
+	fileName = MEMCARD_FindFirstGhost(0, data.s_BASCUS_94426G_Star);
+
+	while (fileName != NULL)
+	{
+		struct GhostProfile profile = {0};
+		RefreshCard_GhostDecodeProfile(&profile, fileName);
+
+		if ((u16)profile.trackID < REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT)
+		{
+			u8 count = s_nativeGhostProfileCounts[profile.trackID];
+			if (count < SELECT_PROFILE_GHOST_SLOT_COUNT)
+			{
+				s_nativeGhostProfiles[profile.trackID][count] = profile;
+				s_nativeGhostProfileCounts[profile.trackID] = count + 1;
+			}
+		}
+
+		fileName = MEMCARD_FindNextGhost();
+	}
+
+	s_nativeGhostProfileIndexValid = true;
+	return true;
+}
+
+void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID)
+{
+	if ((trackID >= REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT) ||
+	    ((!s_nativeGhostProfileIndexValid) && !RefreshCard_NativeRebuildGhostProfileIndex()))
+	{
+		return;
+	}
+
+	int count = s_nativeGhostProfileCounts[trackID];
+	if (count != 0)
+	{
+		memcpy(sdata->ghostProfile_memcard, s_nativeGhostProfiles[trackID], count * sizeof(struct GhostProfile));
+	}
+
+	sdata->numGhostProfilesSaved = count;
+}
+
+void RefreshCard_InvalidateGhostProfileIndex(void)
+{
+	s_nativeGhostProfileIndexValid = false;
+}
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800469f0-0x80046a74.
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID)
 {
+	if ((trackID < REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT) &&
+	    (s_nativeGhostProfileIndexValid || RefreshCard_NativeRebuildGhostProfileIndex()))
+	{
+		return s_nativeGhostProfileCounts[trackID];
+	}
+
 	int i;
 	int count = 0;
 	int numGhosts = (s16)CTR_ReadU16LE(&sdata->numGhostProfilesSaved);
@@ -274,6 +342,7 @@ void RefreshCard_Unknown2(void)
 void RefreshCard_GetNumGhostsTotal(void)
 {
 	CTR_WriteU16LE(&sdata->numGhostProfilesSaved, 0);
+	RefreshCard_InvalidateGhostProfileIndex();
 }
 
 
@@ -509,6 +578,7 @@ void RefreshCard_Unknown3(void)
 
 				sdata->numGhostProfilesSaved++;
 				sdata->ghostProfile_memcard[sdata->ghostProfile_indexSave] = sdata->ghostProfile_current;
+				RefreshCard_InvalidateGhostProfileIndex();
 			}
 		}
 
