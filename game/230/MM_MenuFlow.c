@@ -30,44 +30,13 @@ enum MMNativeExtraDifficultyConstants
 	MM_NATIVE_DIFFICULTY_COUNT,
 };
 
-static const char *s_nativeExtraDifficultyText[MM_NATIVE_LANGUAGE_COUNT][2] =
-{
-	{"SUPER HARD", "ULTRA HARD"},
-	{"SUPER DIFFICILE", "ULTRA DIFFICILE"},
-	{"SUPER SCHWER", "ULTRA SCHWER"},
-	{"SUPER DIFFICILE", "ULTRA DIFFICILE"},
-	{"SUPER DIFICIL", "ULTRA DIFICIL"},
-	{"SUPER MOEILIJK", "ULTRA MOEILIJK"},
-};
-
-static const char *s_nativeMirrorModeText[MM_NATIVE_LANGUAGE_COUNT][2] =
-{
-	{"MIRROR: OFF", "MIRROR: ON"},
-	{"MIROIR: NON", "MIROIR: OUI"},
-	{"SPIEGEL: AUS", "SPIEGEL: EIN"},
-	{"SPECCHIO: NO", "SPECCHIO: SI"},
-	{"ESPEJO: NO", "ESPEJO: SI"},
-	{"SPIEGEL: UIT", "SPIEGEL: AAN"},
-};
-
-static const char *s_nativeGhostReplayText[MM_NATIVE_LANGUAGE_COUNT] =
-{
-	"GHOST REPLAY",
-	"REPLAY FANTOME",
-	"GEISTER-REPLAY",
-	"REPLAY FANTASMA",
-	"REPLAY FANTASMA",
-	"SPOOKREPLAY",
-};
-static char *s_nativeGhostReplayOriginalText;
-
 static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1] =
 {
 	{LNG_EASY, 0, 1, 0, 0},
 	{LNG_MEDIUM, 0, 2, 1, 1},
 	{LNG_HARD, 1, 3, 2, 2},
-	{LNG_NA_241, 2, 4, 3, 3},
-	{LNG_NA_242, 3, 4, 4, 4},
+	{NATIVE_MENU_STRING_SUPER_HARD, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_ULTRA_HARD, 3, 4, 4, 4},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -94,13 +63,10 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 {
 	{LNG_ADVENTURE, 0, 1, 0, 0},
 	{LNG_TIME_TRIAL, 0, 2, 1, 1},
-	{LNG_LOAD_GHOST_CHOOSE_GHOST, 1, 3, 2, 2},
-	{LNG_ARCADE, 2, 4, 3, 3},
-	{LNG_VS, 3, 5, 4, 4},
-	{LNG_BATTLE, 4, 6, 5, 5},
-	{LNG_HIGH_SCORE, 5, 7, 6, 6},
-	{LNG_LANGUAGE, 6, 8, 7, 7},
-	{LNG_NA_243, 7, 8, 8, 8},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_OPTIONS, 4, 5, 5, 5},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -108,19 +74,33 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 {
 	{LNG_ADVENTURE, 0, 1, 0, 0},
 	{LNG_TIME_TRIAL, 0, 2, 1, 1},
-	{LNG_LOAD_GHOST_CHOOSE_GHOST, 1, 3, 2, 2},
-	{LNG_ARCADE, 2, 4, 3, 3},
-	{LNG_VS, 3, 5, 4, 4},
-	{LNG_BATTLE, 4, 6, 5, 5},
-	{LNG_HIGH_SCORE, 5, 7, 6, 6},
-	{LNG_LANGUAGE, 6, 8, 7, 7},
-	{LNG_NA_243, 7, 9, 8, 8},
-	{LNG_SCRAPBOOK, 8, 9, 9, 9},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_OPTIONS, 4, 6, 5, 5},
+	{LNG_SCRAPBOOK, 5, 6, 6, 6},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeTimeTrialRows[] =
+{
+	{LNG_TIME_TRIAL, 2, 1, 0, 0},
+	{NATIVE_MENU_STRING_GHOST_REPLAY, 0, 2, 1, 1},
+	{LNG_HIGH_SCORE, 1, 0, 2, 2},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeOptionsRows[] =
+{
+	{LNG_LANGUAGE, 1, 1, 0, 0},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 0, 1, 1},
 	{RECTMENU_STRING_NONE},
 };
 
 static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
 static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
+static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu);
+static void MM_NativeOptionsMenuProc(struct RectMenu *menu);
 
 static struct RectMenu s_nativeLanguageBootMenu =
 {
@@ -143,6 +123,22 @@ static struct RectMenu s_nativeLanguageMainMenu =
 	.funcPtr = MM_NativeLanguageMainMenuProc,
 };
 
+static struct RectMenu s_nativeTimeTrialMenu =
+{
+	.stringIndexTitle = LNG_TIME_TRIAL,
+	.state = CENTER_ON_X,
+	.rows = s_nativeTimeTrialRows,
+	.funcPtr = MM_NativeTimeTrialMenuProc,
+};
+
+static struct RectMenu s_nativeOptionsMenu =
+{
+	.stringIndexTitle = LNG_OPTIONS,
+	.state = CENTER_ON_X,
+	.rows = s_nativeOptionsRows,
+	.funcPtr = MM_NativeOptionsMenuProc,
+};
+
 s32 s_nativeLanguageChosen = 0;
 static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
@@ -151,82 +147,8 @@ extern int gNativeMirrorModeEnabled;
 extern int gNativeGhostReplayMode;
 extern void save_config();
 
-static void MM_NativeGhostReplayApplyText(void)
-{
-	if ((sdata->lngStrings == NULL) || (sdata->numLngStrings <= LNG_LOAD_GHOST_CHOOSE_GHOST))
-	{
-		return;
-	}
-
-	s16 languageRow = 0;
-	if ((cfg_language >= 2) && (cfg_language <= 7))
-	{
-		languageRow = (s16)(cfg_language - 2);
-	}
-
-	char *currentText = sdata->lngStrings[LNG_LOAD_GHOST_CHOOSE_GHOST];
-	b32 isNativeReplayText = false;
-	for (s16 i = 0; i < MM_NATIVE_LANGUAGE_COUNT; i++)
-	{
-		if (currentText == s_nativeGhostReplayText[i])
-		{
-			isNativeReplayText = true;
-			break;
-		}
-	}
-	if (!isNativeReplayText)
-	{
-		s_nativeGhostReplayOriginalText = currentText;
-	}
-
-	sdata->lngStrings[LNG_LOAD_GHOST_CHOOSE_GHOST] = (char *)s_nativeGhostReplayText[languageRow];
-}
-
-static void MM_NativeGhostReplayRestoreText(void)
-{
-	if ((s_nativeGhostReplayOriginalText != NULL) && (sdata->lngStrings != NULL) &&
-	    (sdata->numLngStrings > LNG_LOAD_GHOST_CHOOSE_GHOST))
-	{
-		sdata->lngStrings[LNG_LOAD_GHOST_CHOOSE_GHOST] = s_nativeGhostReplayOriginalText;
-	}
-}
-
-static void MM_NativeMirrorModeApplyText(void)
-{
-	s16 languageRow = 0;
-
-	if ((cfg_language >= 2) && (cfg_language <= 7))
-	{
-		languageRow = (s16)(cfg_language - 2);
-	}
-
-	if ((sdata->lngStrings != NULL) && (sdata->numLngStrings > LNG_NA_243))
-	{
-		sdata->lngStrings[LNG_NA_243] =
-			(char *)s_nativeMirrorModeText[languageRow][gNativeMirrorModeEnabled != 0];
-	}
-}
-
-static void MM_NativeExtraDifficultyApplyText(void)
-{
-	s16 languageRow = 0;
-
-	if ((cfg_language >= 2) && (cfg_language <= 7))
-	{
-		languageRow = (s16)(cfg_language - 2);
-	}
-
-	if ((sdata->lngStrings != NULL) && (sdata->numLngStrings > LNG_NA_242))
-	{
-		sdata->lngStrings[LNG_NA_241] = (char *)s_nativeExtraDifficultyText[languageRow][0];
-		sdata->lngStrings[LNG_NA_242] = (char *)s_nativeExtraDifficultyText[languageRow][1];
-	}
-}
-
 static void MM_NativeExtraDifficultyPrepare(void)
 {
-	MM_NativeExtraDifficultyApplyText();
-
 	s_nativeExtraDifficultyMenu = (struct RectMenu)
 	{
 		.stringIndexTitle = LNG_DIFFICULTY,
@@ -245,9 +167,6 @@ static void MM_NativeLanguageLoad(s16 row)
 
 	cfg_language = s_nativeLanguageFileIndex[row];
 	LOAD_LangFile((int)sdata->ptrBigfile1, cfg_language);
-	MM_NativeExtraDifficultyApplyText();
-	MM_NativeMirrorModeApplyText();
-	MM_NativeGhostReplayApplyText();
 
 	s_nativeLanguageRow = row;
 	s_nativeLanguageChosen = 1;
@@ -304,6 +223,104 @@ static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu)
 
 	parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
 }
+
+static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
+	{
+		return;
+	}
+
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	struct RectMenu *parent = menu->ptrPrevBox_InHierarchy;
+	if (menu->rowSelected < 0)
+	{
+		if (parent != NULL)
+		{
+			parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		}
+		return;
+	}
+
+	struct GameTracker *gGT = sdata->gGT;
+	s16 choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+
+	gNativeGhostReplayMode = 0;
+	NativeGhostInput_ClearSelection();
+
+	if (choose == LNG_TIME_TRIAL)
+	{
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 |= TIME_TRIAL;
+		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_GHOST_REPLAY)
+	{
+		gNativeGhostReplayMode = 1;
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_GHOST_REPLAY;
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 |= TIME_TRIAL;
+		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
+		return;
+	}
+
+	if (choose == LNG_HIGH_SCORE)
+	{
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_HIGH_SCORE;
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+	}
+}
+
+static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
+	{
+			return;
+	}
+
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	struct RectMenu *parent = menu->ptrPrevBox_InHierarchy;
+	if (menu->rowSelected < 0)
+	{
+		if (parent != NULL)
+		{
+			parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		}
+		return;
+	}
+
+	s16 choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+
+	if (choose == LNG_LANGUAGE)
+	{
+		s_nativeLanguageMainMenu.rowSelected = s_nativeLanguageRow;
+		s_nativeLanguageMainMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeLanguageMainMenu.ptrPrevBox_InHierarchy = menu;
+
+		menu->ptrNextBox_InHierarchy = &s_nativeLanguageMainMenu;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
+	{
+		gNativeMirrorModeEnabled ^= 1;
+			save_config();
+	}
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified against retail 230 0x800abaf0-0x800abcac.
@@ -354,8 +371,6 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	struct GameTracker *gGT = sdata->gGT;
 
 #if defined(CTR_NATIVE)
-	MM_NativeMirrorModeApplyText();
-	MM_NativeGhostReplayApplyText();
 
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
@@ -493,32 +508,23 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// Time Trial
 	if (choose == LNG_TIME_TRIAL)
 	{
-		MM_NativeGhostReplayRestoreText();
-		// Leave main menu hierarchy
-		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+#if defined(CTR_NATIVE)
+		s_nativeTimeTrialMenu.rowSelected = 0;
+		s_nativeTimeTrialMenu.state = CENTER_ON_X;
+		s_nativeTimeTrialMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeTimeTrialMenu.ptrPrevBox_InHierarchy = mainMenu;
 
-		// Leave through the normal character-select flow.
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeTimeTrialMenu;
+		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+#else
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
 		D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
-
-		// set game mode to Time Trial Mode
-		gGT->numPlyrNextGame = 1;
-		gGT->gameMode1 |= TIME_TRIAL;
-		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
-
-		return;
-	}
-
-	if (choose == LNG_LOAD_GHOST_CHOOSE_GHOST)
-	{
-		MM_NativeGhostReplayRestoreText();
-		NativeGhostInput_ClearSelection();
-		gNativeGhostReplayMode = 1;
-		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
-		D230.desiredMenuIndex = MM_EXIT_ROUTE_GHOST_REPLAY;
 		gGT->numPlyrNextGame = 1;
 		gGT->gameMode1 |= TIME_TRIAL;
 		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
 		return;
+#endif
 	}
 
 	// Arcade Mode
@@ -581,25 +587,16 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	}
 
 #if defined(CTR_NATIVE)
-	// Language
-	if (choose == LNG_LANGUAGE)
+	// Options
+	if (choose == LNG_OPTIONS)
 	{
-		s_nativeLanguageMainMenu.rowSelected = s_nativeLanguageRow;
-		s_nativeLanguageMainMenu.ptrNextBox_InHierarchy = NULL;
-		s_nativeLanguageMainMenu.ptrPrevBox_InHierarchy = mainMenu;
+		s_nativeOptionsMenu.rowSelected = 0;
+		s_nativeOptionsMenu.state = CENTER_ON_X;
+		s_nativeOptionsMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeOptionsMenu.ptrPrevBox_InHierarchy = mainMenu;
 
-		mainMenu->ptrNextBox_InHierarchy = &s_nativeLanguageMainMenu;
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeOptionsMenu;
 		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
-		return;
-	}
-
-	// Mirror Mode
-	if (choose == LNG_NA_243)
-	{
-		gNativeMirrorModeEnabled ^= 1;
-		MM_NativeMirrorModeApplyText();
-		save_config();
-		mainMenu->state &= ~ONLY_DRAW_TITLE;
 		return;
 	}
 #endif
@@ -786,8 +783,8 @@ void MM_ToggleRows_Difficulty(void)
 	}
 
 	u16 hardLockFlag = D230.rowsDifficulty[MM_NATIVE_DIFFICULTY_HARD].stringIndex & MENU_ROW_LOCKED;
-	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_SUPER_HARD].stringIndex = LNG_NA_241 | hardLockFlag;
-	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_ULTRA_HARD].stringIndex = LNG_NA_242 | hardLockFlag;
+	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_SUPER_HARD].stringIndex = NATIVE_MENU_STRING_SUPER_HARD | hardLockFlag;
+	s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_ULTRA_HARD].stringIndex = NATIVE_MENU_STRING_ULTRA_HARD | hardLockFlag;
 #endif
 }
 

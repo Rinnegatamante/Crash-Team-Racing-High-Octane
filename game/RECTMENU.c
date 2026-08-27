@@ -1,5 +1,68 @@
 #include <common.h>
 
+extern int cfg_language;
+extern int gNativeMirrorModeEnabled;
+
+static char *RECTMENU_GetString(s16 stringIndex)
+{
+	static const char *ghostReplay[6] =
+	{
+		"GHOST REPLAY",
+		"REPLAY FANTOME",
+		"GEISTER-REPLAY",
+		"REPLAY FANTASMA",
+		"REPLAY FANTASMA",
+		"SPOOKREPLAY",
+	};
+	static const char *mirrorMode[6][2] =
+	{
+		{"MIRROR: OFF", "MIRROR: ON"},
+		{"MIROIR: NON", "MIROIR: OUI"},
+		{"SPIEGEL: AUS", "SPIEGEL: EIN"},
+		{"SPECCHIO: NO", "SPECCHIO: SI"},
+		{"ESPEJO: NO", "ESPEJO: SI"},
+		{"SPIEGEL: UIT", "SPIEGEL: AAN"},
+	};
+	static const char *superHard[6] =
+	{
+		"SUPER HARD",
+		"SUPER DIFFICILE",
+		"SUPER SCHWER",
+		"SUPER DIFFICILE",
+		"SUPER DIFICIL",
+		"SUPER MOEILIJK",
+	};
+	static const char *ultraHard[6] =
+	{
+		"ULTRA HARD",
+		"ULTRA DIFFICILE",
+		"ULTRA SCHWER",
+		"ULTRA DIFFICILE",
+		"ULTRA DIFICIL",
+		"ULTRA MOEILIJK",
+	};
+
+	int languageRow = 0;
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		languageRow = cfg_language - 2;
+	}
+
+	switch (stringIndex & MENU_ROW_LNG_MASK)
+	{
+	case NATIVE_MENU_STRING_GHOST_REPLAY:
+		return (char *)ghostReplay[languageRow];
+	case NATIVE_MENU_STRING_MIRROR_MODE:
+		return (char *)mirrorMode[languageRow][gNativeMirrorModeEnabled != 0];
+	case NATIVE_MENU_STRING_SUPER_HARD:
+		return (char *)superHard[languageRow];
+	case NATIVE_MENU_STRING_ULTRA_HARD:
+		return (char *)ultraHard[languageRow];
+	default:
+		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
+	}
+}
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80044ef8-0x80044f90.
 void RECTMENU_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, u32 color0, u32 color1, u32 color2, u32 color3,
@@ -438,7 +501,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 	for (row = m->rows; row->stringIndex != -1; row++)
 	{
 		// width of string in each row
-		lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[row->stringIndex & 0x7fff], fontType);
+		lineWidth = DecalFont_GetLineWidth(RECTMENU_GetString(row->stringIndex), fontType);
 
 		// set new width if new max is found
 		if (*width < (lineWidth + 1))
@@ -458,7 +521,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 		}
 
 		// width of string in each row
-		lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[m->stringIndexTitle & 0x7fff], fontType);
+		lineWidth = DecalFont_GetLineWidth(RECTMENU_GetString(m->stringIndexTitle), fontType);
 
 		// set new width if new max is found
 		if (*width < (lineWidth + 1))
@@ -592,12 +655,12 @@ LAB_80045e94:
 			{
 				uVar5 = uVar8 | 0x8000;
 			}
-			titleString = sdata->lngStrings[index];
+			titleString = RECTMENU_GetString(index);
 		}
 		else
 		{
 			uVar5 = uVar8 | 0x8000;
-			titleString = sdata->lngStrings[index];
+			titleString = RECTMENU_GetString(index);
 			offsetX = (s16)(posX + menu->posX_prev + (menuWidth / 2));
 		}
 		DecalFont_DrawLine(titleString, offsetX, posY_prev, sVar4, uVar5);
@@ -628,13 +691,13 @@ LAB_80045e94:
 						{
 							textFlags |= 0x8000;
 						}
-						titleString = sdata->lngStrings[uVar5 & 0x7fff];
+						titleString = RECTMENU_GetString((s16)uVar5);
 						index = local_2c;
 					}
 					else
 					{
 						textFlags |= 0x8000;
-						titleString = sdata->lngStrings[uVar5 & 0x7fff];
+						titleString = RECTMENU_GetString((s16)uVar5);
 						sVar4 = (s16)(posX + menu->posX_prev + local_30);
 						index = posX_prev;
 					}
