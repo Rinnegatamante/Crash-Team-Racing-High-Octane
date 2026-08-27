@@ -324,17 +324,26 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 			gGT->pushBuffer[0].distanceToScreen_CURR = gGT->pushBuffer[0].distanceToScreen_PREV;
 		}
 
+#if defined(CTR_NATIVE)
+		b32 bootSkipRequested = (gGT->levelID == NAUGHTY_DOG_CRATE) && (gNativeBootSkipRequested != 0);
+		if (((sdata->gGamepads->gamepad[0].buttonsTapped & BTN_START) != 0) || bootSkipRequested)
+#else
 		if ((sdata->gGamepads->gamepad[0].buttonsTapped & BTN_START) != 0)
+#endif
 		{
 			gGT->clockEffectEnabled &= ~CAM_PATH_FLAG_CLOCK_EFFECT;
 			if ((u32)(gGT->levelID - CREDITS_CRASH) >= CS_CREDITS_LEVEL_COUNT)
 			{
 				if (gGT->levelID == NAUGHTY_DOG_CRATE)
 				{
+#if defined(CTR_NATIVE)
+					gNativeBootSkipRequested = 0;
+#else
 					if ((u32)gGT->msInThisLEV >> CS_FRAME32_SHIFT < CS_ND_CRATE_SKIP_MIN_FRAME32)
 					{
 						goto afterCameraAndSkipChecks;
 					}
+#endif
 					RaceFlag_SetCanDraw(1);
 					if (!RaceFlag_IsTransitioning() && !RaceFlag_IsFullyOnScreen())
 					{

@@ -134,6 +134,20 @@ u32 main(void)
 			DropRain_Reset(gGT);
 			GAMEPROG_GetPtrHighScoreTrack();
 			MainInit_FinalizeInit(gGT);
+
+#if defined(CTR_NATIVE)
+			if ((gGT->levelID == NAUGHTY_DOG_CRATE) && (gNativeBootSkipRequested != 0))
+			{
+				gNativeBootSkipRequested = 0;
+				RaceFlag_SetCanDraw(1);
+				CseqMusic_StopAll();
+				CDSYS_XAPauseRequest();
+				RaceFlag_SetDrawOrder(0);
+				gGT->renderFlags = RENDER_FLAG_CHECKERED_FLAG;
+				MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+			}
+#endif
+
 			GAMEPAD_GetNumConnected(gGS);
 
 			sdata->boolSoundPaused = 0;
@@ -667,6 +681,11 @@ void StateZero()
 		// NOTE(aalhendi): Retail hardware interrupts keep XA/audio moving while
 		// this loop spins. Native owns VBlank in VSync(), so pump it here.
 		VSync(0);
+		if ((gNativeBootSkipRequested == 0) && (Platform_InputStartPressed() != 0))
+		{
+			gNativeBootSkipRequested = 1;
+			CDSYS_XAPauseRequest();
+		}
 #endif
 		CDSYS_XAPauseAtEnd();
 	}

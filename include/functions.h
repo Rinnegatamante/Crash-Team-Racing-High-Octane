@@ -139,6 +139,9 @@ void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap);
 void GhostTape_WriteMoves(s16 raceFinished);
 
 extern int gNativeGhostReplayMode;
+#if defined(CTR_NATIVE)
+extern int gNativeBootSkipRequested;
+#endif
 b32 NativeGhostInput_IsModernGhost(const char *ghostName);
 void NativeGhostInput_ClearSelection(void);
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID);

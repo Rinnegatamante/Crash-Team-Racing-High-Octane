@@ -16,6 +16,7 @@
 #define NATIVE_INPUT_PAD_ANALOG            0x73
 #define NATIVE_INPUT_PAD_MULTITAP          0x80
 #define NATIVE_INPUT_PAD_DISCONNECT        0xff
+#define NATIVE_INPUT_RAW_START             0x0008
 #define NATIVE_INPUT_AXIS_DEADZONE         500
 #define NATIVE_INPUT_VITA_STICK_THRESHOLD  64
 #define NATIVE_INPUT_MAP_FLAG_AXIS         0x4000
@@ -861,6 +862,27 @@ void Platform_InputShutdown(void)
 #endif
 	memset(s_padSlotData, 0, sizeof(s_padSlotData));
 	s_keyboardState = NULL;
+}
+
+int Platform_InputStartPressed(void)
+{
+	s32 slot;
+
+	if (s_inputInitialized == 0)
+	{
+		return 0;
+	}
+
+	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
+	{
+		const struct PlatformInputPadSnapshot *snapshot = &s_controllers[slot].snapshot;
+		if ((snapshot->connected != 0) && ((NativeInput_GetSnapshotButtons(snapshot) & NATIVE_INPUT_RAW_START) == 0))
+		{
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 void Platform_InputUpdate(void)
