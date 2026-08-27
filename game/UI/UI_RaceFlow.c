@@ -366,6 +366,10 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 	}
 
 	option = menu->rows[row].stringIndex;
+	if ((gNativeGhostReplayMode != 0) && (option == LNG_RESTART))
+	{
+		option = UI_RACE_END_OPTION_RETRY;
+	}
 
 	// if not SAVE GHOST
 	if (option != UI_RACE_END_OPTION_SAVE_GHOST)

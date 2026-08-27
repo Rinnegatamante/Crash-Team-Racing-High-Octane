@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern int gNativeGhostReplayMode;
+#endif
+
 enum TrackSelectVideoState
 {
 	MM_TRACK_VIDEO_ICON = 1,
@@ -477,6 +481,12 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				// if track has not been chosen
 				if (D230.trackSelect.transition.startAfterExit == 0)
 				{
+					if (gNativeGhostReplayMode != 0)
+					{
+						gNativeGhostReplayMode = 0;
+						MM_JumpTo_Title_Returning();
+						return;
+					}
 					// return to character selection
 					sdata->ptrDesiredMenu = &D230.menuCharacterSelect;
 					MM_Characters_RestoreIDs();
@@ -610,6 +620,13 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			case BTN_CROSS_one:
 			case BTN_CIRCLE:
+
+				if ((gNativeGhostReplayMode != 0) &&
+				    (RefreshCard_CountModernGhostProfilesForLEV(selectMenu[D230.trackSelect.currentTrack].levID) == 0))
+				{
+					OtherFX_Play(5, 1);
+					break;
+				}
 
 				// "enter/confirm" sound
 				// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0434-0x800b0444 for track-select confirm SFX.

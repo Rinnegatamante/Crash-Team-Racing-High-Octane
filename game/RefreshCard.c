@@ -4,6 +4,8 @@
 
 static struct GhostProfile s_nativeGhostProfiles[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
 static u8 s_nativeGhostProfileCounts[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT];
+static u8 s_nativeGhostProfileModern[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
+static u8 s_nativeActiveGhostProfileModern[SELECT_PROFILE_GHOST_SLOT_COUNT];
 static b32 s_nativeGhostProfileIndexValid;
 
 static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
@@ -16,6 +18,7 @@ static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
 	}
 
 	memset(s_nativeGhostProfileCounts, 0, sizeof(s_nativeGhostProfileCounts));
+	memset(s_nativeGhostProfileModern, 0, sizeof(s_nativeGhostProfileModern));
 	fileName = MEMCARD_FindFirstGhost(0, data.s_BASCUS_94426G_Star);
 
 	while (fileName != NULL)
@@ -29,6 +32,7 @@ static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
 			if (count < SELECT_PROFILE_GHOST_SLOT_COUNT)
 			{
 				s_nativeGhostProfiles[profile.trackID][count] = profile;
+				s_nativeGhostProfileModern[profile.trackID][count] = NativeGhostInput_IsModernGhost(profile.profile_name);
 				s_nativeGhostProfileCounts[profile.trackID] = count + 1;
 			}
 		}
@@ -49,12 +53,35 @@ void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID)
 	}
 
 	int count = s_nativeGhostProfileCounts[trackID];
+	memset(s_nativeActiveGhostProfileModern, 0, sizeof(s_nativeActiveGhostProfileModern));
 	if (count != 0)
 	{
 		memcpy(sdata->ghostProfile_memcard, s_nativeGhostProfiles[trackID], count * sizeof(struct GhostProfile));
+		memcpy(s_nativeActiveGhostProfileModern, s_nativeGhostProfileModern[trackID], count);
 	}
 
 	sdata->numGhostProfilesSaved = count;
+}
+
+s16 RefreshCard_CountModernGhostProfilesForLEV(u16 trackID)
+{
+	if ((trackID >= REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT) ||
+	    ((!s_nativeGhostProfileIndexValid) && !RefreshCard_NativeRebuildGhostProfileIndex()))
+	{
+		return 0;
+	}
+
+	s16 count = 0;
+	for (int i = 0; i < s_nativeGhostProfileCounts[trackID]; i++)
+	{
+		count += s_nativeGhostProfileModern[trackID][i] != 0;
+	}
+	return count;
+}
+
+b32 RefreshCard_IsGhostProfileModern(int row)
+{
+	return (row >= 0) && (row < SELECT_PROFILE_GHOST_SLOT_COUNT) && (s_nativeActiveGhostProfileModern[row] != 0);
 }
 
 void RefreshCard_InvalidateGhostProfileIndex(void)
@@ -559,6 +586,7 @@ void RefreshCard_Unknown3(void)
 		{
 			if (sdata->ghostProfile_rowSelect >= 0)
 			{
+				NativeGhostInput_RemoveForGhost(sdata->ghostFileNameFinal);
 				sdata->ghostProfile_rowSelect = -1;
 				RefreshCard_SetScreenText(MC_SCREEN_SAVING);
 				RefreshCard_QueueGhostSave();
@@ -578,6 +606,7 @@ void RefreshCard_Unknown3(void)
 
 				sdata->numGhostProfilesSaved++;
 				sdata->ghostProfile_memcard[sdata->ghostProfile_indexSave] = sdata->ghostProfile_current;
+				NativeGhostInput_SaveRecordingForGhost(sdata->ghostProfile_current.profile_name);
 				RefreshCard_InvalidateGhostProfileIndex();
 			}
 		}

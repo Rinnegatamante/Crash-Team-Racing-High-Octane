@@ -157,6 +157,12 @@ void MM_Title_MenuUpdate(void)
 		MM_Characters_RestoreIDs();
 		break;
 
+	case MM_EXIT_ROUTE_GHOST_REPLAY:
+		MM_Title_KillThread();
+		sdata->ptrDesiredMenu = &D230.menuTrackSelect;
+		MM_TrackSelect_Init();
+		break;
+
 	// high score menu
 	case MM_EXIT_ROUTE_HIGH_SCORE:
 

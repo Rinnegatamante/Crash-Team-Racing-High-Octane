@@ -138,6 +138,19 @@ void GhostTape_Start(void);
 void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap);
 void GhostTape_WriteMoves(s16 raceFinished);
 
+extern int gNativeGhostReplayMode;
+b32 NativeGhostInput_IsModernGhost(const char *ghostName);
+void NativeGhostInput_ClearSelection(void);
+b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID);
+void NativeGhostInput_StartRecording(void);
+void NativeGhostInput_DiscardRecording(void);
+void NativeGhostInput_StopRecording(void);
+void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads);
+void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS);
+b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName);
+void NativeGhostInput_RemoveForGhost(const char *ghostName);
+b32 NativeGhostInput_BeginPlayback(void);
+
 // howl
 int CountSounds(void);
 int OtherFX_Play(u32 soundID, int flags);
@@ -507,6 +520,8 @@ void RefreshCard_Entry(void);
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID);
 void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID);
 void RefreshCard_InvalidateGhostProfileIndex(void);
+s16 RefreshCard_CountModernGhostProfilesForLEV(u16 trackID);
+b32 RefreshCard_IsGhostProfileModern(int row);
 void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID, int time, char *name);
 int RefreshCard_GhostDecodeByte(int value);
 void RefreshCard_GhostDecodeProfile(struct GhostProfile *profile, char *fileName);

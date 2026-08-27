@@ -3,6 +3,11 @@
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80039fa8-0x8003a2b4
 void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 {
+	if (gNativeGhostReplayMode != 0)
+	{
+		sdata->gGT->newHighScoreIndex = -1;
+		return;
+	}
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *driver = gGT->drivers[0];
 	struct Driver *player = gGT->threadBuckets[PLAYER].thread->object;
@@ -100,6 +105,10 @@ CheckOxideAllTracks:
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003a2b4-0x8003a3fc.
 void MainGameEnd_SoloRaceSaveHighScore(void)
 {
+	if (gNativeGhostReplayMode != 0)
+	{
+		return;
+	}
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *player = gGT->drivers[0];
 
@@ -503,6 +512,10 @@ static void MainGameEnd_FinalizeDriverClocks(struct GameTracker *gGT)
 
 static void MainGameEnd_CheckTimeTrialGhost(struct GameTracker *gGT, struct Driver *player)
 {
+	if (gNativeGhostReplayMode != 0)
+	{
+		return;
+	}
 	if ((gGT->gameMode1 & RELIC_RACE) != 0)
 	{
 		RR_EndEvent_UnlockAward();

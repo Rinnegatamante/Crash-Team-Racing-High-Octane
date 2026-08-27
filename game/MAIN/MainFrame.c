@@ -209,6 +209,9 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 		// before msInThisLEV and elapsedEventTime consume it.
 		NativeReplayScheduler_ConsumeFrameElapsedTimeMS(&gGT->elapsedTimeMS);
 #endif
+#if defined(CTR_NATIVE)
+		NativeGhostInput_ProcessFrameTiming(&gGT->elapsedTimeMS);
+#endif
 		gGT->msInThisLEV += gGT->elapsedTimeMS;
 		if (gGT->trafficLightsTimer < 1)
 		{

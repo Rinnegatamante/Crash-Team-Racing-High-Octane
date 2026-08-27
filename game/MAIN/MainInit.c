@@ -1,5 +1,7 @@
 #include <common.h>
 
+extern int gNativeGhostReplayMode;
+
 static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_info *mesh)
 {
 	if (mesh == NULL || mesh->bspRoot == NULL)
@@ -354,7 +356,18 @@ void MainInit_Drivers(struct GameTracker *gGT)
 		BOTS_Adv_AdjustDifficulty();
 	}
 
-	GhostReplay_Init1();
+	if (gNativeGhostReplayMode == 0)
+	{
+		GhostReplay_Init1();
+	}
+	else
+	{
+		sdata->boolCanSaveGhost = 0;
+		sdata->boolGhostsDrawing = 0;
+		sdata->boolReplayHumanGhost = 0;
+		sdata->ptrGhostTape[0] = NULL;
+		sdata->ptrGhostTape[1] = NULL;
+	}
 
 	if (LOAD_IsOpen_RacingOrBattle())
 	{
@@ -441,18 +454,23 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	// basically, if you're in time trial gameplay
 	if ((gameMode & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) == TIME_TRIAL)
 	{
-		GhostReplay_Init2();
-
-		GhostTape_Start();
+		if (gNativeGhostReplayMode == 0)
+		{
+			GhostReplay_Init2();
+			GhostTape_Start();
+		}
 
 #if defined(CTR_NATIVE)
-		struct Model **humanPlyrDriverModel = &gGT->threadBuckets[PLAYER].thread->inst->model;
+		if (gNativeGhostReplayMode == 0)
+		{
+			struct Model **humanPlyrDriverModel = &gGT->threadBuckets[PLAYER].thread->inst->model;
 
-		// that's characterIDs[1] from the MPK
-		// humanGhost = *humanPlyrDriverModel,
+			// that's characterIDs[1] from the MPK
+			// humanGhost = *humanPlyrDriverModel,
 
-		// then replace with intended P1 model
-		*humanPlyrDriverModel = data.driverModelExtras[0].model;
+			// then replace with intended P1 model
+			*humanPlyrDriverModel = data.driverModelExtras[0].model;
+		}
 #endif
 	}
 }
@@ -599,6 +617,11 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	if (gGT->Debug_ToggleNormalSpawn != 0)
 	{
 		MainGameStart_Initialize(gGT, 1);
+
+		if (gNativeGhostReplayMode != 0)
+		{
+			NativeGhostInput_BeginPlayback();
+		}
 
 		if (gGT->boolDemoMode != 0)
 		{

@@ -1,5 +1,27 @@
 #include <common.h>
 
+extern int gNativeGhostReplayMode;
+extern int cfg_language;
+static const char *s_nativeGhostFormatText[6][2] =
+{
+	{"MODERN", "LEGACY"},
+	{"MODERNE", "LEGACY"},
+	{"MODERN", "LEGACY"},
+	{"MODERNO", "LEGACY"},
+	{"MODERNO", "LEGACY"},
+	{"MODERN", "LEGACY"},
+};
+
+static char *SelectProfile_NativeGhostFormatText(b32 modern)
+{
+	int languageRow = 0;
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		languageRow = cfg_language - 2;
+	}
+	return (char *)s_nativeGhostFormatText[languageRow][modern ? 0 : 1];
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80047da8-0x80047dfc.
 void SelectProfile_QueueLoadHub_MenuProc(struct RectMenu *menu)
 {
@@ -392,7 +414,9 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 	RECT profileRect;
 	RECT innerRect;
 
+#if !defined(CTR_NATIVE)
 	(void)unused;
+#endif
 
 	profileRect.x = posX;
 	profileRect.y = posY;
@@ -413,10 +437,22 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 
 	if (profile != NULL)
 	{
-		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
 		int iconID = data.MetaDataCharacters[profile->characterID].iconID;
 
+#if defined(CTR_NATIVE)
+		int modernRow = unused;
+		if ((profile >= &sdata->ghostProfile_memcard[0]) &&
+		    (profile < &sdata->ghostProfile_memcard[SELECT_PROFILE_GHOST_SLOT_COUNT]))
+		{
+			modernRow = (int)(profile - &sdata->ghostProfile_memcard[0]);
+		}
+		b32 modern = RefreshCard_IsGhostProfileModern(modernRow);
+		DecalFont_DrawLine(SelectProfile_NativeGhostFormatText(modern), posX + 0x64, posY + 0x1e, FONT_SMALL,
+		                   modern ? 0xffff801d : 0xffff8016);
+#else
+		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
 		DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, 0xffff801d);
+#endif
 		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, 0xffff8001);
 		RECTMENU_DrawPolyGT4(gGT->ptrIcons[iconID], posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
 		                     sdata->ghostIconColor, sdata->ghostIconColor, sdata->ghostIconColor, TRANS_50_DECAL, 0x1000);
@@ -745,8 +781,15 @@ static int SelectProfile_GhostRowCount(int *savedCount, b32 *canChooseEmptySlot)
 	}
 	else
 	{
-		*canChooseEmptySlot = true;
-		count++;
+		if (gNativeGhostReplayMode != 0)
+		{
+			*canChooseEmptySlot = false;
+		}
+		else
+		{
+			*canChooseEmptySlot = true;
+			count++;
+		}
 	}
 
 	return count;
@@ -861,6 +904,10 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 		{
 			isWrongTrack = sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE;
 		}
+		if ((gNativeGhostReplayMode != 0) && (profile != NULL) && !RefreshCard_IsGhostProfileModern(i))
+		{
+			isWrongTrack = true;
+		}
 
 		SelectProfile_DrawGhostProfile(profile, x, y, i == menu->rowSelected, i, drawStyle, sdata->memcardAction == SELECT_PROFILE_ACTION_LOAD, isWrongTrack);
 
@@ -963,13 +1010,43 @@ static int SelectProfile_ProcessOverwritePrompt(void)
 
 static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 {
-	if (menu->rowSelected >= rowCount - 1)
+	b32 isNoGhostRow = menu->rowSelected >= rowCount - 1;
+	if (gNativeGhostReplayMode != 0)
+	{
+		isNoGhostRow = false;
+	}
+
+	if (isNoGhostRow)
 	{
 		if (sdata->ptrGhostTapePlaying != NULL)
 		{
 			memset(sdata->ptrGhostTapePlaying, 0, 0x28);
 		}
 
+		*SelectProfile_AllProfiles_ActionActive() = 1;
+		*SelectProfile_AllProfiles_ActionDone() = 1;
+		sdata->boolError = 1;
+		return;
+	}
+
+	if (gNativeGhostReplayMode != 0)
+	{
+		if ((menu->rowSelected < 0) || (menu->rowSelected >= sdata->numGhostProfilesSaved) ||
+		    !RefreshCard_IsGhostProfileModern(menu->rowSelected))
+		{
+			OtherFX_Play(5, 1);
+			return;
+		}
+
+		struct GhostProfile *profile = &sdata->ghostProfile_memcard[menu->rowSelected];
+		if (!NativeGhostInput_SelectGhost(profile->profile_name, profile->trackID, profile->characterID))
+		{
+			OtherFX_Play(5, 1);
+			return;
+		}
+
+		sdata->ghostProfile_indexLoad = menu->rowSelected;
+		data.characterIDs[0] = profile->characterID;
 		*SelectProfile_AllProfiles_ActionActive() = 1;
 		*SelectProfile_AllProfiles_ActionDone() = 1;
 		sdata->boolError = 1;
@@ -1324,6 +1401,10 @@ static void SelectProfile_FinalizeGhost(struct RectMenu *menu)
 
 	if (*SelectProfile_AllProfiles_ExitToPrevious() != 0)
 	{
+		if (gNativeGhostReplayMode != 0)
+		{
+			NativeGhostInput_ClearSelection();
+		}
 		GhostTape_Destroy();
 		sdata->ptrDesiredMenu = MM_TrackSelect_GetMenuPtr();
 		MM_TrackSelect_Init();

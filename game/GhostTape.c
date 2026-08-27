@@ -37,6 +37,8 @@ void GhostTape_Start(void)
 	sdata->GhostRecording.animIndex = -1;
 	sdata->GhostRecording.instanceFlags = 0;
 
+	NativeGhostInput_StartRecording();
+
 	return;
 }
 
@@ -51,6 +53,7 @@ void GhostTape_End(void)
 	// quit, if ghost cant be saved
 	if (sdata->boolCanSaveGhost == 0)
 	{
+		NativeGhostInput_DiscardRecording();
 		return;
 	}
 
@@ -67,6 +70,7 @@ void GhostTape_End(void)
 	gh->speedApprox = d->speedApprox;
 	gh->timeElapsedInRace = d->timeElapsedInRace;
 	gh->size = (u32)sdata->GhostRecording.ptrCurrOffset - (u32)sdata->GhostRecording.ptrStartOffset;
+	NativeGhostInput_StopRecording();
 }
 
 

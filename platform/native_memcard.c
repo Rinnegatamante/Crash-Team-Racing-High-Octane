@@ -20,6 +20,7 @@
 #define NATIVE_MEMCARD_MAX_PATH        512
 #define NATIVE_MEMCARD_COPY_BUFFER     8192
 #define NATIVE_MEMCARD_DEFAULT_ROOT    "memcards"
+#define NATIVE_MEMCARD_REPLAY_ROOT     "replays"
 #define NATIVE_MEMCARD_SLOT_COUNT      2
 
 struct NativeMemcardFindState
@@ -836,4 +837,141 @@ enum NativeMemcardResult NativeMemcard_WriteSaveData(const char *save_name, cons
 	}
 
 	return NATIVE_MEMCARD_OK;
+}
+
+
+internal int NativeMemcard_BuildReplayPath(char *dst, int dst_size, int slot, const char *ghost_name, int ensure_root)
+{
+    char slotRoot[NATIVE_MEMCARD_MAX_PATH];
+    char replayName[NATIVE_MEMCARD_MAX_NAME];
+    int written;
+
+    if ((ghost_name == NULL) || (ghost_name[0] == '\0'))
+    {
+        return 0;
+    }
+
+    if (ensure_root != 0)
+    {
+        if (!NativeMemcard_EnsureSlotRoot(NATIVE_MEMCARD_REPLAY_ROOT, slot))
+        {
+            return 0;
+        }
+    }
+
+    if (!NativeMemcard_BuildSlotRoot(slotRoot, sizeof(slotRoot), NATIVE_MEMCARD_REPLAY_ROOT, slot))
+    {
+        return 0;
+    }
+
+    written = snprintf(replayName, sizeof(replayName), "%s.rpl", ghost_name);
+    if ((written < 0) || (written >= (int)sizeof(replayName)))
+    {
+        return 0;
+    }
+
+    return NativeMemcard_JoinPath(dst, dst_size, slotRoot, replayName);
+}
+
+int NativeMemcard_ReplaySize(int slot, const char *ghost_name)
+{
+    char path[NATIVE_MEMCARD_MAX_PATH];
+    FILE *file;
+    long size;
+
+    if (!NativeMemcard_BuildReplayPath(path, sizeof(path), slot, ghost_name, 0))
+    {
+        return -1;
+    }
+
+    file = fopen(path, "rb");
+    if (file == NULL)
+    {
+        return -1;
+    }
+
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        fclose(file);
+        return -1;
+    }
+
+    size = ftell(file);
+    fclose(file);
+    return (size < 0) ? -1 : (int)size;
+}
+
+enum NativeMemcardResult NativeMemcard_ReadReplayData(int slot, const char *ghost_name, void *dst, int byte_count, int data_offset)
+{
+    char path[NATIVE_MEMCARD_MAX_PATH];
+    FILE *file;
+    size_t read_bytes;
+
+    if (!NativeMemcard_BuildReplayPath(path, sizeof(path), slot, ghost_name, 0))
+    {
+        return NATIVE_MEMCARD_IO_ERROR;
+    }
+
+    file = fopen(path, "rb");
+    if (file == NULL)
+    {
+        return NATIVE_MEMCARD_NOT_FOUND;
+    }
+
+    if (fseek(file, data_offset, SEEK_SET) != 0)
+    {
+        fclose(file);
+        return NATIVE_MEMCARD_IO_ERROR;
+    }
+
+    read_bytes = fread(dst, 1, byte_count, file);
+    fclose(file);
+    return read_bytes == (size_t)byte_count ? NATIVE_MEMCARD_OK : NATIVE_MEMCARD_IO_ERROR;
+}
+
+enum NativeMemcardResult NativeMemcard_WriteReplayData(int slot, const char *ghost_name, const void *header, int header_size, const void *frames, int frames_size)
+{
+    char path[NATIVE_MEMCARD_MAX_PATH];
+    FILE *file;
+    size_t wrote_header;
+    size_t wrote_frames;
+
+    if (!NativeMemcard_BuildReplayPath(path, sizeof(path), slot, ghost_name, 1))
+    {
+        return NATIVE_MEMCARD_IO_ERROR;
+    }
+
+    file = fopen(path, "wb");
+    if (file == NULL)
+    {
+        return NATIVE_MEMCARD_OPEN_FAILED;
+    }
+
+    wrote_header = fwrite(header, 1, header_size, file);
+    wrote_frames = fwrite(frames, 1, frames_size, file);
+    fclose(file);
+
+    if ((wrote_header != (size_t)header_size) || (wrote_frames != (size_t)frames_size))
+    {
+        return NATIVE_MEMCARD_IO_ERROR;
+    }
+
+    return NATIVE_MEMCARD_OK;
+}
+
+enum NativeMemcardResult NativeMemcard_RemoveReplay(int slot, const char *ghost_name)
+{
+    char path[NATIVE_MEMCARD_MAX_PATH];
+
+    if (!NativeMemcard_BuildReplayPath(path, sizeof(path), slot, ghost_name, 0))
+    {
+        return NATIVE_MEMCARD_IO_ERROR;
+    }
+
+    if (!NativeMemcard_PathExists(path))
+    {
+        return NATIVE_MEMCARD_NOT_FOUND;
+    }
+
+    return remove(path) == 0 ? NATIVE_MEMCARD_OK : NATIVE_MEMCARD_IO_ERROR;
 }

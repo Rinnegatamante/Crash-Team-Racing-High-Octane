@@ -1072,6 +1072,8 @@ int GAMEPAD_ProcessAnyoneVars(struct GamepadSystem *gGamepads)
 	}
 #endif
 
+	NativeGhostInput_ProcessGamepad(gGamepads);
+
 	return heldAny;
 }
 

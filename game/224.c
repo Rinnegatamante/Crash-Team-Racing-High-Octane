@@ -34,6 +34,7 @@ global_variable s32 s_rankString224 = 0x20; // " \0"
 
 extern struct RectMenu menu224;
 extern struct RectMenu menu224NoSave;
+extern struct RectMenu menu224GhostReplay;
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8009fdc8-0x800a04d4.
 void TT_EndEvent_DrawMenu(void)
@@ -264,7 +265,14 @@ void TT_EndEvent_DrawMenu(void)
 
 		sdata->flags_timeTrialEndOfRace = 0;
 
-		RECTMENU_Show(sdata->boolGhostTooBigToSave ? &menu224NoSave : &menu224);
+		if (gNativeGhostReplayMode != 0)
+		{
+			RECTMENU_Show(&menu224GhostReplay);
+		}
+		else
+		{
+			RECTMENU_Show(sdata->boolGhostTooBigToSave ? &menu224NoSave : &menu224);
+		}
 	}
 
 	return;
@@ -549,4 +557,37 @@ struct RectMenu menu224NoSave = {
     .drawStyle = 4,
 
     // rest of variables all default zero
+};
+struct MenuRow rowsGhostReplay[3] = {
+    {
+        .stringIndex = LNG_RESTART,
+        .rowOnPressUp = 1,
+        .rowOnPressDown = 1,
+        .rowOnPressLeft = 0,
+        .rowOnPressRight = 0,
+    },
+    {
+        .stringIndex = LNG_QUIT,
+        .rowOnPressUp = 0,
+        .rowOnPressDown = 0,
+        .rowOnPressLeft = 1,
+        .rowOnPressRight = 1,
+    },
+    {
+        .stringIndex = RECTMENU_STRING_NONE,
+        .rowOnPressUp = 0,
+        .rowOnPressDown = 0,
+        .rowOnPressLeft = 0,
+        .rowOnPressRight = 0,
+    }};
+
+struct RectMenu menu224GhostReplay = {
+    .stringIndexTitle = RECTMENU_STRING_NONE,
+    .posX_curr = 0x100,
+    .posY_curr = 0xA0,
+    .unk1 = 0,
+    .state = RECTMENU_STATE_SMALL_EXEC_CENTERED,
+    .rows = rowsGhostReplay,
+    .funcPtr = UI_RaceEnd_MenuProc,
+    .drawStyle = 4,
 };
