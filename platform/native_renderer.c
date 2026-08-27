@@ -868,7 +868,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
 	"		float texelX = texel.x;\n"                                                                            \
 	"		float lanePhase = fract(texelX * 0.25);\n"                                                        \
-	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                                           \
+	"		vec2 pagePixel = v_page_clut.xy;\n"                                           \
 	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.25), texel.y);\n"                         \
 	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
 	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
@@ -877,7 +877,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"		float oddTexel = step(0.25, fract(lanePhase * 2.0));\n"                                         \
 	"		vec2 nibbleCandidates = mix(lowNibble, highNibble, oddTexel);\n"                             \
 	"		float paletteIndex = mix(nibbleCandidates.x, nibbleCandidates.y, step(0.5, lanePhase));\n"    \
-	"		vec2 clutPixel = floor(v_page_clut.zw / c_VRAMTexel + vec2(0.5));\n"                           \
+	"		vec2 clutPixel = v_page_clut.zw;\n"                           \
 	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
 	"	}\n"
 #else
@@ -902,13 +902,13 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"	vec2 samplePSX(vec2 tc) {\n"                                                                               \
 	"		vec2 texel = floor(tc + vec2(0.5));\n"                                                             \
 	"		float texelX = texel.x;\n"                                                                            \
-	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                                           \
+	"		vec2 pagePixel = v_page_clut.xy;\n"                                           \
 	"		vec2 packedPixel = pagePixel + vec2(floor(texelX * 0.5), texel.y);\n"                          \
 	"		vec2 packedRg = VRAM((packedPixel + vec2(0.5)) * c_VRAMTexel);\n"                              \
 	"		float highByte = step(0.25, fract(texelX * 0.5));\n"                                                \
 	"		vec2 packedByte = floor(packedRg * 255.0 + vec2(0.5));\n"                                      \
 	"		float paletteIndex = mix(packedByte.x, packedByte.y, highByte);\n"                                  \
-	"		vec2 clutPixel = floor(v_page_clut.zw / c_VRAMTexel + vec2(0.5));\n"                           \
+	"		vec2 clutPixel = v_page_clut.zw;\n"                           \
 	"		return VRAM((clutPixel + vec2(paletteIndex + 0.5, 0.5)) * c_VRAMTexel);\n"                  \
 	"	}\n"
 #else
@@ -929,7 +929,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                                                       \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                          \
 	"		vec2 texel = floor(tc + vec2(0.5));\n"                                        \
-	"		vec2 pagePixel = floor(v_page_clut.xy + vec2(0.5));\n"                      \
+	"		vec2 pagePixel = v_page_clut.xy;\n"                      \
 	"		return VRAM((pagePixel + texel + vec2(0.5)) * c_VRAMTexel);\n"            \
 	"	}\n"
 #else
@@ -1127,6 +1127,22 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
 
 #define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
 
+#ifdef __vita__
+#define GTE_PAGE_CLUT_SETUP                                                                                     \
+	"\t\tv_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                           \
+	"\t\tv_page_clut.y = floor(a_position.z / 16.0) * 256.0;\n"                                            \
+	"\t\tv_page_clut.z = fract(a_position.w / 64.0) * 1024.0;\n"                                           \
+	"\t\tv_page_clut.w = floor(a_position.w / 64.0);\n"
+#else
+#define GTE_PAGE_CLUT_SETUP                                                                                     \
+	"\t\tv_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                           \
+	"\t\tv_page_clut.y = floor(a_position.z / 16.0) * 256.0;\n"                                            \
+	"\t\tv_page_clut.z = fract(a_position.w / 64.0);\n"                                                    \
+	"\t\tv_page_clut.w = floor(a_position.w / 64.0) / 512.0;\n"                                            \
+	"\t\tv_page_clut.xy += c_UVFudge;\n"                                                                   \
+	"\t\tv_page_clut.zw += c_UVFudge;\n"
+#endif
+
 #define GTE_VERTEX_SHADER                                                                                          \
 	"	attribute vec4 a_position;\n"                                                                                \
 	"	attribute vec4 a_texcoord; // uv, color multiplier, dither\n"                                                \
@@ -1140,12 +1156,7 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
 	"		v_texcoord.xy += a_extra.xy * 0.5;\n"                                                                       \
 	"		v_color = a_color;\n"                                                                                       \
 	"		v_color.xyz *= a_texcoord.z;\n"                                                                             \
-	"		v_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                                     \
-	"		v_page_clut.y = floor(a_position.z / 16.0) * 256.0;\n"                                                      \
-	"		v_page_clut.z = fract(a_position.w / 64.0);\n"                                                              \
-	"		v_page_clut.w = floor(a_position.w / 64.0) / 512.0;\n"                                                      \
-	"		v_page_clut.xy += c_UVFudge;\n"                                                                             \
-	"		v_page_clut.zw += c_UVFudge;\n" GTE_PERSPECTIVE_CORRECTION "		v_z = (gl_Position.z - 40.0) * 0.005;\n" \
+	GTE_PAGE_CLUT_SETUP GTE_PERSPECTIVE_CORRECTION "		v_z = (gl_Position.z - 40.0) * 0.005;\n" \
 	"	}\n"
 
 internal int NativeRenderer_Shader_CheckShaderStatus(GLuint shader)
