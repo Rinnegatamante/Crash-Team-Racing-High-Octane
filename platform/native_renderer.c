@@ -928,9 +928,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #ifdef __vita__
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                                                       \
 	"	vec2 samplePSX(vec2 tc) {\n"                                                          \
-	"		vec2 texel = floor(tc + vec2(0.5));\n"                                        \
-	"		vec2 pagePixel = v_page_clut.xy;\n"                      \
-	"		return VRAM((pagePixel + texel + vec2(0.5)) * c_VRAMTexel);\n"            \
+	"\t\treturn VRAM((v_page_clut.xy + tc + vec2(0.5)) * c_VRAMTexel);\n"             \
 	"	}\n"
 #else
 #define GPU_SAMPLE_TEXTURE_16BIT_FUNC                    \
