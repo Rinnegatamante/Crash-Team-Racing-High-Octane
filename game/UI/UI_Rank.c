@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum UIRankConstants
 {
 	UI_RANK_DRIVER_COUNT = 8,
@@ -112,6 +116,12 @@ void UI_DrawRankedDrivers(void)
 
 	struct GameTracker *gGT = sdata->gGT;
 	int numPlyr = gGT->numPlyrCurrGame;
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() && (numPlyr == 2))
+	{
+		numPlyr = 1;
+	}
+#endif
 
 	if (numPlyr == 1)
 	{

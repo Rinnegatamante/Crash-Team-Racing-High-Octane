@@ -197,18 +197,18 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 
 			if (((gGT->hudFlags & HUD_FLAG_RACE_HUD) != 0) && (gGT->numPlyrCurrGame > 1))
 			{
+#if defined(CTR_NATIVE)
+				gNativeMirrorModeRenderActive = 0;
+#endif
 #if defined(__vita__)
 				if (!NativeAdhoc_IsSingleViewRenderActive())
 #endif
 				{
-#if defined(CTR_NATIVE)
-				gNativeMirrorModeRenderActive = 0;
-#endif
-				UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
+					UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
+				}
 #if defined(CTR_NATIVE)
 				gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
 #endif
-				}
 			}
 
 			if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
@@ -292,8 +292,29 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_UI);
 	if ((gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0)
 	{
-		RaceFlag_DrawSelf();
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive() && NativeAdhoc_IsSimulationActive() &&
+		    (gGT->trafficLightsTimer <= 0) && ((gGT->gameMode1 & END_OF_RACE) == 0))
+		{
+			// During active racing, advance any stale flag state without letting its
+			// G4 mesh leak into the single-view UI chain. Pre-race/loading and the
+			// traffic-light countdown must still draw the legitimate transition.
+			(void)RaceFlag_GetOT();
+		}
+		else
+#endif
+		{
+			RaceFlag_DrawSelf();
+		}
 	}
+
+#if defined(__vita__)
+	if (NativeAdhoc_ShouldDrawConnectionLostNotice())
+	{
+		DecalFont_DrawLine("ADHOC CONNECTION LOST", 0x100, 0x86, FONT_BIG, JUSTIFY_CENTER | RED);
+		DecalFont_DrawLine("RETURNED TO MAIN MENU", 0x100, 0x9a, FONT_SMALL, JUSTIFY_CENTER | ORANGE);
+	}
+#endif
 
 	RenderDispEnv_UI(gGT);
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_UI);
@@ -591,7 +612,14 @@ void RenderAllHUD(struct GameTracker *gGT)
 	gameMode1 = gGT->gameMode1;
 
 	// if drawing intro-race title bars
-	if ((gGT->numPlyrCurrGame == 1) && ((hudFlags & HUD_FLAG_INTRO_RACE_TITLE_BARS) != 0) && ((gameMode1 & START_OF_RACE) != 0))
+	int onePlayerIntroPresentation = gGT->numPlyrCurrGame == 1;
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() && (gGT->numPlyrCurrGame == 2))
+	{
+		onePlayerIntroPresentation = 1;
+	}
+#endif
+	if (onePlayerIntroPresentation && ((hudFlags & HUD_FLAG_INTRO_RACE_TITLE_BARS) != 0) && ((gameMode1 & START_OF_RACE) != 0))
 	{
 		UI_RaceStart_IntroText1P();
 	}
@@ -626,31 +654,7 @@ void RenderAllHUD(struct GameTracker *gGT)
 					// not crystal challenge
 						if ((gameMode1 & CRYSTAL_CHALLENGE) == 0)
 						{
-	#if defined(__vita__)
-							if (NativeAdhoc_IsSingleViewRenderActive() && (gGT->numPlyrCurrGame == 2))
-							{
-								struct UiElement2D adhocHud[UI_HUD_SLOT_COUNT * 2];
-								struct UiElement2D *originalHud = data.hudStructPtr[1];
-								int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
-
-								memcpy(&adhocHud[localPlayer * UI_HUD_SLOT_COUNT], data.hudStructPtr[0], sizeof(struct UiElement2D) * UI_HUD_SLOT_COUNT);
-								memcpy(&adhocHud[(1 - localPlayer) * UI_HUD_SLOT_COUNT],
-								       &originalHud[(1 - localPlayer) * UI_HUD_SLOT_COUNT],
-								       sizeof(struct UiElement2D) * UI_HUD_SLOT_COUNT);
-								for (int slot = 0; slot < UI_HUD_SLOT_COUNT; slot++)
-								{
-									adhocHud[(1 - localPlayer) * UI_HUD_SLOT_COUNT + slot].x += 0x400;
-								}
-
-								data.hudStructPtr[1] = adhocHud;
-								UI_RenderFrame_Racing();
-								data.hudStructPtr[1] = originalHud;
-							}
-							else
-	#endif
-							{
 							UI_RenderFrame_Racing();
-							}
 						}
 
 					// if crystal challenge
@@ -778,13 +782,6 @@ void RenderAllBeakerRain(struct GameTracker *gGT)
 {
 	int numPlyrCurrGame = gGT->numPlyrCurrGame;
 
-#if defined(__vita__)
-	if (NativeAdhoc_IsSingleViewRenderActive())
-	{
-		return;
-	}
-#endif
-
 	// only if beaker rain is enabled
 	if ((gGT->renderFlags & RENDER_FLAG_BEAKER_RAIN) == 0)
 	{
@@ -797,6 +794,17 @@ void RenderAllBeakerRain(struct GameTracker *gGT)
 		return;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		struct PushBuffer *displayPB = NativeAdhoc_GetRenderPushBuffer();
+		if (displayPB != NULL)
+		{
+			RedBeaker_RenderRain(displayPB, &gGT->backBuffer->primMem, &gGT->JitPools.rain, 1, gGT->gameMode1 & PAUSE_ALL);
+		}
+		return;
+	}
+#endif
 	RedBeaker_RenderRain(&gGT->pushBuffer[0], &gGT->backBuffer->primMem, &gGT->JitPools.rain, numPlyrCurrGame, gGT->gameMode1 & PAUSE_ALL);
 }
 
@@ -1067,19 +1075,19 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 #if defined(__vita__)
 	if (NativeAdhoc_IsSingleViewRenderActive())
 	{
-		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+		const int renderSlot = 0;
 		pushBuffer = NativeAdhoc_GetRenderPushBuffer();
 
-		CTR_ClearRenderLists_1P2P(gGT, 2);
+		CTR_ClearRenderLists_1P2P(gGT, 1);
 
 		if ((level1->configFlags & 4) == 0)
 		{
 			AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap,
-			               gGT->visMem1->visOVertList[localPlayer]);
+			               gGT->visMem1->visOVertList[renderSlot]);
 		}
 		else
 		{
-			AnimateQuad(gGT->timer << 7, level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[localPlayer]);
+			AnimateQuad(gGT->timer << 7, level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[renderSlot]);
 		}
 
 		scratch = CTR_SCRATCHPAD_PTR(struct MainRenderLevelGeometryScratch, 0);
@@ -1106,23 +1114,38 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
 		}
 
+		// The retail 2P PVS was built for the split-screen camera and is too
+		// restrictive for the wider single-view presentation. Keep gameplay/PVS
+		// state untouched, but make level rendering use the fullscreen frustum as
+		// the authoritative visibility test. DrawLevelOvr1P still requires a
+		// non-null face bitset, so expose all quad blocks for this render pass.
+		memset(
+			gGT->visMem1->visFaceList[renderSlot],
+			0xff,
+			((ptr_mesh_info->numQuadBlock + 0x1f) >> 5) << 2);
+
 		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
 		gGT->bspLeafsDrawn += RenderLists_Init1P2P(
 			ptr_mesh_info->bspRoot,
-			gGT->visMem1->visLeafList[localPlayer],
+			NULL,
 			pushBuffer,
-			(u32)&gGT->LevRenderLists[localPlayer],
-			gGT->visMem1->bspList[localPlayer],
+			(u32)&gGT->LevRenderLists[renderSlot],
+			gGT->visMem1->bspList[renderSlot],
 			1);
 
 		DrawLevelOvr1P(
-			&gGT->LevRenderLists[localPlayer],
+			&gGT->LevRenderLists[renderSlot],
 			pushBuffer,
 			(struct BSP *)ptr_mesh_info,
 			&gGT->backBuffer->primMem,
-			gGT->visMem1->visFaceList[localPlayer],
+			gGT->visMem1->visFaceList[renderSlot],
 			level1->ptr_tex_waterEnvMap);
+
+		// DrawLevelOvr1P is free to leave OFX/OFY/H changed. Retail normally
+		// inherits a matching viewport here; the synthetic fullscreen PushBuffer
+		// must restore it explicitly before DrawSky_Full performs its RTPT tests.
+		PushBuffer_SetPsyqGeom(pushBuffer);
 		DrawSky_Full(level1->ptr_skybox, pushBuffer, &gGT->backBuffer->primMem);
 
 		if ((level1->configFlags & 1) != 0)

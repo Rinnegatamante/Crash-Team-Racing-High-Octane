@@ -365,6 +365,7 @@ static void VehPickupItem_MissileLoadPlayerView(struct GameTracker *gGT, struct 
 
 	SetRotMatrix(&pb->matrix_ViewProj);
 	SetTransMatrix(&pb->matrix_ViewProj);
+	PushBuffer_SetPsyqGeom(pb);
 }
 
 static void VehPickupItem_MissileLoadAiView(struct Driver *driver)

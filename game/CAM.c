@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 
 enum
 {
@@ -509,7 +513,11 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 
 		// if 1 or less screens
 		cDC->transitionFrame = 0xA5;
+#if defined(__vita__)
+		if (!NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame > 1))
+#else
 		if (gGT->numPlyrCurrGame > 1)
+#endif
 		{
 			cDC->transitionFrame = 1;
 		}

@@ -34,7 +34,10 @@ void QueueLoadTrack_MenuProc(struct RectMenu *menu)
 	}
 
 #if defined(__vita__)
-	NativeAdhoc_PrepareRaceLoad(gGT);
+	if (!NativeAdhoc_PrepareRaceLoad(gGT))
+	{
+		return;
+	}
 #endif
 	MainRaceTrack_RequestLoad(gGT->currLEV);
 

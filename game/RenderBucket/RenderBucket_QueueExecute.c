@@ -19,10 +19,37 @@ struct RenderBucketQueueState
 	uint32_t *otBase;
 	uint32_t *otCurr;
 	uint32_t *otEndMinusOne;
+#if defined(CTR_NATIVE)
+	struct RenderBucketEntry *entryEnd;
+	int entryOverflowed;
+#endif
 };
 CTR_STATIC_ASSERT(sizeof(struct RenderBucketEntry) == 0x8);
 CTR_STATIC_ASSERT(offsetof(struct RenderBucketEntry, inst) == 0x0);
 CTR_STATIC_ASSERT(offsetof(struct RenderBucketEntry, instPlayerBase) == 0x4);
+#if defined(CTR_NATIVE)
+enum
+{
+	NATIVE_RENDER_BUCKET_ENTRY_CAPACITY = 2048,
+};
+static struct RenderBucketEntry s_nativeRenderBucketStorage[NATIVE_RENDER_BUCKET_ENTRY_CAPACITY];
+
+void *RenderBucket_GetNativeStorage(void)
+{
+	return s_nativeRenderBucketStorage;
+}
+
+u32 RenderBucket_GetNativeStorageSize(void)
+{
+	return sizeof(s_nativeRenderBucketStorage);
+}
+
+static void RenderBucket_InitEntryBounds(struct RenderBucketQueueState *queueState)
+{
+	queueState->entryEnd = &s_nativeRenderBucketStorage[NATIVE_RENDER_BUCKET_ENTRY_CAPACITY - 1];
+	queueState->entryOverflowed = 0;
+}
+#endif
 CTR_STATIC_ASSERT(offsetof(struct Item, next) == 0x0);
 CTR_STATIC_ASSERT(offsetof(struct Item, prev) == 0x4);
 CTR_STATIC_ASSERT(sizeof(struct Item) == 0x8);
@@ -2061,6 +2088,19 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	}
 #endif
 
+#if defined(CTR_NATIVE)
+	if ((queueState->entryEnd != NULL) && (rbi >= queueState->entryEnd))
+	{
+		if (!queueState->entryOverflowed)
+		{
+			queueState->entryOverflowed = 1;
+			Platform_Log("[CTR Native] RenderBucket overflow prevented at %u entries\n",
+			             (u32)(rbi - s_nativeRenderBucketStorage));
+		}
+		return rbi;
+	}
+#endif
+
 	queuedFlags = inst->flags;
 	instPlayerBase = RenderBucket_InstancePlayerBase(inst, playerIndex);
 	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
@@ -2184,6 +2224,9 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 	struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
 	struct RenderBucketQueueState queueState = {0};
 	int count = (int)(u8)numPlyr;
+#if defined(CTR_NATIVE)
+	RenderBucket_InitEntryBounds(&queueState);
+#endif
 
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80070720-0x8007084c.
 	// Retail enters QueueDraw through a scratch/register
@@ -2202,13 +2245,18 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 	if (NativeAdhoc_IsSingleViewRenderActive())
 	{
 		int player = NativeAdhoc_GetLocalPlayerIndex();
-		struct Instance **visInstSrc = cDC[player].visInstSrc;
+		struct GameTracker *gGT = sdata->gGT;
+		struct Level *level = (gGT != NULL) ? gGT->level1 : NULL;
 
-		if (visInstSrc != 0)
+		if ((level != NULL) && (level->ptrInstDefs != NULL))
 		{
-			for (; *visInstSrc != 0; visInstSrc++)
+			struct InstDef *instDef = level->ptrInstDefs;
+			for (u32 i = 0; i < level->numInstances; i++, instDef++)
 			{
-				entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
+				if (instDef->ptrInstance != NULL)
+				{
+					entry = RenderBucket_QueueDraw(instDef->ptrInstance, entry, player, lodMask, gameMode1, &queueState);
+				}
 			}
 		}
 	}
@@ -2244,6 +2292,9 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 	struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
 	struct RenderBucketQueueState queueState = {0};
 	int count = (int)(u8)numPlyr;
+#if defined(CTR_NATIVE)
+	RenderBucket_InitEntryBounds(&queueState);
+#endif
 
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8007084c-0x80070950.
 	// Retail enters QueueDraw through a scratch/register
@@ -2264,7 +2315,37 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 		int player = NativeAdhoc_GetLocalPlayerIndex();
 		for (struct Item *curr = item; curr != 0; curr = curr->next)
 		{
-			entry = RenderBucket_QueueDraw((struct Instance *)curr, entry, player, lodMask, gameMode1, &queueState);
+			struct Instance *inst = (struct Instance *)curr;
+			int presentationPlayer = player;
+
+			if ((inst->model != NULL) &&
+			    ((inst->model->id == STATIC_FRUITDISP) || (inst->model->id == STATIC_BIG1)))
+			{
+				int owner = -1;
+				for (int i = 0; i < 2; i++)
+				{
+					struct Driver *driver = sdata->gGT->drivers[i];
+					if ((driver != NULL) &&
+					    (((inst->model->id == STATIC_FRUITDISP) && (driver->instFruitDisp == inst)) ||
+					     ((inst->model->id == STATIC_BIG1) && (driver->instBigNum == inst))))
+					{
+						owner = i;
+						break;
+					}
+				}
+
+				if (owner != player)
+				{
+					continue;
+				}
+
+				// These HUD instances are born with their custom draw PushBuffer in
+				// IDPP 0 only. The logical owner is filtered above; slot zero is only
+				// the presentation metadata used to render it.
+				presentationPlayer = 0;
+			}
+
+			entry = RenderBucket_QueueDraw(inst, entry, presentationPlayer, lodMask, gameMode1, &queueState);
 		}
 	}
 	else
@@ -2904,6 +2985,50 @@ static void RenderBucket_LoadPrimColors(struct RenderBucketDrawContext *ctx, con
 	}
 }
 
+#if defined(CTR_NATIVE)
+static void RenderBucket_DebugSuspiciousTriangle(struct RenderBucketDrawContext *ctx, const char *kind, s16 x0, s16 y0, s16 x1, s16 y1, s16 x2, s16 y2)
+{
+	int minX = x0;
+	int maxX = x0;
+	int minY = y0;
+	int maxY = y0;
+	if (x1 < minX) minX = x1;
+	if (x2 < minX) minX = x2;
+	if (x1 > maxX) maxX = x1;
+	if (x2 > maxX) maxX = x2;
+	if (y1 < minY) minY = y1;
+	if (y2 < minY) minY = y2;
+	if (y1 > maxY) maxY = y1;
+	if (y2 > maxY) maxY = y2;
+
+	int spanX = maxX - minX;
+	int spanY = maxY - minY;
+	if ((spanX < 2048) && (spanY < 2048))
+	{
+		return;
+	}
+
+	static int lastFrame = -1;
+	static int logsThisFrame = 0;
+	int frame = (sdata->gGT != NULL) ? sdata->gGT->frameTimer_MainFrame_ResetDB : -1;
+	if (frame != lastFrame)
+	{
+		lastFrame = frame;
+		logsThisFrame = 0;
+	}
+	if (logsThisFrame >= 4)
+	{
+		return;
+	}
+	logsThisFrame++;
+
+	int modelID = (ctx != NULL && ctx->inst != NULL && ctx->inst->model != NULL) ? ctx->inst->model->id : -1;
+	Platform_Log("[CTR Native] suspicious RB triangle frame=%d model=%d inst=%p kind=%s xy=(%d,%d)(%d,%d)(%d,%d) span=(%d,%d) sz=(%d,%d,%d)\n",
+	             frame, modelID, (ctx != NULL) ? (void *)ctx->inst : NULL, kind, x0, y0, x1, y1, x2, y2, spanX, spanY,
+	             MFC2_S(17), MFC2_S(18), MFC2_S(19));
+}
+#endif
+
 static u8 RenderBucket_SaturateU8(int value)
 {
 	if (value > 0xff)
@@ -2942,6 +3067,9 @@ static int RenderBucket_DrawInstPrim_NormalAtOTEntry(struct RenderBucketDrawCont
 		CtrGpu_WriteColorCode(&p->r1, (u32)MFC2(21));
 		CtrGpu_WriteColorCode(&p->r2, (u32)MFC2(22));
 		CTR_GteStoreSXY3(&p->x0, &p->x1, &p->x2);
+#if defined(CTR_NATIVE)
+		RenderBucket_DebugSuspiciousTriangle(ctx, "G3", p->x0, p->y0, p->x1, p->y1, p->x2, p->y2);
+#endif
 		RenderBucket_LinkPrimRaw(otEntry, p, 0x06000000);
 		ctx->primMem->cursor = (char *)p + 0x1c;
 	}
@@ -2962,6 +3090,9 @@ static int RenderBucket_DrawInstPrim_NormalAtOTEntry(struct RenderBucketDrawCont
 		CtrGpu_WritePackedUVWord(&p->u1, texWord1);
 		CtrGpu_WritePackedUVWord(&p->u2, RenderBucket_ReadTextureWord(tex, RENDER_BUCKET_TEX_WORD2_OFFSET));
 		CTR_GteStoreSXY3(&p->x0, &p->x1, &p->x2);
+#if defined(CTR_NATIVE)
+		RenderBucket_DebugSuspiciousTriangle(ctx, "GT3", p->x0, p->y0, p->x1, p->y1, p->x2, p->y2);
+#endif
 		RenderBucket_LinkPrimRaw(otEntry, p, 0x09000000);
 		ctx->primMem->cursor = (char *)p + 0x28;
 	}
@@ -3552,6 +3683,9 @@ static int RenderBucket_DrawSplitPrimitiveNormalAtOTEntry(struct RenderBucketDra
 		p->y1 = (s16)(v1->sxy >> 16);
 		p->x2 = (s16)v2->sxy;
 		p->y2 = (s16)(v2->sxy >> 16);
+#if defined(CTR_NATIVE)
+		RenderBucket_DebugSuspiciousTriangle(ctx, "split-G3", p->x0, p->y0, p->x1, p->y1, p->x2, p->y2);
+#endif
 		RenderBucket_LinkPrimRaw(otEntry, p, 0x06000000);
 		ctx->primMem->cursor = (char *)p + 0x1c;
 	}
@@ -3578,6 +3712,9 @@ static int RenderBucket_DrawSplitPrimitiveNormalAtOTEntry(struct RenderBucketDra
 		p->y2 = (s16)(v2->sxy >> 16);
 		p->u2 = (u8)v2->uv;
 		p->v2 = (u8)(v2->uv >> 8);
+#if defined(CTR_NATIVE)
+		RenderBucket_DebugSuspiciousTriangle(ctx, "split-GT3", p->x0, p->y0, p->x1, p->y1, p->x2, p->y2);
+#endif
 		RenderBucket_LinkPrimRaw(otEntry, p, 0x09000000);
 		ctx->primMem->cursor = (char *)p + 0x28;
 	}

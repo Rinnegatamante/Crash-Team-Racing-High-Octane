@@ -103,6 +103,29 @@ u32 main(void)
 		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c5d0-0x8003c5dc for per-frame XA pause handling.
 		CDSYS_XAPauseAtEnd();
 
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldReturnToMainMenu() && (sdata->Loading.stage == LOAD_IDLE))
+		{
+			NativeAdhoc_AcknowledgeReturnToMainMenu();
+			NativeAdhoc_Shutdown();
+			gGT = sdata->gGT;
+			gGS = sdata->gGamepads;
+			if (gGT != NULL)
+			{
+				gGT->numPlyrNextGame = 1;
+				sdata->mainMenuState = MAIN_MENU_TITLE;
+				if (gGT->levelID != MAIN_MENU_LEVEL)
+				{
+					MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+				}
+				else if (LOAD_IsOpen_MainMenu())
+				{
+					MM_JumpTo_Title_Returning();
+				}
+			}
+		}
+#endif
+
 		switch (sdata->mainGameState)
 		{
 		// Initialize Game (happens once)
@@ -312,6 +335,11 @@ u32 main(void)
 
 #ifdef CTR_NATIVE
 				nativeAdhocRunSimulation = NativeAdhoc_BeginSimulationFrame(gGT);
+				if (!nativeAdhocRunSimulation)
+				{
+					NativeAdhoc_WaitForFrame();
+					continue;
+				}
 #endif
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 				nativeReplayFrameActive = 0;

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum RaceFlagScratchConstants
 {
 	RACE_FLAG_SCREEN_ROWS = 10,
@@ -249,6 +253,18 @@ u32 *RaceFlag_GetOT(void)
 
 	otDrawFirst_FarthestDepth = (u32 *)&gGT->pushBuffer[0].ptrOT[0x3FF];
 	otDrawLast_ClosestDepth = gGT->otSwapchainDB[gGT->swapchainIndex];
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		struct PushBuffer *adhocPB = NativeAdhoc_GetRenderPushBuffer();
+		if ((adhocPB != NULL) && (adhocPB->ptrOT != NULL))
+		{
+			otDrawFirst_FarthestDepth = &adhocPB->ptrOT[0x3ff];
+			otDrawLast_ClosestDepth = &adhocPB->ptrOT[0];
+		}
+	}
+#endif
 
 	if (sdata->RaceFlag_DrawInitialized == 0)
 	{

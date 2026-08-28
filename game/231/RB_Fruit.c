@@ -10,6 +10,9 @@ void RB_Fruit_GetScreenCoords(struct PushBuffer *pb, struct Instance *inst, s16 
 	gte_SetRotMatrix(m);
 	gte_SetTransMatrix(m);
 
+	// Make projection independent from whichever renderer used the GTE last.
+	PushBuffer_SetPsyqGeom(pb);
+
 	// load input vector, each int casts to s16
 	posWorld.x = (s16)inst->matrix.t[0];
 	posWorld.y = (s16)inst->matrix.t[1];

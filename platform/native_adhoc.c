@@ -5,6 +5,7 @@
 #include "platform/native_checkpoint.h"
 #include "platform/native_input.h"
 #include "platform/native_log.h"
+#include "platform/native_gpu_links.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@
 #include <vitasdk.h>
 
 #define NATIVE_ADHOC_MAGIC 0x41485443u
-#define NATIVE_ADHOC_VERSION 4u
+#define NATIVE_ADHOC_VERSION 7u
 #define NATIVE_ADHOC_PORT 31847
 #define NATIVE_ADHOC_PDP_BUFSIZE 0x8000
 #define NATIVE_ADHOC_NET_MEMORY_SIZE (1024 * 1024)
@@ -29,8 +30,10 @@
 #define NATIVE_ADHOC_HASH_INTERVAL 30u
 #define NATIVE_ADHOC_HASH_HISTORY 8u
 #define NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE 1024u
+#define NATIVE_ADHOC_SNAPSHOT_MAX_SIZE (64u * 1024u * 1024u)
 #define NATIVE_ADHOC_SNAPSHOT_BURST 12u
 #define NATIVE_ADHOC_INVALID_FRAME 0xffffffffu
+#define NATIVE_ADHOC_RENDER_OT_ENTRIES 0x400u
 
 CTR_STATIC_ASSERT((NATIVE_ADHOC_INPUT_RING_SIZE & NATIVE_ADHOC_INPUT_RING_MASK) == 0);
 
@@ -55,6 +58,9 @@ enum NativeAdhocPacketType
 	NATIVE_ADHOC_PACKET_RESUME,
 	NATIVE_ADHOC_PACKET_RESUME_ACK,
 	NATIVE_ADHOC_PACKET_HEARTBEAT,
+	NATIVE_ADHOC_PACKET_RACE_PROPOSAL,
+	NATIVE_ADHOC_PACKET_RACE_CONFIG,
+	NATIVE_ADHOC_PACKET_RACE_CONFIG_ACK,
 };
 
 struct NativeAdhocPacketHeader
@@ -107,7 +113,7 @@ struct NativeAdhocSessionPacket
 	s32 arcadeDifficulty;
 	s32 numLaps;
 	s32 language;
-	u8 characterIDs[8];
+	s16 characterIDs[8];
 	u32 randomNumber;
 	u32 deadcoed0;
 	u32 deadcoed1;
@@ -126,8 +132,11 @@ struct NativeAdhocReadyPacket
 	s32 arcadeDifficulty;
 	s32 numLaps;
 	s32 language;
-	u8 characterIDs[8];
+	s16 characterIDs[8];
 };
+
+CTR_STATIC_ASSERT(sizeof(((struct NativeAdhocSessionPacket *)0)->characterIDs) == sizeof(data.characterIDs));
+CTR_STATIC_ASSERT(sizeof(((struct NativeAdhocReadyPacket *)0)->characterIDs) == sizeof(data.characterIDs));
 
 struct NativeAdhocControlPacket
 {
@@ -200,6 +209,39 @@ struct NativeAdhocHeartbeatPacket
 	u32 simulationFrame;
 };
 
+struct NativeAdhocRaceProposalPacket
+{
+	struct NativeAdhocPacketHeader header;
+	u32 sessionId;
+	u32 build;
+	u8 p2Character;
+	u8 reserved[3];
+};
+
+struct NativeAdhocRaceConfigPacket
+{
+	struct NativeAdhocPacketHeader header;
+	u32 sessionId;
+	u32 build;
+	s32 currLEV;
+	s32 arcadeDifficulty;
+	s32 numLaps;
+	s32 language;
+	u8 p1Character;
+	u8 p2Character;
+	u8 reserved[2];
+};
+
+struct NativeAdhocRaceConfigAckPacket
+{
+	struct NativeAdhocPacketHeader header;
+	u32 sessionId;
+	s32 currLEV;
+	u8 p1Character;
+	u8 p2Character;
+	u8 reserved[2];
+};
+
 struct NativeAdhocInputSlot
 {
 	u32 frame;
@@ -222,6 +264,7 @@ struct NativeAdhocContext
 	int netInitialized;
 	int netCtlInitialized;
 	int netModuleLoadedByUs;
+	int appUtilInitializedByUs;
 	void *netMemory;
 	int adhocInitialized;
 	int adhocctlInitialized;
@@ -240,6 +283,16 @@ struct NativeAdhocContext
 	u32 lastPeerTime;
 	struct PlatformInputPadSnapshot remoteMenuPad;
 	int remoteMenuPadValid;
+
+	int raceSyncPending;
+	int raceLoadPrepared;
+	int raceProposalValid;
+	u8 raceProposalP2;
+	int raceConfigSent;
+	int raceConfigReceived;
+	int raceConfigAcked;
+	u32 lastRaceConfigTime;
+	struct NativeAdhocRaceConfigPacket raceConfig;
 
 	int localLevelReady;
 	int peerLevelReady;
@@ -280,6 +333,7 @@ struct NativeAdhocContext
 	u32 rxSnapshotChunkCount;
 	u32 rxSnapshotReceivedCount;
 	u32 rxSnapshotFrame;
+	u32 lastRestoredSnapshotId;
 	int rxSnapshotInitial;
 	int rxSnapshotActive;
 	int rxRestorePending;
@@ -301,7 +355,13 @@ static struct NativeAdhocContext s_nativeAdhoc =
 };
 
 static struct PushBuffer s_nativeAdhocRenderPushBuffer;
+static u32 s_nativeAdhocRenderOT[NATIVE_ADHOC_RENDER_OT_ENTRIES];
 static int s_nativeAdhocSingleViewRenderActive;
+static int s_nativeAdhocReturnToMainMenuPending;
+static u32 s_nativeAdhocConnectionLostNoticeUntil;
+
+static void NativeAdhoc_InitHeader(struct NativeAdhocPacketHeader *header, int type);
+static int NativeAdhoc_SendRaw(const SceNetEtherAddr *dst, const void *packet, int len);
 
 static const SceNetEtherAddr s_nativeAdhocBroadcastMac =
 {
@@ -402,6 +462,139 @@ static void NativeAdhoc_ResetLockstep(u32 frame)
 	}
 }
 
+static void NativeAdhoc_ResetRaceConfigState(void)
+{
+	s_nativeAdhoc.raceSyncPending = 0;
+	s_nativeAdhoc.raceLoadPrepared = 0;
+	s_nativeAdhoc.raceProposalValid = 0;
+	s_nativeAdhoc.raceProposalP2 = 0;
+	s_nativeAdhoc.raceConfigSent = 0;
+	s_nativeAdhoc.raceConfigReceived = 0;
+	s_nativeAdhoc.raceConfigAcked = 0;
+	s_nativeAdhoc.lastRaceConfigTime = 0;
+	memset(&s_nativeAdhoc.raceConfig, 0, sizeof(s_nativeAdhoc.raceConfig));
+}
+
+static void NativeAdhoc_SendRaceProposal(void)
+{
+	struct NativeAdhocRaceProposalPacket packet;
+
+	if ((s_nativeAdhoc.role != NATIVE_ADHOC_ROLE_CLIENT) || !s_nativeAdhoc.peerKnown || !s_nativeAdhoc.raceSyncPending)
+	{
+		return;
+	}
+
+	memset(&packet, 0, sizeof(packet));
+	NativeAdhoc_InitHeader(&packet.header, NATIVE_ADHOC_PACKET_RACE_PROPOSAL);
+	packet.sessionId = s_nativeAdhoc.sessionId;
+	packet.build = BUILD;
+	packet.p2Character = s_nativeAdhoc.raceProposalP2;
+	NativeAdhoc_SendRaw(&s_nativeAdhoc.peerMac, &packet, sizeof(packet));
+}
+
+static void NativeAdhoc_FillRaceConfig(struct NativeAdhocRaceConfigPacket *packet, const struct GameTracker *gGT)
+{
+	memset(packet, 0, sizeof(*packet));
+	NativeAdhoc_InitHeader(&packet->header, NATIVE_ADHOC_PACKET_RACE_CONFIG);
+	packet->sessionId = s_nativeAdhoc.sessionId;
+	packet->build = BUILD;
+	packet->currLEV = gGT->currLEV;
+	packet->arcadeDifficulty = gGT->arcadeDifficulty;
+	packet->numLaps = gGT->numLaps;
+	packet->language = cfg_language;
+	packet->p1Character = data.characterIDs[0];
+	packet->p2Character = s_nativeAdhoc.raceProposalP2;
+}
+
+static void NativeAdhoc_SendRaceConfig(void)
+{
+	if ((s_nativeAdhoc.role != NATIVE_ADHOC_ROLE_HOST) || !s_nativeAdhoc.peerKnown || !s_nativeAdhoc.raceConfigSent)
+	{
+		return;
+	}
+	NativeAdhoc_SendRaw(&s_nativeAdhoc.peerMac, &s_nativeAdhoc.raceConfig, sizeof(s_nativeAdhoc.raceConfig));
+}
+
+static void NativeAdhoc_SendRaceConfigAck(const struct NativeAdhocRaceConfigPacket *config)
+{
+	struct NativeAdhocRaceConfigAckPacket packet;
+
+	if ((config == NULL) || (s_nativeAdhoc.role != NATIVE_ADHOC_ROLE_CLIENT) || !s_nativeAdhoc.peerKnown)
+	{
+		return;
+	}
+
+	memset(&packet, 0, sizeof(packet));
+	NativeAdhoc_InitHeader(&packet.header, NATIVE_ADHOC_PACKET_RACE_CONFIG_ACK);
+	packet.sessionId = s_nativeAdhoc.sessionId;
+	packet.currLEV = config->currLEV;
+	packet.p1Character = config->p1Character;
+	packet.p2Character = config->p2Character;
+	NativeAdhoc_SendRaw(&s_nativeAdhoc.peerMac, &packet, sizeof(packet));
+}
+
+static void NativeAdhoc_ApplyRaceConfig(const struct NativeAdhocRaceConfigPacket *packet, struct GameTracker *gGT)
+{
+	if ((packet == NULL) || (gGT == NULL))
+	{
+		return;
+	}
+
+	gGT->currLEV = packet->currLEV;
+	gGT->arcadeDifficulty = packet->arcadeDifficulty;
+	gGT->numLaps = packet->numLaps;
+	gGT->numPlyrNextGame = 2;
+	cfg_language = packet->language;
+	data.characterIDs[0] = packet->p1Character;
+	data.characterIDs[1] = packet->p2Character;
+}
+
+static void NativeAdhoc_PumpRaceConfig(u32 now)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	if (!s_nativeAdhoc.raceSyncPending || s_nativeAdhoc.raceLoadPrepared || !s_nativeAdhoc.peerKnown)
+	{
+		return;
+	}
+
+	if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT)
+	{
+		if (!s_nativeAdhoc.raceConfigReceived && ((u32)(now - s_nativeAdhoc.lastRaceConfigTime) >= NATIVE_ADHOC_CONTROL_INTERVAL_US))
+		{
+			NativeAdhoc_SendRaceProposal();
+			s_nativeAdhoc.lastRaceConfigTime = now;
+		}
+		return;
+	}
+
+	if (s_nativeAdhoc.role != NATIVE_ADHOC_ROLE_HOST)
+	{
+		return;
+	}
+
+	if (s_nativeAdhoc.raceProposalValid && !s_nativeAdhoc.raceConfigSent && (gGT != NULL))
+	{
+		NativeAdhoc_FillRaceConfig(&s_nativeAdhoc.raceConfig, gGT);
+		s_nativeAdhoc.raceConfigSent = 1;
+		s_nativeAdhoc.lastRaceConfigTime = 0;
+		Platform_Log("[CTR Adhoc] canonical pre-load config track=%d diff=%d laps=%d lang=%d p1=%u p2=%u\n",
+			s_nativeAdhoc.raceConfig.currLEV,
+			s_nativeAdhoc.raceConfig.arcadeDifficulty,
+			s_nativeAdhoc.raceConfig.numLaps,
+			s_nativeAdhoc.raceConfig.language,
+			s_nativeAdhoc.raceConfig.p1Character,
+			s_nativeAdhoc.raceConfig.p2Character);
+	}
+
+	if (s_nativeAdhoc.raceConfigSent && !s_nativeAdhoc.raceConfigAcked &&
+		((u32)(now - s_nativeAdhoc.lastRaceConfigTime) >= NATIVE_ADHOC_CONTROL_INTERVAL_US))
+	{
+		NativeAdhoc_SendRaceConfig();
+		s_nativeAdhoc.lastRaceConfigTime = now;
+	}
+}
+
 static u32 NativeAdhoc_RaceSeed(const struct GameTracker *gGT)
 {
 	u32 seed = s_nativeAdhoc.sessionId ^ 0x4354524eu;
@@ -412,10 +605,12 @@ static u32 NativeAdhoc_RaceSeed(const struct GameTracker *gGT)
 		seed ^= (u32)gGT->arcadeDifficulty * 0x85ebca6bu;
 		seed ^= (u32)gGT->numLaps * 0xc2b2ae35u;
 	}
-	for (u32 i = 0; i < 8; i++)
-	{
-		seed = (seed * 33u) ^ data.characterIDs[i];
-	}
+
+	// Only the two human selections are authoritative before LOAD_Robots2P.
+	// Slots 2..5 are populated by the 2P AI pack during loading, while 6..7
+	// are unused leftovers in a six-racer 2P race and must not perturb the seed.
+	seed = (seed * 33u) ^ data.characterIDs[0];
+	seed = (seed * 33u) ^ data.characterIDs[1];
 	if (seed == 0)
 	{
 		seed = 1;
@@ -423,13 +618,55 @@ static u32 NativeAdhoc_RaceSeed(const struct GameTracker *gGT)
 	return seed;
 }
 
-void NativeAdhoc_PrepareRaceLoad(struct GameTracker *gGT)
+int NativeAdhoc_PrepareRaceLoad(struct GameTracker *gGT)
 {
 	u32 seed;
 
 	if (!s_nativeAdhoc.peerKnown || (gGT == NULL) || (gGT->numPlyrNextGame != 2))
 	{
-		return;
+		return 1;
+	}
+
+	if (s_nativeAdhoc.raceLoadPrepared)
+	{
+		return 1;
+	}
+
+	if (!s_nativeAdhoc.raceSyncPending)
+	{
+		s_nativeAdhoc.raceSyncPending = 1;
+		s_nativeAdhoc.raceConfigSent = 0;
+		s_nativeAdhoc.raceConfigReceived = 0;
+		s_nativeAdhoc.raceConfigAcked = 0;
+		s_nativeAdhoc.lastRaceConfigTime = 0;
+		memset(&s_nativeAdhoc.raceConfig, 0, sizeof(s_nativeAdhoc.raceConfig));
+
+		if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT)
+		{
+			s_nativeAdhoc.raceProposalP2 = data.characterIDs[1];
+			NativeAdhoc_SendRaceProposal();
+			s_nativeAdhoc.lastRaceConfigTime = NativeAdhoc_Now();
+			Platform_Log("[CTR Adhoc] proposed P2 character %u before race load\n", s_nativeAdhoc.raceProposalP2);
+		}
+	}
+
+	NativeAdhoc_PumpRaceConfig(NativeAdhoc_Now());
+
+	if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST)
+	{
+		if (!s_nativeAdhoc.raceConfigSent || !s_nativeAdhoc.raceConfigAcked)
+		{
+			return 0;
+		}
+		NativeAdhoc_ApplyRaceConfig(&s_nativeAdhoc.raceConfig, gGT);
+	}
+	else
+	{
+		if (!s_nativeAdhoc.raceConfigReceived)
+		{
+			return 0;
+		}
+		NativeAdhoc_ApplyRaceConfig(&s_nativeAdhoc.raceConfig, gGT);
 	}
 
 	seed = NativeAdhoc_RaceSeed(gGT);
@@ -447,7 +684,26 @@ void NativeAdhoc_PrepareRaceLoad(struct GameTracker *gGT)
 	s_nativeAdhoc.simulationActive = 0;
 	s_nativeAdhoc.controlPending = 0;
 	NativeAdhoc_ClearInputRing();
-	Platform_Log("[CTR Adhoc] deterministic race seed 0x%08x for LEV %d\n", seed, gGT->currLEV);
+	s_nativeAdhoc.raceLoadPrepared = 1;
+	s_nativeAdhoc.raceSyncPending = 0;
+	Platform_Log("[CTR Adhoc] deterministic race seed 0x%08x for LEV %d config p1=%u p2=%u lang=%d\n",
+		seed, gGT->currLEV, data.characterIDs[0], data.characterIDs[1], cfg_language);
+	return 1;
+}
+
+int NativeAdhoc_EnforcePreparedRaceConfig(struct GameTracker *gGT)
+{
+	if ((gGT == NULL) || !s_nativeAdhoc.peerKnown || !s_nativeAdhoc.raceLoadPrepared)
+	{
+		return 0;
+	}
+
+	NativeAdhoc_ApplyRaceConfig(&s_nativeAdhoc.raceConfig, gGT);
+	gGT->numPlyrNextGame = 2;
+	gGT->numPlyrCurrGame = 2;
+	Platform_Log("[CTR Adhoc] load config enforced curr=%d next=%d p1=%u p2=%u\n",
+		gGT->numPlyrCurrGame, gGT->numPlyrNextGame, data.characterIDs[0], data.characterIDs[1]);
+	return 1;
 }
 
 void NativeAdhoc_BeginRenderFrame(struct GameTracker *gGT)
@@ -461,25 +717,33 @@ void NativeAdhoc_BeginRenderFrame(struct GameTracker *gGT)
 	}
 
 	localIndex = NativeAdhoc_GetLocalPlayerIndex();
-	s_nativeAdhocRenderPushBuffer = gGT->pushBuffer[localIndex];
+	struct PushBuffer *local = &gGT->pushBuffer[localIndex];
 
-#if BUILD == EurRetail
-	s_nativeAdhocRenderPushBuffer.rect.h = 0xec;
-#else
-	s_nativeAdhocRenderPushBuffer.rect.h = 0xd8;
-#endif
-	s_nativeAdhocRenderPushBuffer.rect.x = 0;
-	s_nativeAdhocRenderPushBuffer.rect.y = 0;
-	s_nativeAdhocRenderPushBuffer.rect.w = 0x200;
-	s_nativeAdhocRenderPushBuffer.aspectX = 4;
-	s_nativeAdhocRenderPushBuffer.aspectY = 3;
-	s_nativeAdhocRenderPushBuffer.distanceToScreen_PREV = 0x100;
-	s_nativeAdhocRenderPushBuffer.distanceToScreen_CURR = 0x100;
+	// Build a genuine 1P PushBuffer instead of cloning a 2P PushBuffer and
+	// patching a few fields. This prevents stale split-screen projection and
+	// RenderBucket metadata from leaking into the fullscreen render path.
+	memset(&s_nativeAdhocRenderPushBuffer, 0, sizeof(s_nativeAdhocRenderPushBuffer));
+	PushBuffer_Init(&s_nativeAdhocRenderPushBuffer, localIndex, 1);
+	s_nativeAdhocRenderPushBuffer.pos = local->pos;
+	s_nativeAdhocRenderPushBuffer.rot = local->rot;
+	memcpy(s_nativeAdhocRenderPushBuffer.data6, local->data6, sizeof(s_nativeAdhocRenderPushBuffer.data6));
+	s_nativeAdhocRenderPushBuffer.fadeFromBlack_currentValue = local->fadeFromBlack_currentValue;
+	s_nativeAdhocRenderPushBuffer.fadeFromBlack_desiredResult = local->fadeFromBlack_desiredResult;
+	s_nativeAdhocRenderPushBuffer.fade_step = local->fade_step;
+	PushBuffer_UpdateFrustum(&s_nativeAdhocRenderPushBuffer);
 
-	// In the retail 2P OT layout player 1 owns the lower OT segment, which
-	// chains directly into the shared UI OT. Render the one local camera there
-	// and submit that segment only; the unused upper 2P segment is never drawn.
-	s_nativeAdhocRenderPushBuffer.ptrOT = gGT->pushBuffer[1].ptrOT;
+	// Keep the fullscreen presentation completely separate from both retail 2P
+	// camera OTs. Some retail render paths still populate those segments even
+	// though adhoc only presents one camera; sharing either segment lets stale
+	// split-screen primitives leak into the fullscreen chain.
+	NativeGpuLinks_RegisterRangeChecked("adhoc single-view OT", s_nativeAdhocRenderOT, sizeof(s_nativeAdhocRenderOT));
+	ClearOTagR(s_nativeAdhocRenderOT, NATIVE_ADHOC_RENDER_OT_ENTRIES);
+
+	// Retail 2P reserves six words before the lower camera OT for the shared UI
+	// chain. pushBuffer_UI.ptrOT points at the second word, so +4 is the last
+	// shared UI slot that the lower camera OT normally chains into.
+	setaddr(&s_nativeAdhocRenderOT[0], &gGT->pushBuffer_UI.ptrOT[4]);
+	s_nativeAdhocRenderPushBuffer.ptrOT = s_nativeAdhocRenderOT;
 	s_nativeAdhocSingleViewRenderActive = 1;
 }
 
@@ -496,79 +760,6 @@ int NativeAdhoc_IsSingleViewRenderActive(void)
 struct PushBuffer *NativeAdhoc_GetRenderPushBuffer(void)
 {
 	return s_nativeAdhocSingleViewRenderActive ? &s_nativeAdhocRenderPushBuffer : NULL;
-}
-
-static void NativeAdhoc_SetSimulationView(struct GameTracker *gGT)
-{
-	struct PushBuffer *p0;
-	struct PushBuffer *p1;
-
-	if ((gGT == NULL) || (gGT->numPlyrCurrGame != 2))
-	{
-		return;
-	}
-	p0 = &gGT->pushBuffer[0];
-	p1 = &gGT->pushBuffer[1];
-#if BUILD == EurRetail
-	p0->rect.h = 0x74;
-	p1->rect.h = 0x74;
-	p1->rect.y = 0x78;
-#else
-	p0->rect.h = 0x6a;
-	p1->rect.h = 0x6a;
-	p1->rect.y = 0x6e;
-#endif
-	p0->rect.x = 0;
-	p0->rect.y = 0;
-	p0->rect.w = 0x200;
-	p1->rect.x = 0;
-	p1->rect.w = 0x200;
-	p0->aspectX = 8;
-	p1->aspectX = 8;
-	p0->aspectY = 3;
-	p1->aspectY = 3;
-	p0->distanceToScreen_PREV = 0x100;
-	p0->distanceToScreen_CURR = 0x100;
-	p1->distanceToScreen_PREV = 0x100;
-	p1->distanceToScreen_CURR = 0x100;
-}
-
-static void NativeAdhoc_SetRenderView(struct GameTracker *gGT)
-{
-	int localIndex;
-	int remoteIndex;
-	struct PushBuffer *local;
-	struct PushBuffer *remote;
-
-	if ((gGT == NULL) || (gGT->numPlyrCurrGame != 2))
-	{
-		return;
-	}
-	localIndex = NativeAdhoc_GetLocalPlayerIndex();
-	remoteIndex = 1 - localIndex;
-	local = &gGT->pushBuffer[localIndex];
-	remote = &gGT->pushBuffer[remoteIndex];
-#if BUILD == EurRetail
-	local->rect.h = 0xec;
-	remote->rect.h = 0xec;
-#else
-	local->rect.h = 0xd8;
-	remote->rect.h = 0xd8;
-#endif
-	local->rect.x = 0;
-	local->rect.y = 0;
-	local->rect.w = 0x200;
-	remote->rect.x = 0x200;
-	remote->rect.y = 0;
-	remote->rect.w = 0x200;
-	local->aspectX = 4;
-	remote->aspectX = 4;
-	local->aspectY = 3;
-	remote->aspectY = 3;
-	local->distanceToScreen_PREV = 0x100;
-	local->distanceToScreen_CURR = 0x100;
-	remote->distanceToScreen_PREV = 0x100;
-	remote->distanceToScreen_CURR = 0x100;
 }
 
 static int NativeAdhoc_IsPacketHeaderValid(const struct NativeAdhocPacketHeader *header, int len)
@@ -905,6 +1096,11 @@ static void NativeAdhoc_FillSession(struct NativeAdhocSessionPacket *packet, con
 	packet->numLaps = gGT->numLaps;
 	packet->language = cfg_language;
 	memcpy(packet->characterIDs, data.characterIDs, sizeof(packet->characterIDs));
+	if (s_nativeAdhoc.raceLoadPrepared)
+	{
+		packet->characterIDs[0] = s_nativeAdhoc.raceConfig.p1Character;
+		packet->characterIDs[1] = s_nativeAdhoc.raceConfig.p2Character;
+	}
 	packet->randomNumber = (u32)sdata->randomNumber;
 	packet->deadcoed0 = (u32)gGT->deadcoed_struct.state0;
 	packet->deadcoed1 = (u32)gGT->deadcoed_struct.state1;
@@ -934,12 +1130,48 @@ static int NativeAdhoc_SessionMatchesLocal(const struct NativeAdhocSessionPacket
 	{
 		return 0;
 	}
+
 	if ((packet->build != BUILD) || (packet->levelID != gGT->levelID) || (packet->currLEV != gGT->currLEV) ||
 		(packet->arcadeDifficulty != gGT->arcadeDifficulty) || (packet->numLaps != gGT->numLaps) || (packet->language != cfg_language))
 	{
 		return 0;
 	}
-	return memcmp(packet->characterIDs, data.characterIDs, sizeof(packet->characterIDs)) == 0;
+
+	// Before the authoritative snapshot only the two human character slots
+	// must already match. LOAD_Robots2P deterministically fills 2..5 from
+	// those two choices; 6..7 are unused in a six-racer 2P race.
+	return (packet->characterIDs[0] == data.characterIDs[0]) &&
+	       (packet->characterIDs[1] == data.characterIDs[1]);
+}
+
+static void NativeAdhoc_ApplySessionConfig(const struct NativeAdhocSessionPacket *packet, struct GameTracker *gGT)
+{
+	if ((packet == NULL) || (gGT == NULL))
+	{
+		return;
+	}
+
+	memcpy(data.characterIDs, packet->characterIDs, sizeof(packet->characterIDs));
+	NativeAdhoc_ApplySessionSeeds(packet, gGT);
+}
+
+static void NativeAdhoc_LogSessionMismatch(const struct NativeAdhocSessionPacket *packet, const struct GameTracker *gGT)
+{
+	if ((packet == NULL) || (gGT == NULL))
+	{
+		return;
+	}
+
+	Platform_Log(
+		"[CTR Adhoc] session mismatch build=%u/%u level=%d/%d currLEV=%d/%d diff=%d/%d laps=%d/%d lang=%d/%d p1=%d/%d p2=%d/%d\n",
+		packet->build, (u32)BUILD,
+		packet->levelID, gGT->levelID,
+		packet->currLEV, gGT->currLEV,
+		packet->arcadeDifficulty, gGT->arcadeDifficulty,
+		packet->numLaps, gGT->numLaps,
+		packet->language, cfg_language,
+		packet->characterIDs[0], data.characterIDs[0],
+		packet->characterIDs[1], data.characterIDs[1]);
 }
 
 static void NativeAdhoc_SendSession(void)
@@ -1156,7 +1388,7 @@ static int NativeAdhoc_BeginSnapshot(int initialSync, u32 simulationFrame)
 	s_nativeAdhoc.txSnapshotAcked = NULL;
 
 	size = NativeCheckpoint_GetGameplaySize();
-	if (size <= 0)
+	if ((size <= 0) || ((u32)size > NATIVE_ADHOC_SNAPSHOT_MAX_SIZE))
 	{
 		Platform_Log("[CTR Adhoc] invalid gameplay checkpoint size: %d\n", size);
 		return 0;
@@ -1167,16 +1399,13 @@ static int NativeAdhoc_BeginSnapshot(int initialSync, u32 simulationFrame)
 		Platform_Log("[CTR Adhoc] failed to allocate %d-byte gameplay checkpoint\n", size);
 		return 0;
 	}
-	NativeAdhoc_SetSimulationView(sdata->gGT);
 	if (!NativeCheckpoint_CaptureGameplay(s_nativeAdhoc.txSnapshot, size))
 	{
 		Platform_Log("[CTR Adhoc] gameplay checkpoint capture failed\n");
 		free(s_nativeAdhoc.txSnapshot);
 		s_nativeAdhoc.txSnapshot = NULL;
-		NativeAdhoc_SetRenderView(sdata->gGT);
 		return 0;
 	}
-	NativeAdhoc_SetRenderView(sdata->gGT);
 
 	s_nativeAdhoc.txSnapshotSize = (u32)size;
 	s_nativeAdhoc.txSnapshotChecksum = NativeAdhoc_Crc32(s_nativeAdhoc.txSnapshot, size);
@@ -1238,11 +1467,33 @@ static void NativeAdhoc_PumpSnapshotTx(void)
 
 static int NativeAdhoc_PrepareSnapshotRx(const struct NativeAdhocSnapshotBeginPacket *packet)
 {
-	if ((packet->totalSize == 0) || (packet->chunkSize != NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE) ||
-		(packet->chunkCount == 0) ||
-		(packet->chunkCount != ((packet->totalSize + NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE - 1u) / NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE)))
+	int expectedSize = NativeCheckpoint_GetGameplaySize();
+	u32 expectedChunks;
+
+	if ((expectedSize <= 0) || ((u32)expectedSize > NATIVE_ADHOC_SNAPSHOT_MAX_SIZE) ||
+		(packet->totalSize != (u32)expectedSize) ||
+		(packet->chunkSize != NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE))
 	{
 		return 0;
+	}
+	expectedChunks = packet->totalSize / NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE;
+	if ((packet->totalSize % NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE) != 0)
+	{
+		expectedChunks++;
+	}
+	if ((expectedChunks == 0) || (packet->chunkCount != expectedChunks))
+	{
+		return 0;
+	}
+
+	// A completed snapshot is immutable protocol history. Delayed BEGIN/CHUNK
+	// packets for it must never reopen the RX state or trigger a second restore.
+	// If START/RESUME has not arrived yet, SNAPSHOT_DONE is already retransmitted
+	// by snapshotDonePending; after control is applied the duplicate is simply stale.
+	if ((s_nativeAdhoc.lastRestoredSnapshotId != 0) &&
+	    (s_nativeAdhoc.lastRestoredSnapshotId == packet->snapshotId))
+	{
+		return 1;
 	}
 
 	if (s_nativeAdhoc.rxSnapshotActive && (s_nativeAdhoc.rxSnapshotId == packet->snapshotId))
@@ -1292,7 +1543,15 @@ static void NativeAdhoc_HandleSnapshotChunk(const struct NativeAdhocSnapshotChun
 	{
 		return;
 	}
+	if (packet->chunkIndex > (0xffffffffu / NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE))
+	{
+		return;
+	}
 	offset = packet->chunkIndex * NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE;
+	if (offset >= s_nativeAdhoc.rxSnapshotSize)
+	{
+		return;
+	}
 	expectedSize = s_nativeAdhoc.rxSnapshotSize - offset;
 	if (expectedSize > NATIVE_ADHOC_SNAPSHOT_CHUNK_SIZE)
 	{
@@ -1366,8 +1625,25 @@ static void NativeAdhoc_ApplyControl(const struct NativeAdhocControlPacket *pack
 		{
 			sdata->gGT->elapsedTimeMS = 0x20;
 		}
+		if (sdata->gGamepads != NULL)
+		{
+			GAMEPAD_GetNumConnected(sdata->gGamepads);
+			for (int i = 0; i < 2; i++)
+			{
+				sdata->gGamepads->gamepad[i].buttonsHeldCurrFrame = 0;
+				sdata->gGamepads->gamepad[i].buttonsHeldPrevFrame = 0;
+				sdata->gGamepads->gamepad[i].buttonsTapped = 0;
+				sdata->gGamepads->gamepad[i].buttonsReleased = 0;
+			}
+			Platform_Log("[CTR Adhoc] client pad bindings connected=%d p0=%d p1=%d local=%d\n",
+				sdata->gGamepads->numGamepadsConnected,
+				sdata->gGamepads->gamepad[0].ptrControllerPacket != NULL,
+				sdata->gGamepads->gamepad[1].ptrControllerPacket != NULL,
+				NativeAdhoc_GetLocalPlayerIndex());
+		}
 		s_nativeAdhoc.snapshotDonePending = 0;
 		s_nativeAdhoc.rxSnapshotActive = 0;
+		s_nativeAdhoc.rxRestorePending = 0;
 		free(s_nativeAdhoc.rxSnapshot);
 		free(s_nativeAdhoc.rxSnapshotReceived);
 		s_nativeAdhoc.rxSnapshot = NULL;
@@ -1375,6 +1651,10 @@ static void NativeAdhoc_ApplyControl(const struct NativeAdhocControlPacket *pack
 		Platform_Log("[CTR Adhoc] simulation %s at frame %u\n",
 			ackType == NATIVE_ADHOC_PACKET_START_ACK ? "started" : "resumed",
 			packet->simulationFrame);
+		if (ackType == NATIVE_ADHOC_PACKET_START_ACK)
+		{
+			NativeAdhoc_ResetRaceConfigState();
+		}
 	}
 	NativeAdhoc_SendControlAck(ackType, packet->snapshotId, packet->simulationFrame);
 }
@@ -1478,6 +1758,57 @@ static void NativeAdhoc_ReceivePackets(void)
 			continue;
 		}
 
+		if ((header->type == NATIVE_ADHOC_PACKET_RACE_PROPOSAL) && (len == (int)sizeof(struct NativeAdhocRaceProposalPacket)))
+		{
+			struct NativeAdhocRaceProposalPacket *packet = (struct NativeAdhocRaceProposalPacket *)buffer;
+			if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST) && NativeAdhoc_PacketSessionMatches(packet->sessionId) && (packet->build == BUILD))
+			{
+				s_nativeAdhoc.raceProposalP2 = packet->p2Character;
+				s_nativeAdhoc.raceProposalValid = 1;
+				Platform_Log("[CTR Adhoc] received P2 character proposal %u\n", packet->p2Character);
+			}
+			continue;
+		}
+
+		if ((header->type == NATIVE_ADHOC_PACKET_RACE_CONFIG) && (len == (int)sizeof(struct NativeAdhocRaceConfigPacket)))
+		{
+			struct NativeAdhocRaceConfigPacket *packet = (struct NativeAdhocRaceConfigPacket *)buffer;
+			if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT) && NativeAdhoc_PacketSessionMatches(packet->sessionId) && (packet->build == BUILD))
+			{
+				if ((s_nativeAdhoc.raceSyncPending || s_nativeAdhoc.raceLoadPrepared) &&
+					(packet->p2Character == s_nativeAdhoc.raceProposalP2))
+				{
+					s_nativeAdhoc.raceConfig = *packet;
+					s_nativeAdhoc.raceConfigReceived = 1;
+					NativeAdhoc_ApplyRaceConfig(packet, sdata->gGT);
+					NativeAdhoc_SendRaceConfigAck(packet);
+					Platform_Log("[CTR Adhoc] accepted pre-load config track=%d diff=%d laps=%d lang=%d p1=%u p2=%u\n",
+						packet->currLEV, packet->arcadeDifficulty, packet->numLaps, packet->language,
+						packet->p1Character, packet->p2Character);
+				}
+				else if (s_nativeAdhoc.raceSyncPending || s_nativeAdhoc.raceLoadPrepared)
+				{
+					Platform_Log("[CTR Adhoc] rejected pre-load config P2=%u expected=%u\n", packet->p2Character, s_nativeAdhoc.raceProposalP2);
+				}
+			}
+			continue;
+		}
+
+		if ((header->type == NATIVE_ADHOC_PACKET_RACE_CONFIG_ACK) && (len == (int)sizeof(struct NativeAdhocRaceConfigAckPacket)))
+		{
+			struct NativeAdhocRaceConfigAckPacket *packet = (struct NativeAdhocRaceConfigAckPacket *)buffer;
+			if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST) && NativeAdhoc_PacketSessionMatches(packet->sessionId) &&
+				s_nativeAdhoc.raceConfigSent &&
+				(packet->currLEV == s_nativeAdhoc.raceConfig.currLEV) &&
+				(packet->p1Character == s_nativeAdhoc.raceConfig.p1Character) &&
+				(packet->p2Character == s_nativeAdhoc.raceConfig.p2Character))
+			{
+				s_nativeAdhoc.raceConfigAcked = 1;
+				Platform_Log("[CTR Adhoc] pre-load config acknowledged by client\n");
+			}
+			continue;
+		}
+
 		if ((header->type == NATIVE_ADHOC_PACKET_SESSION) && (len == (int)sizeof(struct NativeAdhocSessionPacket)))
 		{
 			struct NativeAdhocSessionPacket *packet = (struct NativeAdhocSessionPacket *)buffer;
@@ -1489,12 +1820,12 @@ static void NativeAdhoc_ReceivePackets(void)
 			s_nativeAdhoc.sessionReceived = 1;
 			if (s_nativeAdhoc.localLevelReady && !NativeAdhoc_SessionMatchesLocal(packet, sdata->gGT))
 			{
-				Platform_Log("[CTR Adhoc] session mismatch: level/build/language/characters differ\n");
+				NativeAdhoc_LogSessionMismatch(packet, sdata->gGT);
 				s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 			}
 			else if (s_nativeAdhoc.localLevelReady)
 			{
-				NativeAdhoc_ApplySessionSeeds(packet, sdata->gGT);
+				NativeAdhoc_ApplySessionConfig(packet, sdata->gGT);
 				NativeAdhoc_SendReady();
 			}
 			continue;
@@ -1532,15 +1863,8 @@ static void NativeAdhoc_ReceivePackets(void)
 			struct NativeAdhocDesyncPacket *packet = (struct NativeAdhocDesyncPacket *)buffer;
 			if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST) && NativeAdhoc_PacketSessionMatches(packet->sessionId))
 			{
-				Platform_Log("[CTR Adhoc] desync abort at frame %u; cross-console checkpoint recovery is disabled\n", packet->frame);
-				s_nativeAdhoc.simulationActive = 0;
-				s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
-				NativeAdhoc_SendDesync(packet->frame, packet->hostHash, packet->clientHash);
-			}
-			else if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT) && NativeAdhoc_PacketSessionMatches(packet->sessionId))
-			{
-				s_nativeAdhoc.simulationActive = 0;
-				s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
+				Platform_Log("[CTR Adhoc] recovery requested after desync at frame %u\n", packet->frame);
+				s_nativeAdhoc.resyncRequested = 1;
 			}
 			continue;
 		}
@@ -1617,6 +1941,26 @@ static void NativeAdhoc_ReceivePackets(void)
 				{
 					sdata->gGT->elapsedTimeMS = 0x20;
 				}
+				if (sdata->gGamepads != NULL)
+				{
+					GAMEPAD_GetNumConnected(sdata->gGamepads);
+					for (int i = 0; i < 2; i++)
+					{
+						sdata->gGamepads->gamepad[i].buttonsHeldCurrFrame = 0;
+						sdata->gGamepads->gamepad[i].buttonsHeldPrevFrame = 0;
+						sdata->gGamepads->gamepad[i].buttonsTapped = 0;
+						sdata->gGamepads->gamepad[i].buttonsReleased = 0;
+					}
+					Platform_Log("[CTR Adhoc] host pad bindings connected=%d p0=%d p1=%d local=%d\n",
+						sdata->gGamepads->numGamepadsConnected,
+						sdata->gGamepads->gamepad[0].ptrControllerPacket != NULL,
+						sdata->gGamepads->gamepad[1].ptrControllerPacket != NULL,
+						NativeAdhoc_GetLocalPlayerIndex());
+				}
+				if (header->type == NATIVE_ADHOC_PACKET_START_ACK)
+				{
+					NativeAdhoc_ResetRaceConfigState();
+				}
 				free(s_nativeAdhoc.txSnapshot);
 				free(s_nativeAdhoc.txSnapshotAcked);
 				s_nativeAdhoc.txSnapshot = NULL;
@@ -1673,6 +2017,8 @@ static void NativeAdhoc_PumpConnected(void)
 		s_nativeAdhoc.lastHeartbeatTime = now;
 	}
 
+	NativeAdhoc_PumpRaceConfig(now);
+
 	if (s_nativeAdhoc.localLevelReady && !s_nativeAdhoc.initialSyncComplete && !s_nativeAdhoc.txSnapshotActive && !s_nativeAdhoc.rxSnapshotActive && !s_nativeAdhoc.controlPending)
 	{
 		if ((u32)(now - s_nativeAdhoc.lastSessionTime) >= NATIVE_ADHOC_SESSION_INTERVAL_US)
@@ -1690,9 +2036,14 @@ static void NativeAdhoc_PumpConnected(void)
 	}
 
 	if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST) && s_nativeAdhoc.localLevelReady && s_nativeAdhoc.peerLevelReady &&
-		!s_nativeAdhoc.initialSyncComplete && !s_nativeAdhoc.controlPending)
+		!s_nativeAdhoc.initialSyncComplete && !s_nativeAdhoc.controlPending &&
+		!s_nativeAdhoc.txSnapshotActive && !s_nativeAdhoc.rxSnapshotActive)
 	{
-		NativeAdhoc_BeginDirectStart(0);
+		if (!NativeAdhoc_BeginSnapshot(1, 0))
+		{
+			Platform_Log("[CTR Adhoc] failed to create initial gameplay snapshot\n");
+			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
+		}
 	}
 
 	if (s_nativeAdhoc.txSnapshotActive)
@@ -1728,6 +2079,8 @@ int NativeAdhoc_Begin(int role)
 	SceNetAdhocctlAdhocId adhocId;
 	SceNetCheckDialogParam param;
 	SceNetAdhocctlGroupName groupName;
+	SceAppUtilInitParam appUtilInitParam;
+	SceAppUtilBootParam appUtilBootParam;
 	int result;
 
 	if ((role != NATIVE_ADHOC_ROLE_HOST) && (role != NATIVE_ADHOC_ROLE_CLIENT))
@@ -1741,6 +2094,20 @@ int NativeAdhoc_Begin(int role)
 	s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 	s_nativeAdhoc.socket = -1;
 	s_nativeAdhoc.installedFrame = NATIVE_ADHOC_INVALID_FRAME;
+
+	memset(&appUtilInitParam, 0, sizeof(appUtilInitParam));
+	memset(&appUtilBootParam, 0, sizeof(appUtilBootParam));
+	result = sceAppUtilInit(&appUtilInitParam, &appUtilBootParam);
+	if ((result < 0) && (result != SCE_APPUTIL_ERROR_BUSY))
+	{
+		Platform_Log("[CTR Adhoc] sceAppUtilInit failed: 0x%08x\n", result);
+		NativeAdhoc_Shutdown();
+		return 0;
+	}
+	if (result >= 0)
+	{
+		s_nativeAdhoc.appUtilInitializedByUs = 1;
+	}
 
 	if (sceSysmoduleIsLoaded(SCE_SYSMODULE_NET) != SCE_SYSMODULE_LOADED)
 	{
@@ -1851,6 +2218,10 @@ void NativeAdhoc_Shutdown(void)
 	{
 		sceNetAdhocPdpDelete(s_nativeAdhoc.socket, 0);
 	}
+	if (s_nativeAdhoc.netCtlInitialized)
+	{
+		sceNetCtlAdhocDisconnect();
+	}
 	if (s_nativeAdhoc.adhocctlInitialized)
 	{
 		sceNetAdhocctlTerm();
@@ -1875,6 +2246,10 @@ void NativeAdhoc_Shutdown(void)
 	if (s_nativeAdhoc.netModuleLoadedByUs)
 	{
 		sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
+	}
+	if (s_nativeAdhoc.appUtilInitializedByUs)
+	{
+		sceAppUtilShutdown();
 	}
 
 	memset(&s_nativeAdhoc, 0, sizeof(s_nativeAdhoc));
@@ -1922,10 +2297,12 @@ void NativeAdhoc_Update(void)
 		NativeAdhoc_PumpConnected();
 		if ((u32)(now - s_nativeAdhoc.lastPeerTime) > NATIVE_ADHOC_PEER_TIMEOUT_US)
 		{
-			Platform_Log("[CTR Adhoc] peer timed out\n");
+			Platform_Log("[CTR Adhoc] peer timed out after %u ms, returning to main menu\n",
+			             NATIVE_ADHOC_PEER_TIMEOUT_US / 1000u);
 			NativeAdhoc_FreeSnapshotBuffers();
 			s_nativeAdhoc.peerKnown = 0;
 			s_nativeAdhoc.remoteMenuPadValid = 0;
+			NativeAdhoc_ResetRaceConfigState();
 			s_nativeAdhoc.localLevelReady = 0;
 			s_nativeAdhoc.peerLevelReady = 0;
 			s_nativeAdhoc.sessionReceived = 0;
@@ -1933,9 +2310,17 @@ void NativeAdhoc_Update(void)
 			s_nativeAdhoc.simulationActive = 0;
 			s_nativeAdhoc.controlPending = 0;
 			NativeAdhoc_ClearInputRing();
-			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_WAITING;
+			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
+			s_nativeAdhocReturnToMainMenuPending = 1;
+			s_nativeAdhocConnectionLostNoticeUntil = now + 6000000u;
 		}
 	}
+}
+
+void NativeAdhoc_WaitForFrame(void)
+{
+	Platform_PollInput();
+	sceDisplayWaitVblankStart();
 }
 
 void NativeAdhoc_ProcessPadSnapshots(struct PlatformInputPadSnapshot *pads, int count)
@@ -2008,6 +2393,7 @@ void NativeAdhoc_NotifyLevelReady(struct GameTracker *gGT)
 		return;
 	}
 
+	NativeAdhoc_EnforcePreparedRaceConfig(gGT);
 	s_nativeAdhoc.localLevelReady = 1;
 	s_nativeAdhoc.peerLevelReady = 0;
 	s_nativeAdhoc.initialSyncComplete = 0;
@@ -2028,13 +2414,13 @@ void NativeAdhoc_NotifyLevelReady(struct GameTracker *gGT)
 	{
 		if (s_nativeAdhoc.sessionReceived && !NativeAdhoc_SessionMatchesLocal(&s_nativeAdhoc.session, gGT))
 		{
-			Platform_Log("[CTR Adhoc] local level does not match host session\n");
+			NativeAdhoc_LogSessionMismatch(&s_nativeAdhoc.session, gGT);
 			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 			return;
 		}
 		if (s_nativeAdhoc.sessionReceived)
 		{
-			NativeAdhoc_ApplySessionSeeds(&s_nativeAdhoc.session, gGT);
+			NativeAdhoc_ApplySessionConfig(&s_nativeAdhoc.session, gGT);
 		}
 		NativeAdhoc_SendReady();
 	}
@@ -2057,9 +2443,31 @@ static int NativeAdhoc_ApplyPendingSnapshot(void)
 	}
 
 	gGT = sdata->gGT;
-	NativeAdhoc_SetRenderView(gGT);
+	if (gGT != NULL)
+	{
+		MainDB_RebindNativePrimMem(gGT);
+		gGT->ptrRenderBucketInstance = RenderBucket_GetNativeStorage();
+	}
+	if ((gGT != NULL) && (gGT->level1 != NULL))
+	{
+		// Visibility/PVS state is a render-only runtime cache. The checkpoint
+		// restores the host mempack contents, but fields such as VisMem source
+		// caches and bspList[].bsp are populated at runtime and are not all LEV
+		// pointer-map slots. Rebuild them from the client's relocated LEV before
+		// the first post-restore frame instead of consuming host cache pointers.
+		MainInit_VisMem(gGT);
+		memset(gGT->LevRenderLists, 0, sizeof(gGT->LevRenderLists));
+		Platform_Log("[CTR Adhoc] rebuilt render visibility cache level=%p vis=%p mesh=%p\n",
+			(void *)gGT->level1, (void *)gGT->visMem1, (void *)gGT->level1->ptr_mesh_info);
+	}
 	NativeAdhoc_ResetLockstep(s_nativeAdhoc.rxSnapshotFrame);
+	s_nativeAdhoc.lastRestoredSnapshotId = s_nativeAdhoc.rxSnapshotId;
 	s_nativeAdhoc.rxRestorePending = 0;
+	s_nativeAdhoc.rxSnapshotActive = 0;
+	free(s_nativeAdhoc.rxSnapshot);
+	free(s_nativeAdhoc.rxSnapshotReceived);
+	s_nativeAdhoc.rxSnapshot = NULL;
+	s_nativeAdhoc.rxSnapshotReceived = NULL;
 	s_nativeAdhoc.snapshotDonePending = 1;
 	s_nativeAdhoc.lastControlTime = 0;
 	NativeAdhoc_SendSnapshotDone();
@@ -2075,6 +2483,14 @@ int NativeAdhoc_BeginSimulationFrame(struct GameTracker *gGT)
 		return 1;
 	}
 
+	// Do not freeze the race-loading/checkered-flag state machine before
+	// NativeAdhoc_NotifyLevelReady() has been reached. The state-pure wait is
+	// only valid once this console has finished local level initialization.
+	if (!s_nativeAdhoc.localLevelReady)
+	{
+		return 1;
+	}
+
 	if (!NativeAdhoc_ApplyPendingSnapshot())
 	{
 		return 0;
@@ -2082,10 +2498,14 @@ int NativeAdhoc_BeginSimulationFrame(struct GameTracker *gGT)
 
 	if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST) && s_nativeAdhoc.resyncRequested && s_nativeAdhoc.simulationActive)
 	{
+		u32 recoveryFrame = s_nativeAdhoc.simulationFrame;
 		s_nativeAdhoc.resyncRequested = 0;
-		Platform_Log("[CTR Adhoc] recovery snapshot disabled; stopping desynced session at frame %u\n", s_nativeAdhoc.simulationFrame);
-		s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
-		s_nativeAdhoc.simulationActive = 0;
+		if (!NativeAdhoc_BeginSnapshot(0, recoveryFrame))
+		{
+			Platform_Log("[CTR Adhoc] failed to create recovery snapshot at frame %u\n", recoveryFrame);
+			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
+			s_nativeAdhoc.simulationActive = 0;
+		}
 		return 0;
 	}
 
@@ -2116,6 +2536,25 @@ void NativeAdhoc_EndSimulationFrame(struct GameTracker *gGT)
 	{
 		hash = NativeAdhoc_GameplayHash(gGT);
 		NativeAdhoc_SaveHash(frame, hash);
+		if (frame <= 60u)
+		{
+			struct Driver *d0 = gGT->drivers[0];
+			struct Driver *d1 = gGT->drivers[1];
+			Platform_Log(
+				"[CTR Adhoc] state role=%s frame=%u hash=0x%08x rng=0x%08x d0=%d pos=(%d,%d,%d) d1=%d pos=(%d,%d,%d)\n",
+				s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST ? "host" : "client",
+				frame,
+				hash,
+				(u32)sdata->randomNumber,
+				d0 != NULL ? d0->driverID : -1,
+				d0 != NULL ? d0->posCurr.x : 0,
+				d0 != NULL ? d0->posCurr.y : 0,
+				d0 != NULL ? d0->posCurr.z : 0,
+				d1 != NULL ? d1->driverID : -1,
+				d1 != NULL ? d1->posCurr.x : 0,
+				d1 != NULL ? d1->posCurr.y : 0,
+				d1 != NULL ? d1->posCurr.z : 0);
+		}
 		if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST)
 		{
 			NativeAdhoc_SendHash(frame, hash);
@@ -2152,6 +2591,39 @@ int NativeAdhoc_IsSimulationActive(void)
 int NativeAdhoc_IsDialogRunning(void)
 {
 	return s_nativeAdhoc.dialogRunning;
+}
+
+int NativeAdhoc_ShouldPresentDriver(int driverID)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	if (!NativeAdhoc_IsConnected() || (gGT == NULL) || (gGT->numPlyrCurrGame != 2) || ((gGT->gameMode1 & MAIN_MENU) != 0))
+	{
+		return 1;
+	}
+	if ((driverID < 0) || (driverID >= 2))
+	{
+		return 1;
+	}
+	return driverID == NativeAdhoc_GetLocalPlayerIndex();
+}
+
+int NativeAdhoc_ShouldReturnToMainMenu(void)
+{
+	return s_nativeAdhocReturnToMainMenuPending;
+}
+
+void NativeAdhoc_AcknowledgeReturnToMainMenu(void)
+{
+	s_nativeAdhocReturnToMainMenuPending = 0;
+}
+
+int NativeAdhoc_ShouldDrawConnectionLostNotice(void)
+{
+	if (s_nativeAdhocConnectionLostNoticeUntil == 0)
+	{
+		return 0;
+	}
+	return (s32)(s_nativeAdhocConnectionLostNoticeUntil - NativeAdhoc_Now()) > 0;
 }
 
 int NativeAdhoc_GetRole(void)
@@ -2221,15 +2693,26 @@ void NativeAdhoc_Update(void)
 {
 }
 
+void NativeAdhoc_WaitForFrame(void)
+{
+}
+
 void NativeAdhoc_ProcessPadSnapshots(struct PlatformInputPadSnapshot *pads, int count)
 {
 	(void)pads;
 	(void)count;
 }
 
-void NativeAdhoc_PrepareRaceLoad(struct GameTracker *gGT)
+int NativeAdhoc_PrepareRaceLoad(struct GameTracker *gGT)
 {
 	(void)gGT;
+	return 1;
+}
+
+int NativeAdhoc_EnforcePreparedRaceConfig(struct GameTracker *gGT)
+{
+	(void)gGT;
+	return 0;
 }
 
 void NativeAdhoc_NotifyLevelReady(struct GameTracker *gGT)
@@ -2283,6 +2766,26 @@ int NativeAdhoc_IsSimulationActive(void)
 }
 
 int NativeAdhoc_IsDialogRunning(void)
+{
+	return 0;
+}
+
+int NativeAdhoc_ShouldPresentDriver(int driverID)
+{
+	(void)driverID;
+	return 1;
+}
+
+int NativeAdhoc_ShouldReturnToMainMenu(void)
+{
+	return 0;
+}
+
+void NativeAdhoc_AcknowledgeReturnToMainMenu(void)
+{
+}
+
+int NativeAdhoc_ShouldDrawConnectionLostNotice(void)
 {
 	return 0;
 }

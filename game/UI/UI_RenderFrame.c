@@ -1,5 +1,10 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+static int s_nativeAdhocRouletteSoundActive;
+#endif
+
 // To do: add a header
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80052f98-0x80054298.
@@ -44,6 +49,17 @@ void UI_RenderFrame_Racing()
 
 	int numPlyr = gGT->numPlyrCurrGame;
 	int gameMode1 = gGT->gameMode1;
+	int onePlayerPresentation = numPlyr == 1;
+#if defined(__vita__)
+	int adhocSingleView = NativeAdhoc_IsSingleViewRenderActive() && (numPlyr == 2);
+	int adhocLocalPlayer = adhocSingleView ? NativeAdhoc_GetLocalPlayerIndex() : 0;
+	u32 *adhocVisibleUiOT = gGT->pushBuffer_UI.ptrOT;
+	u32 *adhocDiscardOT = adhocSingleView ? gGT->pushBuffer[0].ptrOT : NULL;
+	if (adhocSingleView)
+	{
+		onePlayerPresentation = 1;
+	}
+#endif
 
 	// Get pointer to array of HUD structs
 	hudStructPtr = (struct UiElement2D *)data.hudStructPtr[numPlyr - 1];
@@ -57,6 +73,29 @@ void UI_RenderFrame_Racing()
 	turboCountPos.y = 0;
 
 	UI_WeaponBG_AnimateShine();
+
+#if defined(__vita__)
+	if (adhocSingleView)
+	{
+		struct Driver *audioDriver = gGT->drivers[adhocLocalPlayer];
+		int shouldPlayRoulette = (audioDriver != NULL) && (audioDriver->itemRollTimer != 0);
+		if (shouldPlayRoulette && !s_nativeAdhocRouletteSoundActive)
+		{
+			OtherFX_Play(0x5d, 0);
+			s_nativeAdhocRouletteSoundActive = 1;
+		}
+		else if (!shouldPlayRoulette && s_nativeAdhocRouletteSoundActive)
+		{
+			OtherFX_Stop2(0x5d);
+			s_nativeAdhocRouletteSoundActive = 0;
+		}
+	}
+	else if (s_nativeAdhocRouletteSoundActive)
+	{
+		OtherFX_Stop2(0x5d);
+		s_nativeAdhocRouletteSoundActive = 0;
+	}
+#endif
 
 	// if time on clock is zero
 	if (gGT->elapsedEventTime == 0)
@@ -78,7 +117,11 @@ void UI_RenderFrame_Racing()
 		if ((gGT->hudFlags & HUD_FLAG_RENDER_LESS) == 0)
 		{
 			// If you press Triangle
+#if defined(__vita__)
+			if ((sdata->gGamepads->gamepad[adhocSingleView ? adhocLocalPlayer : 0].buttonsTapped & 0x40000) != 0)
+#else
 			if ((sdata->gGamepads->gamepad[0].buttonsTapped & 0x40000) != 0)
+#endif
 			{
 				// if & 8, remove bit 8,
 				// if !& 8, add bit 8,
@@ -130,6 +173,25 @@ void UI_RenderFrame_Racing()
 		{
 			// pointer to player structure
 			playerStruct = (struct Driver *)playerThread->object;
+#if defined(__vita__)
+			u32 *adhocPlayerOriginalOT = NULL;
+			if (adhocSingleView)
+			{
+				int playerIndex = playerStruct->driverID;
+				if (playerIndex == adhocLocalPlayer)
+				{
+					hudStructPtr = data.hudStructPtr[0];
+					gGT->pushBuffer_UI.ptrOT = adhocVisibleUiOT;
+				}
+				else
+				{
+					hudStructPtr = &data.hudStructPtr[1][playerIndex * UI_HUD_SLOT_COUNT];
+					adhocPlayerOriginalOT = gGT->pushBuffer[playerIndex].ptrOT;
+					gGT->pushBuffer_UI.ptrOT = adhocDiscardOT;
+					gGT->pushBuffer[playerIndex].ptrOT = adhocDiscardOT;
+				}
+			}
+#endif
 			// if player has not driven backwards very far,
 			if ((playerStruct->distanceDrivenBackwards < 0x1f5)
 
@@ -152,6 +214,12 @@ void UI_RenderFrame_Racing()
 				if ((gameMode1 & PAUSE_ALL) == 0)
 				{
 					pb = &gGT->pushBuffer[playerStruct->driverID];
+#if defined(__vita__)
+					if (adhocSingleView && (playerStruct->driverID == adhocLocalPlayer))
+					{
+						pb = NativeAdhoc_GetRenderPushBuffer();
+					}
+#endif
 
 					// if "Time on clock" last 0xXX u8 is greater than 0x80 and less than 0xFF
 					if ((gGT->elapsedEventTime & 0x80) != 0)
@@ -177,7 +245,7 @@ void UI_RenderFrame_Racing()
 
 			if (
 			    // numPlyrCurrGame is less than 2 (1P mode)
-			    (numPlyr < 2) &&
+			    onePlayerPresentation &&
 			    // if want to draw speedometer
 			    ((sdata->HudAndDebugFlags & 8) != 0))
 			{
@@ -247,7 +315,21 @@ void UI_RenderFrame_Racing()
 					}
 					else
 					{
-						UI_Lerp2D_HUD(wumpaModelPos.v, (int)playerStruct->PickupWumpaHUD.startX, (int)playerStruct->PickupWumpaHUD.startY,
+						int pickupStartX = (int)playerStruct->PickupWumpaHUD.startX;
+						int pickupStartY = (int)playerStruct->PickupWumpaHUD.startY;
+#if defined(__vita__)
+						if (adhocSingleView && (playerStruct->driverID == adhocLocalPlayer))
+						{
+							struct PushBuffer *sourcePB = &gGT->pushBuffer[adhocLocalPlayer];
+							struct PushBuffer *displayPB = NativeAdhoc_GetRenderPushBuffer();
+							if (displayPB != NULL)
+							{
+								pickupStartX = pickupStartX - sourcePB->rect.x - (sourcePB->rect.w >> 1) + displayPB->rect.x + (displayPB->rect.w >> 1);
+								pickupStartY = pickupStartY - sourcePB->rect.y - (sourcePB->rect.h >> 1) + displayPB->rect.y + (displayPB->rect.h >> 1);
+							}
+						}
+#endif
+						UI_Lerp2D_HUD(wumpaModelPos.v, pickupStartX, pickupStartY,
 						              hudStructPtr[UI_HUD_SLOT_FRUIT_MODEL].x, hudStructPtr[UI_HUD_SLOT_FRUIT_MODEL].y, playerStruct->PickupWumpaHUD.cooldown,
 						              5);
 
@@ -540,11 +622,27 @@ void UI_RenderFrame_Racing()
 				}
 			}
 
+#if defined(__vita__)
+			if (adhocSingleView)
+			{
+				if ((playerStruct->driverID != adhocLocalPlayer) && (adhocPlayerOriginalOT != NULL))
+				{
+					gGT->pushBuffer[playerStruct->driverID].ptrOT = adhocPlayerOriginalOT;
+				}
+				gGT->pushBuffer_UI.ptrOT = adhocVisibleUiOT;
+			}
+#endif
+
 			// go to next player
 			// thread = thread->sibling
 			playerThread = playerThread->siblingThread;
 
-			hudStructPtr += UI_HUD_SLOT_COUNT;
+#if defined(__vita__)
+			if (!adhocSingleView)
+#endif
+			{
+				hudStructPtr += UI_HUD_SLOT_COUNT;
+			}
 
 		} while (playerThread != 0);
 	}
@@ -557,9 +655,13 @@ void UI_RenderFrame_Racing()
 
 	sdata->framesDrivingSameDirection++;
 
-	if (numPlyr == 1)
+	if (onePlayerPresentation)
 	{
+#if defined(__vita__)
+		playerStruct = gGT->drivers[adhocSingleView ? adhocLocalPlayer : 0];
+#else
 		playerStruct = gGT->drivers[0];
+#endif
 
 		UI_DrawRaceClock(0x14, 8, UI_RACE_CLOCK_SHOW_CURRENT_TIME, playerStruct);
 
@@ -747,7 +849,7 @@ void UI_RenderFrame_Racing()
 
 	if (levPtrMap != 0)
 	{
-		if (((numPlyr == 1)
+		if ((onePlayerPresentation
 
 		     // if want to draw map, not speedometer
 		     && (sdata->HudAndDebugFlags & 8) == 0) ||
@@ -804,6 +906,23 @@ void UI_RenderFrame_Racing()
 		{
 			playerStruct = gGT->drivers[i];
 			pb = &gGT->pushBuffer[playerStruct->driverID];
+#if defined(__vita__)
+			u32 *adhocStatusOriginalOT = NULL;
+			if (adhocSingleView)
+			{
+				if (i == adhocLocalPlayer)
+				{
+					pb = NativeAdhoc_GetRenderPushBuffer();
+					gGT->pushBuffer_UI.ptrOT = adhocVisibleUiOT;
+				}
+				else
+				{
+					adhocStatusOriginalOT = gGT->pushBuffer[i].ptrOT;
+					gGT->pushBuffer_UI.ptrOT = adhocDiscardOT;
+					gGT->pushBuffer[i].ptrOT = adhocDiscardOT;
+				}
+			}
+#endif
 
 			if ((((playerStruct->actionsFlagSet & ACTION_RACE_FINISHED) != 0) && ((gameMode1 & (ARCADE_MODE | TIME_TRIAL)) == 0)) &&
 			    ((
@@ -858,6 +977,17 @@ void UI_RenderFrame_Racing()
 				bVar3 = true;
 			}
 
+#if defined(__vita__)
+			if (adhocSingleView)
+			{
+				if ((i != adhocLocalPlayer) && (adhocStatusOriginalOT != NULL))
+				{
+					gGT->pushBuffer[i].ptrOT = adhocStatusOriginalOT;
+				}
+				gGT->pushBuffer_UI.ptrOT = adhocVisibleUiOT;
+			}
+#endif
+
 			// increment the iteration counter
 			i++;
 
@@ -882,10 +1012,18 @@ void UI_RenderFrame_Racing()
 		gGT->gameMode1 &= ~ROLLING_ITEM;
 	}
 
-	if ((numPlyr == 1) && (gGT->drivers[0] != NULL))
+	if (onePlayerPresentation)
 	{
 		struct UiElement2D *hud1P = data.hudStructPtr[0];
-		UI_DrawReservesMeter(hud1P[UI_HUD_SLOT_SLIDE_METER].x, hud1P[UI_HUD_SLOT_SLIDE_METER].y + 5, gGT->drivers[0]);
+#if defined(__vita__)
+		struct Driver *reservesDriver = gGT->drivers[adhocSingleView ? adhocLocalPlayer : 0];
+#else
+		struct Driver *reservesDriver = gGT->drivers[0];
+#endif
+		if (reservesDriver != NULL)
+		{
+			UI_DrawReservesMeter(hud1P[UI_HUD_SLOT_SLIDE_METER].x, hud1P[UI_HUD_SLOT_SLIDE_METER].y + 5, reservesDriver);
+		}
 	}
 }
 
@@ -1081,6 +1219,13 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 	RECT *viewport;
 	struct PushBuffer *wumpaPushBuffer;
 	u32 packedRect;
+#if defined(__vita__)
+	int adhocSingleView = NativeAdhoc_IsSingleViewRenderActive() && (gGT->numPlyrCurrGame == 2);
+	int adhocLocalPlayer = adhocSingleView ? NativeAdhoc_GetLocalPlayerIndex() : 0;
+#else
+	int adhocSingleView = 0;
+	int adhocLocalPlayer = 0;
+#endif
 
 	// NOTE(aalhendi): Retail copies packed RECT halfwords; native unpacks them
 	// explicitly to avoid strict-aliasing UB from writing RECT fields as u32.
@@ -1122,7 +1267,14 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 
 		if (shouldCycleTexture)
 		{
-			CTR_CycleTex_2p3p4pWumpaHUD((u32 *)&gGT->pushBuffer[0].ptrOT[0x3ff], textureStart, (int)(textureEnd - textureStart) + 1);
+			u32 *cycleOT = (u32 *)&gGT->pushBuffer[0].ptrOT[0x3ff];
+#if defined(__vita__)
+			if (adhocSingleView)
+			{
+				cycleOT = (u32 *)&NativeAdhoc_GetRenderPushBuffer()->ptrOT[0x3ff];
+			}
+#endif
+			CTR_CycleTex_2p3p4pWumpaHUD(cycleOT, textureStart, (int)(textureEnd - textureStart) + 1);
 		}
 	}
 
@@ -1131,10 +1283,16 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 		return;
 	}
 
-	struct UiElement2D *hud = data.hudStructPtr[gGT->numPlyrCurrGame - 1];
-
-	for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++, hud += UI_HUD_SLOT_COUNT)
+	for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
 	{
+		if (adhocSingleView && (playerIndex != adhocLocalPlayer))
+		{
+			continue;
+		}
+
+		struct UiElement2D *hud = adhocSingleView
+		    ? data.hudStructPtr[0]
+		    : &data.hudStructPtr[gGT->numPlyrCurrGame - 1][playerIndex * UI_HUD_SLOT_COUNT];
 		struct Driver *driver = gGT->drivers[playerIndex];
 
 		if ((driver->actionsFlagSet & ACTION_RACE_FINISHED) != 0)

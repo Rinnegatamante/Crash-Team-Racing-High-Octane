@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	DOT_LIGHT_COUNT = 4,
@@ -50,11 +54,28 @@ void DotLights_Video(struct GameTracker *gGT, s32 red1, s32 red2, s32 red3, s32 
 	iconState[2] = red3;
 	iconState[DOT_LIGHT_GREEN_INDEX] = green;
 
-	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
+	s32 playerCount = gGT->numPlyrCurrGame;
+#if defined(__vita__)
+	b32 adhocSingleView = NativeAdhoc_IsSingleViewRenderActive() && (gGT->numPlyrCurrGame == 2);
+	if (adhocSingleView)
+	{
+		playerCount = 1;
+	}
+#endif
+
+	for (s32 playerIndex = 0; playerIndex < playerCount; playerIndex++)
 	{
 		struct PushBuffer *pb = &gGT->pushBuffer[playerIndex];
 
 		s32 scale = DOT_LIGHT_SCALE_3P4P;
+#if defined(__vita__)
+		if (adhocSingleView)
+		{
+			pb = NativeAdhoc_GetRenderPushBuffer();
+			scale = DOT_LIGHT_SCALE_1P;
+		}
+		else
+#endif
 		if (gGT->numPlyrCurrGame == 1)
 		{
 			scale = DOT_LIGHT_SCALE_1P;

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 #define RED_BEAKER_CENTER_XY 0x02000080u
 #define RED_BEAKER_XY_MASK   0xfffeffffu
 #define RED_BEAKER_WRAP_MASK 0x01fe00ffu
@@ -215,7 +219,14 @@ void RedBeaker_RenderRain(struct PushBuffer *pb, struct PrimMem *primMem, struct
 
 		screenBounds = RedBeaker_ReadWord(pb, 0x20);
 		otBase = pb->ptrOT;
-		playerOffset = playerIndex * sizeof(struct InstDrawPerPlayer);
+		int instancePlayerIndex = playerIndex;
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive())
+		{
+			instancePlayerIndex = NativeAdhoc_GetLocalPlayerIndex();
+		}
+#endif
+		playerOffset = instancePlayerIndex * sizeof(struct InstDrawPerPlayer);
 
 		for (rainLocal = firstRain; rainLocal != NULL; rainLocal = rainLocal->next)
 		{

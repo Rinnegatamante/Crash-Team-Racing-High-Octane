@@ -368,6 +368,10 @@ void LOAD_NextQueuedFile(void);
 
 void MainDB_OTMem(struct OTMem *otMem, u32 size);
 void MainDB_PrimMem(struct PrimMem *primMem, u32 size);
+#if defined(CTR_NATIVE)
+void MainDB_RebindNativePrimMem(struct GameTracker *gGT);
+void MainDB_NativePrimMemFrameEnd(struct PrimMem *primMem);
+#endif
 
 void MainDrawCb_Vsync(void);
 void MainDrawCb_DrawSync(void);
@@ -397,6 +401,10 @@ void RenderStars(struct PushBuffer *pb, struct PrimMem *primMem, struct Stars *s
 void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBuffer *rainBuffer, u8 numPlyr, int gameMode1);
 void DrawConfetti(struct PushBuffer *pb, struct PrimMem *primMem, struct GameTrackerConfetti *confetti, int frameTimer, int gameMode1);
 void RedBeaker_RenderRain(struct PushBuffer *pb, struct PrimMem *primMem, struct JitPool *rain, u8 numPlyr, int gameMode1);
+#if defined(CTR_NATIVE)
+void *RenderBucket_GetNativeStorage(void);
+u32 RenderBucket_GetNativeStorageSize(void);
+#endif
 void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otMem, void *rbi, u32 lodMask, u8 numPlyr, int gameMode1);
 void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otMem, void *rbi, u32 lodMask, u8 numPlyr, int gameMode1);
 void RenderBucket_Execute(void *param_1, struct PrimMem *param_2);

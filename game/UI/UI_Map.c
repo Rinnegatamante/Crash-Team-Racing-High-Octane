@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum UIMapConstants
 {
 	UI_MAP_NEUTRAL_COLOR = 0x808080,
@@ -319,10 +323,16 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 
 	for (/* bucket */; bucket != 0; bucket = bucket->siblingThread, *driverIconCounter = *driverIconCounter + 1)
 	{
-		// if 2P or 4P
+		// Retail hides race-map driver markers in 2P/4P. Adhoc renders a
+		// single fullscreen 1P presentation while retaining 2P simulation.
 		if ((gGT->numPlyrCurrGame & 1) == 0)
 		{
-			continue;
+#if defined(__vita__)
+			if (!NativeAdhoc_IsSingleViewRenderActive())
+#endif
+			{
+				continue;
+			}
 		}
 
 		// Player structure

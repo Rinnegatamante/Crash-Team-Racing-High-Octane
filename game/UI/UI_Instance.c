@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum UIInstanceConstants
 {
 	UI_INSTANCE_MENU_READY_SHOW_MENU = 1,
@@ -381,7 +385,12 @@ void UI_INSTANCE_InitAll(void)
 	sdata->ptrPushBufferUI = (int)NULL;
 	if (gGT->numPlyrCurrGame >= 2)
 	{
-		sdata->ptrPushBufferUI = (int)&sdata->pushBuffer_DecalMP;
+#if defined(__vita__)
+		if (!(NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) && ((gameMode1 & MAIN_MENU) == 0)))
+#endif
+		{
+			sdata->ptrPushBufferUI = (int)&sdata->pushBuffer_DecalMP;
+		}
 	}
 
 	sdata->pushBuffer_DecalMP.matrix_ViewProj = gGT->pushBuffer_UI.matrix_ViewProj;

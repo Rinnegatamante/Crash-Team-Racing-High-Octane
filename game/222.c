@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum ArcadeAdventureEndMenuConstants
 {
 	AA_SCREEN_DEPTH = 0x200,
@@ -538,9 +542,32 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	struct Driver *driver = gGT->drivers[driverId];
 
 	s32 numPlayers = gGT->numPlyrCurrGame;
+	int presentationDriverId = driverId;
 	struct UiElement2D *hudArray = data.hudStructPtr[numPlayers - 1];
 	struct UiElement2D *hud = &hudArray[driverId * AA_HUD_ELEMENTS_PER_DRIVER];
 	struct Instance *bigNum = driver->instBigNum;
+#if defined(__vita__)
+	u32 *adhocSavedPushUiOT = NULL;
+	u32 *adhocSavedDbUiOT = NULL;
+	if (NativeAdhoc_IsConnected() && (numPlayers == 2))
+	{
+		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+		if (driverId == localPlayer)
+		{
+			hudArray = data.hudStructPtr[0];
+			hud = &hudArray[0];
+			presentationDriverId = 0;
+		}
+		else
+		{
+			adhocSavedPushUiOT = gGT->pushBuffer_UI.ptrOT;
+			adhocSavedDbUiOT = gGT->backBuffer->otMem.uiOT;
+			u32 *discardOT = gGT->pushBuffer[0].ptrOT;
+			gGT->pushBuffer_UI.ptrOT = discardOT;
+			gGT->backBuffer->otMem.uiOT = discardOT;
+		}
+	}
+#endif
 
 	// Lap time box height
 	RECT timeBoxRect;
@@ -591,7 +618,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	// Player 2
 	lerpEndY = 0x41;
 
-	if (driverId == 0)
+	if (presentationDriverId == 0)
 	{
 		lerpEndY = -0x3d;
 	}
@@ -635,7 +662,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	// Player 2
 	lerpEndY = 0x89;
 
-	if (driverId == 0)
+	if (presentationDriverId == 0)
 	{
 		lerpEndY = 9;
 	}
@@ -660,7 +687,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	// === DrawRaceClock ===
 
 	lerpEndY = 0xc3;
-	if (driverId == 0)
+	if (presentationDriverId == 0)
 	{
 		lerpEndY = 0x3e;
 	}
@@ -690,6 +717,13 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 
 	// Draw 2D Menu rectangle background
 	RECTMENU_DrawInnerRect(&timeBoxRect, 4, gGT->backBuffer->otMem.uiOT);
+#if defined(__vita__)
+	if (adhocSavedPushUiOT != NULL)
+	{
+		gGT->pushBuffer_UI.ptrOT = adhocSavedPushUiOT;
+		gGT->backBuffer->otMem.uiOT = adhocSavedDbUiOT;
+	}
+#endif
 	return;
 }
 

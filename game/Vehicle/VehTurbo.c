@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	TURBO_FIRE_SIZE_MIN = 4,
@@ -318,10 +322,17 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 
 		// if echo is required
 		u32 echo = ((driver->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
-
-		// driver audio
-		OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_AUDIO_SFX_ID,
-		                   HowlSfx_Pack(HOWL_SFX_LR_CENTER, fireAudioDistort, fireSfxVolume, echo));
+#if defined(__vita__)
+		if (!NativeAdhoc_ShouldPresentDriver(driver->driverID))
+		{
+			OtherFX_RecycleMute(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT]);
+		}
+		else
+#endif
+		{
+			OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_AUDIO_SFX_ID,
+			                   HowlSfx_Pack(HOWL_SFX_LR_CENTER, fireAudioDistort, fireSfxVolume, echo));
+		}
 
 		// manipulate turbo audio distort to change sound each frame
 		if (turbo->fireAudioDistort < TURBO_AUDIO_DISTORT_INCREMENT_LIMIT)
@@ -396,9 +407,16 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 				// add echo, volume, distortion, left/right
 				stopSfxParams = HOWL_SFX_CENTER_NO_DISTORTION | HOWL_SFX_ECHO_FLAG;
 			}
-
-			// driver audio
-			OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_STOP_SFX_ID, stopSfxParams);
+#if defined(__vita__)
+			if (!NativeAdhoc_ShouldPresentDriver(driver->driverID))
+			{
+				OtherFX_RecycleMute(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT]);
+			}
+			else
+#endif
+			{
+				OtherFX_RecycleNew(&driver->driverAudioPtrs[TURBO_AUDIO_SLOT], TURBO_STOP_SFX_ID, stopSfxParams);
+			}
 		}
 
 		// 0x800 = this thread needs to be deleted

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_FIRE_AUDIO_HIGH_THRESHOLD = 0x80,
@@ -75,7 +79,12 @@ void VehFire_Audio(struct Driver *driver, int speed_cap)
 		// distort
 		distortion = VEH_FIRE_AUDIO_DISTORT_HIGH;
 
-		Voiceline_RequestPlay(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, data.characterIDs[driver->driverID], VEH_FIRE_VOICELINE_PRIORITY);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+		{
+			Voiceline_RequestPlay(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, data.characterIDs[driver->driverID], VEH_FIRE_VOICELINE_PRIORITY);
+		}
 
 		goto Skip;
 	}
@@ -99,7 +108,12 @@ Skip:
 		echo = 1;
 	}
 
-	OtherFX_Play_LowLevel(VEH_FIRE_AUDIO_SFX, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, distortion, volume, echo));
+#if defined(__vita__)
+	if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+	{
+		OtherFX_Play_LowLevel(VEH_FIRE_AUDIO_SFX, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, distortion, volume, echo));
+	}
 
 	// turbo audio cooldown 0.24s
 	driver->VehFire_AudioCooldown = VEH_FIRE_AUDIO_COOLDOWN;

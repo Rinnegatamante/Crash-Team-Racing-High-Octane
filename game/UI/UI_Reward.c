@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	UI_LAP_TIME_LAPS_PER_PLAYER = 7,
@@ -75,6 +79,38 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 
 	MatrixRotate(mat, &obj->m, mat);
 
+#if defined(__vita__)
+	if (!isTimeCrate && (inst->model->id == STATIC_FRUITDISP) && NativeAdhoc_IsConnected() &&
+	    (gGT->numPlyrCurrGame == 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
+	{
+		int owner = -1;
+		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+
+		for (int i = 0; i < 2; i++)
+		{
+			if ((gGT->drivers[i] != NULL) && (gGT->drivers[i]->instFruitDisp == inst))
+			{
+				owner = i;
+				break;
+			}
+		}
+
+		if (owner == localPlayer)
+		{
+			struct UiElement2D *hud = &data.hudStructPtr[0][UI_HUD_SLOT_FRUIT_MODEL];
+			inst->matrix.t[0] = UI_ConvertX_2(hud->x, hud->z);
+			inst->matrix.t[1] = UI_ConvertY_2(hud->y, hud->z);
+			inst->matrix.t[2] = hud->z;
+			inst->scale.x = hud->scale;
+			inst->scale.y = hud->scale;
+			inst->scale.z = hud->scale;
+			inst->alphaScale = (gGT->drivers[localPlayer]->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
+			                       ? 0
+			                       : ((s16)sdata->wumpaShineResult - UI_REWARD_WUMPA_SHINE_CENTER) << UI_REWARD_WUMPA_SHINE_SHIFT;
+		}
+	}
+#endif
+
 	u32 drawOtagState = CTR_ReadU32LE(&gGT->bool_DrawOTag_InProgress);
 	if ((drawOtagState & UI_REWARD_HUD_VISIBLE_WORD_MASK) == UI_REWARD_HUD_VISIBLE_WORD_VALUE)
 	{
@@ -84,6 +120,7 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 	{
 		inst->flags |= HIDE_MODEL;
 	}
+
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004c850-0x8004c914.
@@ -159,6 +196,7 @@ void UI_ThTick_big1(struct Thread *bucket)
 {
 	struct UiElement3D *obj = bucket->object;
 	struct Instance *inst = bucket->inst;
+	struct GameTracker *gGT = sdata->gGT;
 
 	s16 scale = obj->scale;
 	CTR_WriteU32LE(&inst->matrix.m[0][0], scale);
@@ -178,4 +216,37 @@ void UI_ThTick_big1(struct Thread *bucket)
 	{
 		inst->flags |= HIDE_MODEL;
 	}
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT != NULL) && (gGT->numPlyrCurrGame == 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
+	{
+		int owner = -1;
+		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+
+		for (int i = 0; i < 2; i++)
+		{
+			if ((gGT->drivers[i] != NULL) && (gGT->drivers[i]->instBigNum == inst))
+			{
+				owner = i;
+				break;
+			}
+		}
+
+		if (owner != localPlayer)
+		{
+			inst->flags |= HIDE_MODEL;
+		}
+		else
+		{
+			struct UiElement2D *hud = &data.hudStructPtr[0][UI_HUD_SLOT_BIG1];
+
+			inst->matrix.t[0] = UI_ConvertX_2(hud->x, hud->z);
+			inst->matrix.t[1] = UI_ConvertY_2(hud->y, hud->z);
+			inst->matrix.t[2] = hud->z;
+			inst->scale.x = hud->scale;
+			inst->scale.y = hud->scale;
+			inst->scale.z = hud->scale;
+		}
+	}
+#endif
 }

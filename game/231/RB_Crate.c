@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // add to buildList, overwrite original
 // RB_CrateAny_ThTick_Explode at 800b3d04,
 // and add new LinCs to zGlobalMetaModels.c
@@ -279,7 +283,12 @@ int RB_CrateWeapon_ThCollide(struct Thread *crateThread, struct Thread *collidin
 
 			if ((sdata->gGT->gameMode1 & ROLLING_ITEM) == 0)
 			{
-				OtherFX_Play(0x5d, 0);
+#if defined(__vita__)
+				if (!NativeAdhoc_IsConnected())
+#endif
+				{
+					OtherFX_Play(0x5d, 0);
+				}
 				sdata->gGT->gameMode1 |= ROLLING_ITEM;
 			}
 
