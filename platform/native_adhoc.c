@@ -55,7 +55,7 @@
 #define NATIVE_ADHOC_SNAPSHOT_HEADER_SIZE     56
 #define NATIVE_ADHOC_CONTROL_SIZE             24
 #define NATIVE_ADHOC_INPUT_SIZE               40
-#define NATIVE_ADHOC_PROTOCOL_VERSION         2
+#define NATIVE_ADHOC_PROTOCOL_VERSION         3
 #define NATIVE_ADHOC_WIRE_MAGIC               0x43545241u
 #define NATIVE_ADHOC_WIRE_HELLO               1
 #define NATIVE_ADHOC_WIRE_SNAPSHOT            2
@@ -68,7 +68,7 @@
 #define NATIVE_ADHOC_MATCHING_TIMEOUT_US      (120ULL * 1000 * 1000)
 #define NATIVE_ADHOC_CONNECT_TIMEOUT_US       (15ULL * 1000 * 1000)
 #define NATIVE_ADHOC_BOOTSTRAP_TIMEOUT_US     (30ULL * 1000 * 1000)
-#define NATIVE_ADHOC_CONTROL_TIMEOUT_US       (15ULL * 1000 * 1000)
+#define NATIVE_ADHOC_CONTROL_TIMEOUT_US       (10ULL * 1000 * 1000)
 #define NATIVE_ADHOC_FRAME_TIMEOUT_US         (5ULL * 1000 * 1000)
 #define NATIVE_ADHOC_LOAD_TIMEOUT_US          (120ULL * 1000 * 1000)
 #define NATIVE_ADHOC_IDLE_DELAY_US            1000
@@ -81,6 +81,7 @@
 #define NATIVE_ADHOC_MATCH_FLAG_ESTABLISHED (1u << 3)
 #define NATIVE_ADHOC_MATCH_FLAG_LOST        (1u << 4)
 #define NATIVE_ADHOC_MATCH_FLAG_ERROR       (1u << 5)
+#define NATIVE_ADHOC_MATCH_FLAG_DENIED      (1u << 6)
 
 CTR_STATIC_ASSERT(sizeof(struct PlatformInputPadSnapshot) == 12);
 CTR_STATIC_ASSERT(NATIVE_ADHOC_INPUT_SIZE == 28 + sizeof(struct PlatformInputPadSnapshot));
@@ -159,6 +160,7 @@ static volatile u32 s_nativeAdhocCandidateAddress;
 static volatile u32 s_nativeAdhocRequestAddress;
 static volatile u32 s_nativeAdhocRejectAddress;
 static volatile u32 s_nativeAdhocEstablishedAddress;
+static volatile u32 s_nativeAdhocSelectedAddress;
 
 static u8 s_nativeAdhocHelloSend[NATIVE_ADHOC_HELLO_SIZE];
 static u8 s_nativeAdhocHelloRecv[NATIVE_ADHOC_HELLO_SIZE];
@@ -249,6 +251,7 @@ static u32 NativeAdhoc_CompatibilityHash(void)
 	{
 		BUILD,
 		NATIVE_ADHOC_PROTOCOL_VERSION,
+		NativeCheckpoint_GetFormatVersion(),
 		sizeof(struct PlatformInputPadSnapshot),
 		sizeof(struct NativeAdhocTimingState),
 	};
@@ -365,16 +368,28 @@ static void NativeAdhoc_MatchingCallback(int id, int event, SceNetInAddr *addres
 		break;
 
 	case SCE_NET_ADHOC_MATCHING_EVENT_ESTABLISHED:
-		__atomic_store_n(&s_nativeAdhocEstablishedAddress, address->s_addr, __ATOMIC_RELEASE);
-		__atomic_fetch_or(&s_nativeAdhocMatchingFlags, NATIVE_ADHOC_MATCH_FLAG_ESTABLISHED, __ATOMIC_RELEASE);
+		if (address->s_addr == __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE))
+		{
+			__atomic_store_n(&s_nativeAdhocEstablishedAddress, address->s_addr, __ATOMIC_RELEASE);
+			__atomic_fetch_or(&s_nativeAdhocMatchingFlags, NATIVE_ADHOC_MATCH_FLAG_ESTABLISHED, __ATOMIC_RELEASE);
+		}
 		break;
 
 	case SCE_NET_ADHOC_MATCHING_EVENT_DENY:
+		if (address->s_addr == __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE))
+		{
+			__atomic_fetch_or(&s_nativeAdhocMatchingFlags, NATIVE_ADHOC_MATCH_FLAG_DENIED, __ATOMIC_RELEASE);
+		}
+		break;
+
 	case SCE_NET_ADHOC_MATCHING_EVENT_LEAVE:
 	case SCE_NET_ADHOC_MATCHING_EVENT_CANCEL:
 	case SCE_NET_ADHOC_MATCHING_EVENT_TIMEOUT:
 	case SCE_NET_ADHOC_MATCHING_EVENT_BYE:
-		__atomic_fetch_or(&s_nativeAdhocMatchingFlags, NATIVE_ADHOC_MATCH_FLAG_LOST, __ATOMIC_RELEASE);
+		if (address->s_addr == __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE))
+		{
+			__atomic_fetch_or(&s_nativeAdhocMatchingFlags, NATIVE_ADHOC_MATCH_FLAG_LOST, __ATOMIC_RELEASE);
+		}
 		break;
 	}
 }
@@ -394,11 +409,18 @@ static void NativeAdhoc_CloseSocket(int *socket)
 
 static void NativeAdhoc_StopMatching(void)
 {
+	SceNetInAddr selectedAddress;
+
 	if (s_nativeAdhocMatchingId < 0)
 	{
 		return;
 	}
 
+	selectedAddress.s_addr = __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE);
+	if (selectedAddress.s_addr != 0)
+	{
+		sceNetAdhocMatchingCancelTarget(s_nativeAdhocMatchingId, &selectedAddress);
+	}
 	sceNetAdhocMatchingStop(s_nativeAdhocMatchingId);
 	sceNetAdhocMatchingDelete(s_nativeAdhocMatchingId);
 	s_nativeAdhocMatchingId = -1;
@@ -535,6 +557,7 @@ static void NativeAdhoc_ResetRuntime(void)
 	__atomic_store_n(&s_nativeAdhocRequestAddress, 0, __ATOMIC_RELEASE);
 	__atomic_store_n(&s_nativeAdhocRejectAddress, 0, __ATOMIC_RELEASE);
 	__atomic_store_n(&s_nativeAdhocEstablishedAddress, 0, __ATOMIC_RELEASE);
+	__atomic_store_n(&s_nativeAdhocSelectedAddress, 0, __ATOMIC_RELEASE);
 }
 
 static void NativeAdhoc_Fail(const char *operation, int result)
@@ -663,6 +686,7 @@ static int NativeAdhoc_StartMatching(void)
 
 	__atomic_store_n(&s_nativeAdhocMatchingFlags, 0, __ATOMIC_RELEASE);
 	s_nativeAdhocTargetSelected = 0;
+	__atomic_store_n(&s_nativeAdhocSelectedAddress, 0, __ATOMIC_RELEASE);
 
 	result = sceNetAdhocMatchingCreate(
 	    mode,
@@ -942,6 +966,7 @@ static void NativeAdhoc_EndSessionNormally(void)
 	NativeAdhoc_RestoreNativeModes();
 	if ((sdata != NULL) && (sdata->gGT != NULL))
 	{
+		sdata->gGT->numPlyrCurrGame = 1;
 		sdata->gGT->numPlyrNextGame = 1;
 	}
 	NativeAdhoc_ResetRuntime();
@@ -1025,6 +1050,7 @@ static int NativeAdhoc_CaptureSnapshot(u32 reason, u32 targetEpoch)
 static int NativeAdhoc_ValidateSnapshotHeader(void)
 {
 	const u32 expectedEpoch = s_nativeAdhocSnapshotReason == NATIVE_ADHOC_SNAPSHOT_INITIAL ? 1 : s_nativeAdhocEpoch + 1;
+	const int expectedSize = NativeCheckpoint_GetSize();
 
 	if ((NativeAdhoc_ReadU32(s_nativeAdhocSnapshotHeader) != NATIVE_ADHOC_WIRE_MAGIC) ||
 	    (NativeAdhoc_ReadU16(s_nativeAdhocSnapshotHeader + 4) != NATIVE_ADHOC_PROTOCOL_VERSION) ||
@@ -1047,7 +1073,47 @@ static int NativeAdhoc_ValidateSnapshotHeader(void)
 	s_nativeAdhocTiming.rootCounterValue = NativeAdhoc_ReadU64(s_nativeAdhocSnapshotHeader + 28);
 	s_nativeAdhocTiming.rootCounterBase = NativeAdhoc_ReadU64(s_nativeAdhocSnapshotHeader + 36);
 	s_nativeAdhocSnapshotLevelId = NativeAdhoc_ReadU16(s_nativeAdhocSnapshotHeader + 48);
-	return (s_nativeAdhocSnapshotSize > 0) && (s_nativeAdhocSnapshotSize <= NATIVE_ADHOC_SNAPSHOT_MAX_SIZE);
+	return (expectedSize > 0) && ((u32)expectedSize == s_nativeAdhocSnapshotSize) &&
+	       (s_nativeAdhocSnapshotSize <= NATIVE_ADHOC_SNAPSHOT_MAX_SIZE);
+}
+
+static int NativeAdhoc_RestoreSnapshot(const void *snapshot, u32 snapshotSize, u16 expectedLevelId)
+{
+	const int rollbackSize = NativeCheckpoint_GetSize();
+	u8 *rollback;
+	int restored;
+
+	if ((snapshot == NULL) || (rollbackSize <= 0) || ((u32)rollbackSize != snapshotSize))
+	{
+		return 0;
+	}
+
+	rollback = (u8 *)malloc((size_t)rollbackSize);
+	if (rollback == NULL)
+	{
+		return 0;
+	}
+	if (!NativeCheckpoint_Capture(rollback, rollbackSize))
+	{
+		free(rollback);
+		return 0;
+	}
+
+	restored = NativeCheckpoint_Restore(snapshot, (int)snapshotSize);
+	if (restored && ((sdata == NULL) || (sdata->gGT == NULL) || ((u16)sdata->gGT->levelID != expectedLevelId)))
+	{
+		restored = 0;
+	}
+	if (!restored && !NativeCheckpoint_Restore(rollback, rollbackSize))
+	{
+		Platform_LogError("[CTR Adhoc] checkpoint rollback failed\n");
+		free(rollback);
+		sceKernelExitProcess(-1);
+		return 0;
+	}
+
+	free(rollback);
+	return restored;
 }
 
 static void NativeAdhoc_UpdateDialog(void)
@@ -1118,32 +1184,51 @@ static void NativeAdhoc_UpdateMatching(void)
 	{
 		NativeAdhoc_TouchProgress();
 	}
-	if ((flags & (NATIVE_ADHOC_MATCH_FLAG_ERROR | NATIVE_ADHOC_MATCH_FLAG_LOST)) != 0)
+	if ((flags & NATIVE_ADHOC_MATCH_FLAG_ERROR) != 0)
+	{
+		NativeAdhoc_Fail("ad hoc matching error", (int)flags);
+		return;
+	}
+	if ((flags & NATIVE_ADHOC_MATCH_FLAG_LOST) != 0)
 	{
 		NativeAdhoc_Fail("ad hoc matching peer lost", (int)flags);
 		return;
+	}
+	if ((flags & NATIVE_ADHOC_MATCH_FLAG_DENIED) != 0)
+	{
+		s_nativeAdhocTargetSelected = 0;
+		__atomic_store_n(&s_nativeAdhocSelectedAddress, 0, __ATOMIC_RELEASE);
 	}
 
 	if ((flags & NATIVE_ADHOC_MATCH_FLAG_REJECT) != 0)
 	{
 		address.s_addr = __atomic_load_n(&s_nativeAdhocRejectAddress, __ATOMIC_ACQUIRE);
-		sceNetAdhocMatchingCancelTarget(s_nativeAdhocMatchingId, &address);
+		if (!s_nativeAdhocTargetSelected ||
+		    (address.s_addr != __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE)))
+		{
+			sceNetAdhocMatchingCancelTarget(s_nativeAdhocMatchingId, &address);
+		}
 	}
 
 	if ((s_nativeAdhocRole == NATIVE_ADHOC_ROLE_HOST) && s_nativeAdhocTargetSelected &&
 	    ((flags & NATIVE_ADHOC_MATCH_FLAG_REQUEST) != 0))
 	{
 		address.s_addr = __atomic_load_n(&s_nativeAdhocRequestAddress, __ATOMIC_ACQUIRE);
-		sceNetAdhocMatchingCancelTarget(s_nativeAdhocMatchingId, &address);
+		if (address.s_addr != __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE))
+		{
+			sceNetAdhocMatchingCancelTarget(s_nativeAdhocMatchingId, &address);
+		}
 	}
 	else if (!s_nativeAdhocTargetSelected && (s_nativeAdhocRole == NATIVE_ADHOC_ROLE_CLIENT) &&
 	         ((flags & NATIVE_ADHOC_MATCH_FLAG_CANDIDATE) != 0))
 	{
 		address.s_addr = __atomic_load_n(&s_nativeAdhocCandidateAddress, __ATOMIC_ACQUIRE);
+		__atomic_store_n(&s_nativeAdhocSelectedAddress, address.s_addr, __ATOMIC_RELEASE);
 		NativeAdhoc_BuildHello(s_nativeAdhocHelloSend, s_nativeAdhocRole);
 		result = sceNetAdhocMatchingSelectTarget(s_nativeAdhocMatchingId, &address, NATIVE_ADHOC_HELLO_SIZE, s_nativeAdhocHelloSend);
 		if (result < 0)
 		{
+			__atomic_store_n(&s_nativeAdhocSelectedAddress, 0, __ATOMIC_RELEASE);
 			NativeAdhoc_Fail("sceNetAdhocMatchingSelectTarget(client)", result);
 			return;
 		}
@@ -1153,9 +1238,11 @@ static void NativeAdhoc_UpdateMatching(void)
 	         ((flags & NATIVE_ADHOC_MATCH_FLAG_REQUEST) != 0))
 	{
 		address.s_addr = __atomic_load_n(&s_nativeAdhocRequestAddress, __ATOMIC_ACQUIRE);
+		__atomic_store_n(&s_nativeAdhocSelectedAddress, address.s_addr, __ATOMIC_RELEASE);
 		result = sceNetAdhocMatchingSelectTarget(s_nativeAdhocMatchingId, &address, 0, NULL);
 		if (result < 0)
 		{
+			__atomic_store_n(&s_nativeAdhocSelectedAddress, 0, __ATOMIC_RELEASE);
 			NativeAdhoc_Fail("sceNetAdhocMatchingSelectTarget(host)", result);
 			return;
 		}
@@ -1164,7 +1251,15 @@ static void NativeAdhoc_UpdateMatching(void)
 
 	if ((flags & NATIVE_ADHOC_MATCH_FLAG_ESTABLISHED) != 0)
 	{
-		s_nativeAdhocPeerAddress.s_addr = __atomic_load_n(&s_nativeAdhocEstablishedAddress, __ATOMIC_ACQUIRE);
+		const u32 establishedAddress = __atomic_load_n(&s_nativeAdhocEstablishedAddress, __ATOMIC_ACQUIRE);
+
+		if (!s_nativeAdhocTargetSelected ||
+		    (establishedAddress != __atomic_load_n(&s_nativeAdhocSelectedAddress, __ATOMIC_ACQUIRE)))
+		{
+			NativeAdhoc_Fail("unexpected matching peer", -1);
+			return;
+		}
+		s_nativeAdhocPeerAddress.s_addr = establishedAddress;
 		NativeAdhoc_CreateSocket();
 		return;
 	}
@@ -1385,24 +1480,22 @@ static void NativeAdhoc_UpdateBootstrap(void)
 				NativeAdhoc_Fail("snapshot CRC", -1);
 				break;
 			}
-			if (!NativeCheckpoint_Restore(s_nativeAdhocSnapshot, s_nativeAdhocSnapshotSize))
-			{
-				NativeAdhoc_Fail("NativeCheckpoint_Restore", -1);
-				break;
-			}
 			if (s_nativeAdhocSnapshotReason == NATIVE_ADHOC_SNAPSHOT_INITIAL)
 			{
 				s_nativeAdhocSessionSynchronized = 1;
+			}
+			if (!NativeAdhoc_RestoreSnapshot(
+			        s_nativeAdhocSnapshot,
+			        s_nativeAdhocSnapshotSize,
+			        s_nativeAdhocSnapshotLevelId))
+			{
+				NativeAdhoc_Fail("checkpoint restore", -1);
+				break;
 			}
 			NativeAdhocTiming_Restore(&s_nativeAdhocTiming);
 			NativeAdhoc_FreeSnapshot();
 			NativeAdhoc_ClearInputOverride();
 			NativeAdhoc_ForceDeterministicModes();
-			if ((sdata == NULL) || (sdata->gGT == NULL) || ((u16)sdata->gGT->levelID != s_nativeAdhocSnapshotLevelId))
-			{
-				NativeAdhoc_Fail("snapshot level validation", -1);
-				break;
-			}
 			NativeAdhoc_BuildControl(
 			    s_nativeAdhocControlSend,
 			    NATIVE_ADHOC_WIRE_READY,
@@ -1439,8 +1532,8 @@ static void NativeAdhoc_UpdateBootstrap(void)
 				break;
 			}
 			NativeAdhoc_Activate();
-			}
-			break;
+		}
+		break;
 
 	default:
 		break;
@@ -1452,6 +1545,35 @@ static void NativeAdhoc_UpdateBootstrap(void)
 	{
 		NativeAdhoc_Fail("snapshot synchronization timeout", -1);
 	}
+}
+
+static int NativeAdhoc_IsInitialBootstrapState(void)
+{
+	if (s_nativeAdhocState == NATIVE_ADHOC_STATE_HOST_WAIT_STATE)
+	{
+		return 1;
+	}
+
+	return (s_nativeAdhocSnapshotReason == NATIVE_ADHOC_SNAPSHOT_INITIAL) &&
+	       (s_nativeAdhocState >= NATIVE_ADHOC_STATE_HOST_SEND_HEADER) &&
+	       (s_nativeAdhocState <= NATIVE_ADHOC_STATE_CLIENT_RECV_START);
+}
+
+static int NativeAdhoc_PollBootstrapCancel(void)
+{
+	struct PlatformInputPadSnapshot physical[PLATFORM_INPUT_PAD_COUNT];
+	u16 rawButtons;
+	u16 pressedButtons;
+
+	Platform_InputUpdate();
+	if (Platform_InputCapturePadSnapshots(physical, PLATFORM_INPUT_PAD_COUNT) != PLATFORM_INPUT_PAD_COUNT)
+	{
+		return 0;
+	}
+
+	rawButtons = (u16)physical[0].buttons[0] | ((u16)physical[0].buttons[1] << 8);
+	pressedButtons = (u16)~rawButtons;
+	return (pressedButtons & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0;
 }
 
 static void NativeAdhoc_BeginLoadSynchronization(void)
@@ -1529,7 +1651,10 @@ static void NativeAdhoc_UpdateLoadReady(void)
 
 		if (s_nativeAdhocRole == NATIVE_ADHOC_ROLE_HOST)
 		{
-			NativeAdhoc_CaptureSnapshot(NATIVE_ADHOC_SNAPSHOT_RESYNC, s_nativeAdhocEpoch + 1);
+			if (!NativeAdhoc_CaptureSnapshot(NATIVE_ADHOC_SNAPSHOT_RESYNC, s_nativeAdhocEpoch + 1))
+			{
+				return;
+			}
 		}
 		else
 		{
@@ -1551,27 +1676,59 @@ static void NativeAdhoc_UpdateLoadReady(void)
 static u32 NativeAdhoc_FrameFingerprint(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
-	u32 words[18];
+	u32 words[23 + len(data.characterIDs) + (len(gGT->drivers) * 6)];
+	u32 count = 0;
 
-	words[0] = (u32)sdata->frameCounter;
-	words[1] = (u32)sdata->randomNumber;
-	words[2] = (u32)sdata->audioRNG;
-	words[3] = (u32)sdata->Loading.stage;
-	words[4] = (u32)sdata->mainGameState;
-	words[5] = (u32)gGT->timer;
-	words[6] = (u32)gGT->framesInThisLEV;
-	words[7] = (u32)gGT->elapsedTimeMS;
-	words[8] = (u32)gGT->msInThisLEV;
-	words[9] = (u32)gGT->elapsedEventTime;
-	words[10] = (u32)gGT->frameTimer_VsyncCallback;
-	words[11] = (u32)gGT->trafficLightsTimer;
-	words[12] = (u32)gGT->levelID;
-	words[13] = (u32)gGT->gameMode1;
-	words[14] = (u32)gGT->gameMode2;
-	words[15] = (u32)gGT->numPlyrCurrGame;
-	words[16] = (u32)gGT->numPlyrNextGame;
-	words[17] = s_nativeAdhocEpoch;
-	return NativeAdhoc_Crc32(words, sizeof(words));
+	words[count++] = (u32)sdata->frameCounter;
+	words[count++] = (u32)sdata->randomNumber;
+	words[count++] = (u32)sdata->audioRNG;
+	words[count++] = (u32)sdata->Loading.stage;
+	words[count++] = (u32)sdata->mainGameState;
+	words[count++] = (u32)gGT->timer;
+	words[count++] = (u32)gGT->framesInThisLEV;
+	words[count++] = (u32)gGT->elapsedTimeMS;
+	words[count++] = (u32)gGT->msInThisLEV;
+	words[count++] = (u32)gGT->elapsedEventTime;
+	words[count++] = (u32)gGT->frameTimer_VsyncCallback;
+	words[count++] = (u32)gGT->trafficLightsTimer;
+	words[count++] = (u32)gGT->levelID;
+	words[count++] = (u32)gGT->gameMode1;
+	words[count++] = (u32)gGT->gameMode2;
+	words[count++] = (u32)gGT->numPlyrCurrGame;
+	words[count++] = (u32)gGT->numPlyrNextGame;
+	words[count++] = s_nativeAdhocEpoch;
+	words[count++] = (u32)gGT->arcadeDifficulty;
+	words[count++] = (u32)gGT->numLaps;
+	words[count++] = (u32)sdata->mainMenuState;
+	words[count++] = (u32)D230.titleMenuState;
+	words[count++] = (u32)D230.desiredMenuIndex;
+
+	for (u32 character = 0; character < len(data.characterIDs); character++)
+	{
+		words[count++] = (u32)data.characterIDs[character];
+	}
+	for (u32 driverIndex = 0; driverIndex < len(gGT->drivers); driverIndex++)
+	{
+		struct Driver *driver = gGT->drivers[driverIndex];
+
+		if (driver == NULL)
+		{
+			for (u32 word = 0; word < 6; word++)
+			{
+				words[count++] = 0;
+			}
+			continue;
+		}
+
+		words[count++] = 1;
+		words[count++] = (u32)driver->posCurr.x;
+		words[count++] = (u32)driver->posCurr.y;
+		words[count++] = (u32)driver->posCurr.z;
+		words[count++] = (u32)driver->lapIndex;
+		words[count++] = (u32)driver->actionsFlagSet;
+	}
+
+	return NativeAdhoc_Crc32(words, count * sizeof(words[0]));
 }
 
 static void NativeAdhoc_BuildInputPacket(void)
@@ -1641,9 +1798,9 @@ static int NativeAdhoc_ApplyFrameInputs(void)
 		combined[1] = s_nativeAdhocLocalInput;
 	}
 
-	if (Platform_InputApplyPadSnapshots(combined, PLATFORM_INPUT_PAD_COUNT) != PLATFORM_INPUT_PAD_COUNT)
+	if (Platform_InputInstallPadSnapshots(combined, PLATFORM_INPUT_PAD_COUNT) != PLATFORM_INPUT_PAD_COUNT)
 	{
-		NativeAdhoc_Fail("Platform_InputApplyPadSnapshots", -1);
+		NativeAdhoc_Fail("Platform_InputInstallPadSnapshots", -1);
 		return 0;
 	}
 	return 1;
@@ -1685,6 +1842,8 @@ void NativeAdhoc_StartClient(void)
 
 void NativeAdhoc_Cancel(void)
 {
+	const int gameplayFailure = s_nativeAdhocSessionSynchronized;
+
 	if (s_nativeAdhocDialogActive)
 	{
 		if (!s_nativeAdhocDialogCancelRequested)
@@ -1704,8 +1863,8 @@ void NativeAdhoc_Cancel(void)
 	NativeAdhoc_CleanupNetwork();
 	NativeAdhoc_ClearInputOverride();
 	NativeAdhoc_RestoreNativeModes();
-	s_nativeAdhocGameplayFailure = 0;
 	NativeAdhoc_ResetRuntime();
+	s_nativeAdhocGameplayFailure |= gameplayFailure;
 }
 
 void NativeAdhoc_Update(void)
@@ -1713,6 +1872,11 @@ void NativeAdhoc_Update(void)
 	if (s_nativeAdhocNetCtlInitialized)
 	{
 		sceNetCtlCheckCallback();
+	}
+	if (NativeAdhoc_IsInitialBootstrapState() && NativeAdhoc_PollBootstrapCancel())
+	{
+		NativeAdhoc_Cancel();
+		return;
 	}
 
 	switch (s_nativeAdhocState)
@@ -1816,6 +1980,8 @@ int NativeAdhoc_BeginGameFrame(void)
 
 	if (!s_nativeAdhocFramePending)
 	{
+		Platform_InputClearInstalledPadSnapshots();
+		Platform_InputUpdate();
 		if (Platform_InputCapturePadSnapshots(physical, PLATFORM_INPUT_PAD_COUNT) != PLATFORM_INPUT_PAD_COUNT)
 		{
 			NativeAdhoc_Fail("Platform_InputCapturePadSnapshots", -1);
@@ -1881,7 +2047,11 @@ int NativeAdhoc_IsTimingControlled(void)
 
 int NativeAdhoc_IsMenuInputBlocked(void)
 {
-	return s_nativeAdhocDialogActive;
+	return s_nativeAdhocDialogActive ||
+	       ((s_nativeAdhocState >= NATIVE_ADHOC_STATE_HOST_WAIT_STATE) &&
+	        (s_nativeAdhocState <= NATIVE_ADHOC_STATE_CLIENT_RECV_START)) ||
+	       (s_nativeAdhocState == NATIVE_ADHOC_STATE_LOAD_LOCAL) ||
+	       (s_nativeAdhocState == NATIVE_ADHOC_STATE_LOAD_READY);
 }
 
 int NativeAdhoc_IsCommonDialogActive(void)
@@ -1893,6 +2063,10 @@ int NativeAdhoc_ConsumeGameplayFailure(void)
 {
 	const int failed = s_nativeAdhocGameplayFailure;
 	s_nativeAdhocGameplayFailure = 0;
+	if (failed)
+	{
+		s_nativeAdhocSessionSynchronized = 0;
+	}
 	return failed;
 }
 

@@ -37,7 +37,7 @@ static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1
 	{LNG_HARD, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_SUPER_HARD, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_ULTRA_HARD, 3, 4, 4, 4},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct RectMenu s_nativeExtraDifficultyMenu =
@@ -56,7 +56,7 @@ static struct MenuRow s_nativeLanguageRows[MM_NATIVE_LANGUAGE_COUNT + 1] =
 	{LNG_ITALIAN, 2, 4, 3, 3},
 	{LNG_SPANISH, 3, 5, 4, 4},
 	{LNG_DUTCH, 4, 5, 5, 5},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeMainMenuBasic[] =
@@ -68,7 +68,7 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 	{LNG_OPTIONS, 5, 6, 6, 6},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeMainMenuWithScrapbook[] =
@@ -81,7 +81,7 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 	{LNG_OPTIONS, 5, 7, 6, 6},
 	{LNG_SCRAPBOOK, 6, 7, 7, 7},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeTimeTrialRows[] =
@@ -89,14 +89,14 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 	{LNG_TIME_TRIAL, 2, 1, 0, 0},
 	{NATIVE_MENU_STRING_GHOST_REPLAY, 0, 2, 1, 1},
 	{LNG_HIGH_SCORE, 1, 0, 2, 2},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeOptionsRows[] =
 {
 	{LNG_LANGUAGE, 1, 1, 0, 0},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 0, 1, 1},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeArcadeRows[] =
@@ -104,13 +104,13 @@ static struct MenuRow s_nativeArcadeRows[] =
 	{NATIVE_MENU_STRING_LOCAL_ARCADE, 2, 1, 0, 0},
 	{NATIVE_MENU_STRING_HOST_GAME, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_JOIN_GAME, 1, 0, 2, 2},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeAdhocStatusRows[] =
 {
 	{NATIVE_MENU_STRING_CANCEL, 0, 0, 0, 0},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeBossFightRows[] =
@@ -121,7 +121,7 @@ static struct MenuRow s_nativeBossFightRows[] =
 	{LNG_PINSTRIPE, 2, 4, 3, 3},
 	{LNG_N_OXIDE_FULL, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_OXIDE_FINAL, 4, 5, 5, 5},
-	{RECTMENU_STRING_NONE},
+	{.stringIndex = RECTMENU_STRING_NONE},
 };
 
 static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
@@ -245,6 +245,7 @@ static void MM_NativeAdhocCloseStatusMenu(void)
 	s_nativeAdhocStatusMenu.ptrPrevBox_InHierarchy = NULL;
 	s_nativeAdhocStatusMenu.ptrNextBox_InHierarchy = NULL;
 	s_nativeAdhocStatusMenu.rowSelected = 0;
+	sdata->gGT->numPlyrNextGame = 1;
 	s_nativeAdhocMenuOpen = 0;
 	s_nativeAdhocCancelPending = 0;
 }
@@ -393,6 +394,8 @@ void MM_NativeAdhoc_ResetAfterFailure(void)
 
 	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 	gGT->gameMode2 &= ~CUP_ANY_KIND;
+	gGT->numPlyrNextGame = 1;
+	gGT->numPlyrCurrGame = 1;
 	gGT->numLaps = MM_DEFAULT_LAP_COUNT;
 	D230.titleMenuState = TITLE_MENU_STATE_IN_MENU;
 	mainMenu->state = EXECUTE_FUNCPTR | CENTER_ON_COORDS;
