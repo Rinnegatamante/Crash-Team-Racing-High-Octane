@@ -694,8 +694,8 @@ static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerInde
 	}
 }
 
-#if defined(__vita__)
-static void MainFrame_VisMemAddPVSFaces(struct GameTracker *gGT, int visIndex, struct PVS *pvs)
+#ifdef CTR_NATIVE
+static void MainFrame_VisMemAddFacesFromPVS(struct GameTracker *gGT, int visIndex, struct PVS *pvs)
 {
 	struct mesh_info *mesh = gGT->level1->ptr_mesh_info;
 
@@ -761,8 +761,8 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		struct Driver *driver = gGT->drivers[playerIndex];
 		struct QuadBlock *driverQuad = driver->underDriver;
 		struct PVS *driverPVS = NULL;
-#if defined(__vita__)
-		int rebuildCrashCoveSingleViewPVS = 0;
+#ifdef CTR_NATIVE
+		int rebuildCrashCoveCameraPVS = 0;
 #endif
 
 		if (driverQuad != NULL)
@@ -770,14 +770,13 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 			driverPVS = driverQuad->pvs;
 		}
 
-#if defined(__vita__)
-		// Crash Cove's 1P camera PVS omits ship faces even when it contains the
+#ifdef CTR_NATIVE
+		// Crash Cove's camera PVS omits ship faces even when it contains the
 		// driver quad. Rebuild the camera masks before applying a face-only union,
-		// so AdHoc does not retain old driver bits or admit driver-only BSP leaves.
-		rebuildCrashCoveSingleViewPVS =
-		    (gGT->levelID == CRASH_COVE) && NativeAdhoc_IsSingleViewRenderActive() &&
-		    (camDC->visLeafSrc != NULL) && (camDC->visFaceSrc != NULL);
-		if (rebuildCrashCoveSingleViewPVS)
+		// so old driver bits cannot accumulate or admit driver-only BSP leaves.
+		rebuildCrashCoveCameraPVS =
+		    (gGT->levelID == CRASH_COVE) && (camDC->visLeafSrc != NULL) && (camDC->visFaceSrc != NULL);
+		if (rebuildCrashCoveCameraPVS)
 		{
 			visMem->visLeafSrc[visIndex] = NULL;
 			visMem->visFaceSrc[visIndex] = NULL;
@@ -830,70 +829,15 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 			}
 		}
 
-#if defined(__vita__)
-		if (rebuildCrashCoveSingleViewPVS && ((camDC->flags & 0x2000) == 0) &&
+#ifdef CTR_NATIVE
+		// Preserve retail's full driver fallback when the camera PVS omits the
+		// driver. Otherwise only add driver-visible faces from camera-visible
+		// leaves, which repairs the ship without exposing unrelated geometry.
+		if (rebuildCrashCoveCameraPVS && ((camDC->flags & 0x2000) == 0) &&
 		    (driverPVS != NULL) && (driverPVS->visFaceSrc != NULL) &&
 		    (camDC->visFaceSrc != driverPVS->visFaceSrc))
 		{
-			MainFrame_VisMemAddPVSFaces(gGT, visIndex, driverPVS);
-		}
-#endif
-
-#ifdef CTR_NATIVE
-		// HACK: Crash Cove's ship can place the camera and driver in different PVS
-		// records even though the camera record contains the driver's quad. That
-		// record still omits parts of the ship, so merge these two local PVS sets
-		// instead of disabling visibility for the whole level.
-#if defined(__vita__)
-		if ((gGT->levelID == CRASH_COVE) && !NativeAdhoc_IsSingleViewRenderActive())
-#else
-		if (gGT->levelID == CRASH_COVE)
-#endif
-		{
-			int hadDriverPVS = (camDC->flags & 0x2000) != 0;
-			int needsDriverPVS =
-			    (driverPVS != NULL) && (driverPVS->visLeafSrc != NULL) && (driverPVS->visFaceSrc != NULL) && (driverPVS->visInstSrc != NULL) &&
-			    (camDC->visLeafSrc != NULL) && (camDC->visFaceSrc != NULL) &&
-			    ((camDC->visLeafSrc != driverPVS->visLeafSrc) || (camDC->visFaceSrc != driverPVS->visFaceSrc));
-
-			if (needsDriverPVS)
-			{
-				camDC->flags |= 0x2000;
-			}
-			else
-			{
-				camDC->flags &= ~0x2000;
-
-				if (hadDriverPVS)
-				{
-					void *leafSrc = camDC->visLeafSrc;
-					void *faceSrc = camDC->visFaceSrc;
-
-					if ((leafSrc == NULL) && (driverPVS != NULL))
-					{
-						leafSrc = driverPVS->visLeafSrc;
-					}
-					if ((faceSrc == NULL) && (driverPVS != NULL))
-					{
-						faceSrc = driverPVS->visFaceSrc;
-					}
-
-					if (leafSrc != NULL)
-					{
-						MainFrame_ReplacePackedVisList(visMem->visLeafList[visIndex], leafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
-					}
-					if (faceSrc != NULL)
-					{
-						MainFrame_ReplacePackedVisList(visMem->visFaceList[visIndex], faceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
-					}
-				}
-			}
-
-			if (needsDriverPVS && ((camDC->flags & 0x4000) == 0))
-			{
-				MainFrame_VisMemAddDriverPVS(gGT, playerIndex, visIndex);
-				camDC->flags |= 0x4000;
-			}
+			MainFrame_VisMemAddFacesFromPVS(gGT, visIndex, driverPVS);
 		}
 #endif
 
