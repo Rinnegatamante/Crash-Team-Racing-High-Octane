@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_PICK_DAMAGE_NONE = 0,
@@ -101,7 +105,12 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 	    (victimDriver->invincibleTimer != 0))
 	{
 	VictimLaugh:
-		Voiceline_RequestPlay(VEH_PICK_VOICELINE_VICTIM_LAUGH, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(victimDriver->driverID))
+#endif
+		{
+			Voiceline_RequestPlay(VEH_PICK_VOICELINE_VICTIM_LAUGH, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+		}
 		return 0;
 	}
 
@@ -223,7 +232,12 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 
 	if (voice != 0)
 	{
-		Voiceline_RequestPlay(voice, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(victimDriver->driverID))
+#endif
+		{
+			Voiceline_RequestPlay(voice, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+		}
 	}
 
 	switch (reason)

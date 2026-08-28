@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	UI_JUMP_METER_SIGNIFICANT_THRESHOLD = 0x150,
@@ -114,7 +118,12 @@ void UI_JumpMeter_Update(struct Driver *driver)
 	{
 		if ((UI_JUMP_METER_LANDING_VOICELINE_MIN < driver->jump_LandingBoost) && (driver->jumpMeter < UI_JUMP_METER_LANDING_VOICELINE_CUTOFF))
 		{
-			Voiceline_RequestPlay(UI_JUMP_METER_LANDING_VOICELINE_ID, data.characterIDs[driver->driverID], UI_JUMP_METER_LANDING_VOICELINE_FLAGS);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+			{
+				Voiceline_RequestPlay(UI_JUMP_METER_LANDING_VOICELINE_ID, data.characterIDs[driver->driverID], UI_JUMP_METER_LANDING_VOICELINE_FLAGS);
+			}
 		}
 
 		driver->jumpMeter = driver->jump_LandingBoost;

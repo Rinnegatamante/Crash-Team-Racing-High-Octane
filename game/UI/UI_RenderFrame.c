@@ -302,7 +302,12 @@ void UI_RenderFrame_Racing()
 
 						// OtherFX_Play to get wumpa fruit
 						// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8005347c-0x80053484 for wumpa pickup SFX.
-						OtherFX_Play(0x42, 1);
+#if defined(__vita__)
+						if (!adhocSingleView || (playerStruct->driverID == adhocLocalPlayer))
+#endif
+						{
+							OtherFX_Play(0x42, 1);
+						}
 
 						// initial timer value
 						partTimeVariable1 = 5;

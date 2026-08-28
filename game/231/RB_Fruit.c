@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 void RB_Fruit_GetScreenCoords(struct PushBuffer *pb, struct Instance *inst, s16 *output)
 {
 	MATRIX *m;
@@ -76,7 +80,12 @@ int RB_Fruit_ThCollide(struct Thread *fruitTh, struct Thread *driverTh, void *fu
 	fruitInst->scale.z = 0;
 	fruitInst->thread = NULL;
 
-	PlaySound3D(0x43, fruitInst);
+#if defined(__vita__)
+	if (!NativeAdhoc_IsConnected() || (modelID != DYNAMIC_PLAYER) || NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+	{
+		PlaySound3D(0x43, fruitInst);
+	}
 	fruitTh->flags |= THREAD_FLAG_DEAD;
 
 	return 1;

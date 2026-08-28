@@ -51,6 +51,9 @@ enum ArcadeAdventureEndMenuConstants
 global_variable s32 s_driverRankString222 = 0x20; // " \0"
 extern struct RectMenu menu222;
 extern struct RectMenu menu222_2P;
+#if defined(__vita__)
+static struct RectMenu s_nativeAdhocRaceEndMenu;
+#endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8009f704-0x800a06f8.
 void AA_EndEvent_DrawMenu(void)
@@ -414,7 +417,16 @@ void AA_EndEvent_DrawMenu(void)
 	// If you're in Arcade mode
 	if ((gGT->gameMode1 & ARCADE_MODE) != 0)
 	{
-		RECTMENU_Show((numPlayers == 1) ? &menu222 : &menu222_2P);
+#if defined(__vita__)
+		if (NativeAdhoc_IsConnected())
+		{
+			RECTMENU_Show(&s_nativeAdhocRaceEndMenu);
+		}
+		else
+#endif
+		{
+			RECTMENU_Show((numPlayers == 1) ? &menu222 : &menu222_2P);
+		}
 
 		// record that the menu is drawing
 		sdata->menuReadyToPass |= AA_MENU_READY_FLAG;
@@ -726,6 +738,25 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 #endif
 	return;
 }
+
+#if defined(__vita__)
+static struct MenuRow s_nativeAdhocRaceEndRows[] =
+{
+	{LNG_QUIT, 0, 0, 0, 0},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct RectMenu s_nativeAdhocRaceEndMenu =
+{
+	.stringIndexTitle = RECTMENU_STRING_NONE,
+	.posX_curr = 256,
+	.posY_curr = 170,
+	.state = RECTMENU_STATE_SMALL_CENTERED,
+	.rows = s_nativeAdhocRaceEndRows,
+	.funcPtr = UI_RaceEnd_MenuProc,
+	.drawStyle = 4,
+};
+#endif
 
 struct MenuRow rows222[5] = {
     // Retry

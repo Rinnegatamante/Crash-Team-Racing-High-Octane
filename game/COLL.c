@@ -1,4 +1,8 @@
 #include <common.h>
+
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
 #include <ctr_scratchpad.h>
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8001d094-0x8001d0c4
@@ -1525,8 +1529,13 @@ void COLL_FIXED_PlayerSearch(struct Thread *t, struct Driver *d)
 
 			if (d->kartState != KS_MASK_GRABBED)
 			{
-				u32 echo = ((d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
-				OtherFX_Play_LowLevel(7, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, HOWL_SFX_DISTORTION_NONE, volume, echo));
+#if defined(__vita__)
+				if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+				{
+					u32 echo = ((d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+					OtherFX_Play_LowLevel(7, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, HOWL_SFX_DISTORTION_NONE, volume, echo));
+				}
 			}
 		}
 	}
@@ -2654,7 +2663,12 @@ u32 COLL_MOVED_ScrubImpact(struct Driver *d, struct Thread *t, struct Scratchpad
 					u32 soundFlags = HowlSfx_Pack(HOWL_SFX_LR_CENTER, HOWL_SFX_DISTORTION_NONE, HOWL_SFX_VOLUME_MAX, echo);
 
 					OtherFX_Play_LowLevel(6, 1, soundFlags);
-					Voiceline_RequestPlay(6, data.characterIDs[d->driverID], 0x10);
+#if defined(__vita__)
+					if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+					{
+						Voiceline_RequestPlay(6, data.characterIDs[d->driverID], 0x10);
+					}
 					GAMEPAD_ShockFreq(d, 8, 0);
 					GAMEPAD_ShockForce1(d, 8, 0x7f);
 

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b95fc-0x800b9848.
 void RB_Spider_DrawWebs(struct Thread *t, struct PushBuffer *pb)
 {
@@ -296,7 +300,12 @@ checkCollision:
 	if ((RB_Hazard_HurtDriver(victim, 1, 0, 0) != 0) && (prevKartState != KS_SPINNING))
 	{
 		OtherFX_Play(0x7b, 1);
-		Voiceline_RequestPlay(1, data.characterIDs[victim->driverID], 0x10);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(victim->driverID))
+#endif
+		{
+			Voiceline_RequestPlay(1, data.characterIDs[victim->driverID], 0x10);
+		}
 	}
 }
 

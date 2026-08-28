@@ -415,6 +415,14 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 		// go back to main menu
 		sdata->mainMenuState = MAIN_MENU_TITLE;
 
+#if defined(__vita__)
+		if (NativeAdhoc_IsActive())
+		{
+			NativeAdhoc_RequestReturnToMainMenu();
+			break;
+		}
+#endif
+
 		// load LEV of main menu
 		MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
 		break;

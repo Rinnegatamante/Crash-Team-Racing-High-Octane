@@ -29,6 +29,28 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 }
 #endif
 
+#if defined(CTR_NATIVE)
+static void MainFrame_DrawClockEffect(struct GameTracker *gGT, struct Driver *driver, struct PushBuffer *retailPushBuffer, int strength)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT != NULL) && (gGT->numPlyrCurrGame == 2))
+	{
+		if ((driver == NULL) || !NativeAdhoc_ShouldPresentDriver(driver->driverID))
+		{
+			return;
+		}
+
+		struct PushBuffer fullscreenPushBuffer;
+		memset(&fullscreenPushBuffer, 0, sizeof(fullscreenPushBuffer));
+		PushBuffer_Init(&fullscreenPushBuffer, NativeAdhoc_GetLocalPlayerIndex(), 1);
+		DISPLAY_Blur_Main(&fullscreenPushBuffer, strength);
+		return;
+	}
+#endif
+	DISPLAY_Blur_Main(retailPushBuffer, strength);
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034b48-0x80034bbc.
 void MainFrame_TogglePauseAudio(b32 bool_pause)
 {
@@ -175,13 +197,13 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 				}
 
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, uVar3);
 #endif
 			}
 			else
 			{
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, -uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, -uVar3);
 #endif
 				psVar9->clockFlash--;
 			}

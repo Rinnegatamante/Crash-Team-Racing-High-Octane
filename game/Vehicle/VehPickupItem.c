@@ -1,5 +1,20 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
+static inline int VehPickupItem_ShouldPlayLocalDriverFx(struct Driver *driver)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (driver != NULL) && (driver->driverID < 2))
+	{
+		return NativeAdhoc_ShouldPresentDriver(driver->driverID);
+	}
+#endif
+	return 1;
+}
+
 static inline void VehPickupItem_CopyMatrix(MATRIX *dst, const MATRIX *src)
 {
 	dst->m[0][0] = src->m[0][0];
@@ -284,7 +299,8 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 		    // If this is human and not AI
 		    ((driver->actionsFlagSet & ACTION_BOT) == 0) &&
 
-		    (boolPlaySound != 0))
+		    (boolPlaySound != 0) &&
+		    VehPickupItem_ShouldPlayLocalDriverFx(driver))
 		{
 			soundID = currThread->modelIndex + MASK_SOUND_ID_OFFSET_FROM_MODEL;
 			OtherFX_Play_Echo(soundID, 1, driver->actionsFlagSet & ACTION_ENGINE_ECHO);
@@ -305,13 +321,16 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 
 	soundID = modelID + MASK_SOUND_ID_OFFSET_FROM_MODEL;
 
+	if (((driver->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(driver))
+	{
+		OtherFX_Play_Echo(soundID, 1, driver->actionsFlagSet & ACTION_ENGINE_ECHO);
+	}
+
 	if (
 	    // If this is human and not AI
 	    ((driver->actionsFlagSet & ACTION_BOT) == 0) &&
 
-	    (OtherFX_Play_Echo(soundID, 1, driver->actionsFlagSet & ACTION_ENGINE_ECHO),
-
-	     (driver->kartState != KS_ENGINE_REVVING) && (driver->kartState != KS_MASK_GRABBED)))
+	    ((driver->kartState != KS_ENGINE_REVVING) && (driver->kartState != KS_MASK_GRABBED)))
 	{
 		if (boolGoodGuy == 0)
 		{
@@ -687,7 +706,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 			tw->dir.y = rot.vx;
 			tw->dir.z = rot.vz;
 
-			PlaySound3D(SOUND_BOMB_LAUNCH, weaponInst);
+			if (VehPickupItem_ShouldPlayLocalDriverFx(d))
+			{
+				PlaySound3D(SOUND_BOMB_LAUNCH, weaponInst);
+			}
 		}
 
 		// missile
@@ -703,11 +725,14 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 				}
 			}
 
-			PlaySound3D(SOUND_MISSILE_LAUNCH, weaponInst);
+			if (VehPickupItem_ShouldPlayLocalDriverFx(d))
+			{
+				PlaySound3D(SOUND_MISSILE_LAUNCH, weaponInst);
+			}
 		}
 
 		// if human and not AI
-		if ((d->actionsFlagSet & ACTION_BOT) == 0)
+		if (((d->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(d))
 		{
 			Voiceline_RequestPlay(talk, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
@@ -786,10 +811,13 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
-		PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		if (VehPickupItem_ShouldPlayLocalDriverFx(d))
+		{
+			PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		}
 
 		// if human and not AI
-		if ((d->actionsFlagSet & ACTION_BOT) == 0)
+		if (((d->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(d))
 		{
 			Voiceline_RequestPlay(VOICELINE_MINE_DROP, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
@@ -929,7 +957,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		PlaySound3D(SOUND_MINE_DROP, weaponInst);
 
 		// if human and not AI
-		if ((d->actionsFlagSet & ACTION_BOT) == 0)
+		if (((d->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(d))
 		{
 			Voiceline_RequestPlay(VOICELINE_MINE_DROP, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
@@ -1040,7 +1068,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 
 		OtherFX_Play(SOUND_CLOCK, 1);
 
-		if ((d->actionsFlagSet & ACTION_BOT) == 0)
+		if (((d->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(d))
 		{
 			Voiceline_RequestPlay(VOICELINE_CLOCK, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}
@@ -1107,10 +1135,13 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 
-		PlaySound3D(SOUND_WARPBALL, weaponInst);
+		if (VehPickupItem_ShouldPlayLocalDriverFx(d))
+		{
+			PlaySound3D(SOUND_WARPBALL, weaponInst);
+		}
 
 		// if human and not AI (AIs can not use Warpball)
-		if ((d->actionsFlagSet & ACTION_BOT) == 0)
+		if (((d->actionsFlagSet & ACTION_BOT) == 0) && VehPickupItem_ShouldPlayLocalDriverFx(d))
 		{
 			Voiceline_RequestPlay(VOICELINE_WARPBALL, data.characterIDs[d->driverID], VOICELINE_WEAPON_PRIORITY);
 		}

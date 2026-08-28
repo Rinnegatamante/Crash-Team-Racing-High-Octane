@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_STUCK_MASK_BSP_PROBE_HEIGHT = 0x100,
@@ -1015,7 +1019,12 @@ void VehStuckProc_RevEngine_Animate(struct Thread *t, struct Driver *d)
 				d->KartStates.RevEngine.chargeState = REV_ENGINE_CHARGE_IDLE;
 				d->KartStates.RevEngine.lockoutFlags |= REV_ENGINE_LOCKOUT_ALL;
 
-				OtherFX_Play_Echo(VEH_STUCK_REV_OVERREV_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+#if defined(__vita__)
+				if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+				{
+					OtherFX_Play_Echo(VEH_STUCK_REV_OVERREV_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+				}
 			}
 		}
 		goto LAB_80067dec;

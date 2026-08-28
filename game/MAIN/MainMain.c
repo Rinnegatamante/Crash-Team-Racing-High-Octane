@@ -106,23 +106,40 @@ u32 main(void)
 #if defined(__vita__)
 		if (NativeAdhoc_ShouldReturnToMainMenu() && (sdata->Loading.stage == LOAD_IDLE))
 		{
-			NativeAdhoc_AcknowledgeReturnToMainMenu();
-			NativeAdhoc_Shutdown();
 			gGT = sdata->gGT;
 			gGS = sdata->gGamepads;
 			if (gGT != NULL)
 			{
+				// The adhoc race uses a 1P LEV with 2P gameplay. Once adhoc is shut
+				// down, any residual loading/checkered-flag frames must not fall back
+				// to the retail 2P visibility path on that 1P LEV.
+				gGT->numPlyrCurrGame = 1;
 				gGT->numPlyrNextGame = 1;
+			}
+
+			NativeAdhoc_AcknowledgeReturnToMainMenu();
+			NativeAdhoc_Shutdown();
+			if (gGT != NULL)
+			{
 				sdata->mainMenuState = MAIN_MENU_TITLE;
 				if (gGT->levelID != MAIN_MENU_LEVEL)
 				{
-					MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+					// Connection-loss teardown must not depend on the old race's
+					// RaceFlag transition reaching LOAD_REQUESTED. Cover the old
+					// scene immediately and start the menu load directly.
+					RaceFlag_SetFullyOnScreen();
+					MainRaceTrack_StartLoad(MAIN_MENU_LEVEL);
 				}
 				else if (LOAD_IsOpen_MainMenu())
 				{
+					RaceFlag_SetFullyOffScreen();
 					MM_JumpTo_Title_Returning();
 				}
 			}
+
+			// MainRaceTrack_RequestLoad can invalidate the current level visibility
+			// data immediately. Never execute one more game/render frame against it.
+			continue;
 		}
 #endif
 
@@ -186,7 +203,16 @@ u32 main(void)
 			                                        // Battle tracks
 			                                        gGT->levelID - NITRO_COURT < 7))
 				{
-					Audio_SetState_Safe(uVar12);
+#if defined(__vita__)
+					if (NativeAdhoc_IsConnected() && (uVar12 == AUDIO_RACE_INTRO))
+					{
+						Platform_Log("[CTR Adhoc] race intro audio deferred until simulation START\n");
+					}
+					else
+#endif
+					{
+						Audio_SetState_Safe(uVar12);
+					}
 				}
 #ifdef CTR_NATIVE
 				NativeAdhoc_NotifyLevelReady(gGT);
@@ -337,6 +363,12 @@ u32 main(void)
 				nativeAdhocRunSimulation = NativeAdhoc_BeginSimulationFrame(gGT);
 				if (!nativeAdhocRunSimulation)
 				{
+#if defined(__vita__)
+					if (NativeAdhoc_ShouldReturnToMainMenu())
+					{
+						continue;
+					}
+#endif
 					NativeAdhoc_WaitForFrame();
 					continue;
 				}

@@ -2988,45 +2988,16 @@ static void RenderBucket_LoadPrimColors(struct RenderBucketDrawContext *ctx, con
 #if defined(CTR_NATIVE)
 static void RenderBucket_DebugSuspiciousTriangle(struct RenderBucketDrawContext *ctx, const char *kind, s16 x0, s16 y0, s16 x1, s16 y1, s16 x2, s16 y2)
 {
-	int minX = x0;
-	int maxX = x0;
-	int minY = y0;
-	int maxY = y0;
-	if (x1 < minX) minX = x1;
-	if (x2 < minX) minX = x2;
-	if (x1 > maxX) maxX = x1;
-	if (x2 > maxX) maxX = x2;
-	if (y1 < minY) minY = y1;
-	if (y2 < minY) minY = y2;
-	if (y1 > maxY) maxY = y1;
-	if (y2 > maxY) maxY = y2;
-
-	int spanX = maxX - minX;
-	int spanY = maxY - minY;
-	if ((spanX < 2048) && (spanY < 2048))
-	{
-		return;
-	}
-
-	static int lastFrame = -1;
-	static int logsThisFrame = 0;
-	int frame = (sdata->gGT != NULL) ? sdata->gGT->frameTimer_MainFrame_ResetDB : -1;
-	if (frame != lastFrame)
-	{
-		lastFrame = frame;
-		logsThisFrame = 0;
-	}
-	if (logsThisFrame >= 4)
-	{
-		return;
-	}
-	logsThisFrame++;
-
-	int modelID = (ctx != NULL && ctx->inst != NULL && ctx->inst->model != NULL) ? ctx->inst->model->id : -1;
-	Platform_Log("[CTR Native] suspicious RB triangle frame=%d model=%d inst=%p kind=%s xy=(%d,%d)(%d,%d)(%d,%d) span=(%d,%d) sz=(%d,%d,%d)\n",
-	             frame, modelID, (ctx != NULL) ? (void *)ctx->inst : NULL, kind, x0, y0, x1, y1, x2, y2, spanX, spanY,
-	             MFC2_S(17), MFC2_S(18), MFC2_S(19));
+	(void)ctx;
+	(void)kind;
+	(void)x0;
+	(void)y0;
+	(void)x1;
+	(void)y1;
+	(void)x2;
+	(void)y2;
 }
+
 #endif
 
 static u8 RenderBucket_SaturateU8(int value)

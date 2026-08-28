@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_PHYS_ANGULAR_STICK_MIN_SPEED = 0x10,
@@ -778,7 +782,12 @@ CHECK_FOR_ANY_JUMP:
 			int jumpForce = CTR_MipsAddLo(CTR_MipsSll(d->const_JumpForce, 3), d->const_JumpForce);
 			d->jump_InitialVelY = (s16)VehPhysGeneral_Jump_Div4TowardZero(jumpForce);
 
-			OtherFX_Play_Echo(VEH_PHYS_JUMP_SPRING_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+			{
+				OtherFX_Play_Echo(VEH_PHYS_JUMP_SPRING_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+			}
 
 			d->jump_HighJumpTimerMS = VEH_PHYS_JUMP_HIGH_TIMER_MS;
 			goto PROCESS_JUMP;
@@ -817,13 +826,23 @@ CHECK_FOR_ANY_JUMP:
 		d->numberOfJumps = (s16)CTR_MipsAddLo((u16)d->numberOfJumps, 1);
 		d->jump_InitialVelY = d->const_JumpForce;
 
-		OtherFX_Play_Echo(VEH_PHYS_JUMP_NORMAL_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+		{
+			OtherFX_Play_Echo(VEH_PHYS_JUMP_NORMAL_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+		}
 	}
 	else
 	{
 		if ((d->jump_ForcedMS == 0) || (d->jump_InitialVelY == d->const_JumpForce))
 		{
-			OtherFX_Play(VEH_PHYS_JUMP_FORCED_SFX, 1);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+			{
+				OtherFX_Play(VEH_PHYS_JUMP_FORCED_SFX, 1);
+			}
 		}
 
 		d->jump_ForcedMS = VEH_PHYS_JUMP_FORCED_MS;

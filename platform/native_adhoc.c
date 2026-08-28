@@ -22,7 +22,7 @@
 #define NATIVE_ADHOC_CONTROL_INTERVAL_US 100000u
 #define NATIVE_ADHOC_SESSION_INTERVAL_US 250000u
 #define NATIVE_ADHOC_HEARTBEAT_INTERVAL_US 500000u
-#define NATIVE_ADHOC_PEER_TIMEOUT_US 15000000u
+#define NATIVE_ADHOC_PEER_TIMEOUT_US 5000000u
 #define NATIVE_ADHOC_INPUT_RING_SIZE 64u
 #define NATIVE_ADHOC_INPUT_RING_MASK (NATIVE_ADHOC_INPUT_RING_SIZE - 1u)
 #define NATIVE_ADHOC_INPUT_DELAY 2u
@@ -358,7 +358,9 @@ static struct PushBuffer s_nativeAdhocRenderPushBuffer;
 static u32 s_nativeAdhocRenderOT[NATIVE_ADHOC_RENDER_OT_ENTRIES];
 static int s_nativeAdhocSingleViewRenderActive;
 static int s_nativeAdhocReturnToMainMenuPending;
+static int s_nativeAdhocReturnVisualPending;
 static u32 s_nativeAdhocConnectionLostNoticeUntil;
+static int s_nativeAdhocConnectionLostNoticePending;
 
 static void NativeAdhoc_InitHeader(struct NativeAdhocPacketHeader *header, int type);
 static int NativeAdhoc_SendRaw(const SceNetEtherAddr *dst, const void *packet, int len);
@@ -1653,6 +1655,10 @@ static void NativeAdhoc_ApplyControl(const struct NativeAdhocControlPacket *pack
 			packet->simulationFrame);
 		if (ackType == NATIVE_ADHOC_PACKET_START_ACK)
 		{
+			if ((sdata->gGT != NULL) && (sdata->gGT->levelID < NITRO_COURT))
+			{
+				Audio_SetState_Safe(AUDIO_RACE_INTRO);
+			}
 			NativeAdhoc_ResetRaceConfigState();
 		}
 	}
@@ -1959,6 +1965,10 @@ static void NativeAdhoc_ReceivePackets(void)
 				}
 				if (header->type == NATIVE_ADHOC_PACKET_START_ACK)
 				{
+					if ((sdata->gGT != NULL) && (sdata->gGT->levelID < NITRO_COURT))
+					{
+						Audio_SetState_Safe(AUDIO_RACE_INTRO);
+					}
 					NativeAdhoc_ResetRaceConfigState();
 				}
 				free(s_nativeAdhoc.txSnapshot);
@@ -2312,7 +2322,9 @@ void NativeAdhoc_Update(void)
 			NativeAdhoc_ClearInputRing();
 			s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 			s_nativeAdhocReturnToMainMenuPending = 1;
-			s_nativeAdhocConnectionLostNoticeUntil = now + 6000000u;
+			s_nativeAdhocReturnVisualPending = 1;
+			s_nativeAdhocConnectionLostNoticePending = 1;
+			s_nativeAdhocConnectionLostNoticeUntil = 0;
 		}
 	}
 }
@@ -2478,6 +2490,10 @@ static int NativeAdhoc_ApplyPendingSnapshot(void)
 int NativeAdhoc_BeginSimulationFrame(struct GameTracker *gGT)
 {
 	NativeAdhoc_Update();
+	if (s_nativeAdhocReturnToMainMenuPending)
+	{
+		return 0;
+	}
 	if (!NativeAdhoc_IsConnected() || (gGT == NULL) || (gGT->numPlyrCurrGame != 2) || ((gGT->gameMode1 & MAIN_MENU) != 0))
 	{
 		return 1;
@@ -2612,13 +2628,50 @@ int NativeAdhoc_ShouldReturnToMainMenu(void)
 	return s_nativeAdhocReturnToMainMenuPending;
 }
 
+void NativeAdhoc_RequestReturnToMainMenu(void)
+{
+	s_nativeAdhocReturnToMainMenuPending = 1;
+	s_nativeAdhocReturnVisualPending = 1;
+	s_nativeAdhocConnectionLostNoticePending = 0;
+	s_nativeAdhocConnectionLostNoticeUntil = 0;
+}
+
 void NativeAdhoc_AcknowledgeReturnToMainMenu(void)
 {
 	s_nativeAdhocReturnToMainMenuPending = 0;
 }
 
+int NativeAdhoc_IsReturningToMainMenu(void)
+{
+	if (!s_nativeAdhocReturnVisualPending)
+	{
+		return 0;
+	}
+
+	struct GameTracker *gGT = sdata->gGT;
+	return (gGT == NULL) || (gGT->levelID != MAIN_MENU_LEVEL) || (sdata->Loading.stage != LOAD_IDLE);
+}
+
 int NativeAdhoc_ShouldDrawConnectionLostNotice(void)
 {
+	if (s_nativeAdhocReturnVisualPending)
+	{
+		struct GameTracker *gGT = sdata->gGT;
+		if ((gGT == NULL) || (gGT->levelID != MAIN_MENU_LEVEL) || (sdata->Loading.stage != LOAD_IDLE))
+		{
+			return 0;
+		}
+
+		RaceFlag_SetFullyOffScreen();
+		MM_JumpTo_Title_Returning();
+		s_nativeAdhocReturnVisualPending = 0;
+		if (s_nativeAdhocConnectionLostNoticePending)
+		{
+			s_nativeAdhocConnectionLostNoticePending = 0;
+			s_nativeAdhocConnectionLostNoticeUntil = NativeAdhoc_Now() + 6000000u;
+		}
+	}
+
 	if (s_nativeAdhocConnectionLostNoticeUntil == 0)
 	{
 		return 0;
@@ -2781,11 +2834,20 @@ int NativeAdhoc_ShouldReturnToMainMenu(void)
 	return 0;
 }
 
+void NativeAdhoc_RequestReturnToMainMenu(void)
+{
+}
+
 void NativeAdhoc_AcknowledgeReturnToMainMenu(void)
 {
 }
 
 int NativeAdhoc_ShouldDrawConnectionLostNotice(void)
+{
+	return 0;
+}
+
+int NativeAdhoc_IsReturningToMainMenu(void)
 {
 	return 0;
 }

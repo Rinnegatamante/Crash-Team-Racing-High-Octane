@@ -205,6 +205,17 @@ void VehPhysCrash_AI(struct Driver *bot, Vec3 *vel)
 	bot->botData.aiPhysics.accel.z = CTR_MipsSubLo(vel->z, CTR_MipsSra(CTR_MipsMulLo(scratch->forward.z, botSpeed), VEH_PHYS_CRASH_BOT_SPEED_SHIFT));
 }
 
+static int VehPhysCrash_ShouldPlayLocalFeedback(struct Driver *driver)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (driver != NULL) && (driver->driverID < 2))
+	{
+		return NativeAdhoc_ShouldPresentDriver(driver->driverID);
+	}
+#endif
+	return 1;
+}
+
 static void VehPhysCrash_Attack_SetReason(struct Driver *driver, u8 reason)
 {
 	driver->pendingDamageReasonByte = reason;
@@ -221,7 +232,7 @@ int VehPhysCrash_Attack(struct Driver *driver1, struct Driver *driver2, b32 canP
 			VehPhysCrash_Attack_SetReason(driver1, VEH_PHYS_CRASH_DAMAGE_REASON_MASK);
 			driver1->pendingDamageAttacker = driver2;
 
-			if ((canPlayFeedback != 0) && (driver1->kartState != KS_BLASTED) && (driver1->invincibleTimer == 0))
+			if ((canPlayFeedback != 0) && VehPhysCrash_ShouldPlayLocalFeedback(driver1) && (driver1->kartState != KS_BLASTED) && (driver1->invincibleTimer == 0))
 			{
 				OtherFX_DriverCrashing((driver1->actionsFlagSet & ACTION_ENGINE_ECHO) != 0, VEH_PHYS_CRASH_VOLUME_MAX);
 				Voiceline_RequestPlay(VEH_PHYS_CRASH_VOICELINE_CRASH, data.characterIDs[driver1->driverID], VEH_PHYS_CRASH_VOICELINE_PRIORITY);
@@ -239,7 +250,7 @@ int VehPhysCrash_Attack(struct Driver *driver1, struct Driver *driver2, b32 canP
 			VehPhysCrash_Attack_SetReason(driver1, VEH_PHYS_CRASH_DAMAGE_REASON_SHIELD);
 			driver1->pendingDamageAttacker = driver2;
 
-			if ((canPlayFeedback != 0) && (driver1->kartState != KS_BLASTED) && (driver1->invincibleTimer == 0))
+			if ((canPlayFeedback != 0) && VehPhysCrash_ShouldPlayLocalFeedback(driver1) && (driver1->kartState != KS_BLASTED) && (driver1->invincibleTimer == 0))
 			{
 				OtherFX_DriverCrashing((driver1->actionsFlagSet & ACTION_ENGINE_ECHO) != 0, VEH_PHYS_CRASH_VOLUME_MAX);
 
@@ -320,8 +331,8 @@ static void VehPhysCrash_PlayHumanFeedback(struct Thread *selfThread, struct Thr
 		int volume = VehCalc_MapToRange(sdata->vehicleCollisionImpactStrength, 0, VEH_PHYS_CRASH_VOLUME_IMPACT_MAX, VEH_PHYS_CRASH_VOLUME_MIN,
 		                                VEH_PHYS_CRASH_VOLUME_MAX);
 
-		if ((canPlayFeedback != 0) && (selfDriver->kartState != KS_BLASTED) && (selfDriver->invincibleTimer == 0) && (otherDriver->kartState != KS_BLASTED) &&
-		    (otherDriver->invincibleTimer == 0))
+		if ((canPlayFeedback != 0) && VehPhysCrash_ShouldPlayLocalFeedback(selfDriver) && (selfDriver->kartState != KS_BLASTED) &&
+		    (selfDriver->invincibleTimer == 0) && (otherDriver->kartState != KS_BLASTED) && (otherDriver->invincibleTimer == 0))
 		{
 			OtherFX_DriverCrashing((selfDriver->actionsFlagSet & ACTION_ENGINE_ECHO) != 0, volume);
 

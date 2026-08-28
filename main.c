@@ -218,6 +218,15 @@ void save_config() {
 
 void *real_main(void *_argv) {
 	load_config();
+	int razorCaptureResult = sceSysmoduleLoadModule(SCE_SYSMODULE_RAZOR_CAPTURE);
+	if (razorCaptureResult < 0)
+	{
+		sceClibPrintf("[CTR Native] Razor Capture module unavailable: 0x%08x\n", razorCaptureResult);
+	}
+	else
+	{
+		sceClibPrintf("[CTR Native] Razor Capture module loaded\n");
+	}
 	sceIoMkdir("ux0:data/ctr/shader_cache", 0777);
 	vglSetShaderCachePath("ux0:data/ctr/shader_cache");
 	vglUseLowPrecision(GL_TRUE);
