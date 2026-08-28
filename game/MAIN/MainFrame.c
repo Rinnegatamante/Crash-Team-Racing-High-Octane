@@ -29,6 +29,28 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 }
 #endif
 
+#if defined(CTR_NATIVE)
+static void MainFrame_DrawClockEffect(struct GameTracker *gGT, struct Driver *driver, struct PushBuffer *retailPushBuffer, int strength)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT != NULL) && (gGT->numPlyrCurrGame == 2))
+	{
+		if ((driver == NULL) || !NativeAdhoc_ShouldPresentDriver(driver->driverID))
+		{
+			return;
+		}
+
+		struct PushBuffer fullscreenPushBuffer;
+		memset(&fullscreenPushBuffer, 0, sizeof(fullscreenPushBuffer));
+		PushBuffer_Init(&fullscreenPushBuffer, NativeAdhoc_GetLocalPlayerIndex(), 1);
+		DISPLAY_Blur_Main(&fullscreenPushBuffer, strength);
+		return;
+	}
+#endif
+	DISPLAY_Blur_Main(retailPushBuffer, strength);
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034b48-0x80034bbc.
 void MainFrame_TogglePauseAudio(b32 bool_pause)
 {
@@ -71,9 +93,6 @@ void MainFrame_ResetDB(struct GameTracker *gGT)
 
 	db = gGT->backBuffer;
 	db->blurCameraMask = 0;
-#if defined(CTR_NATIVE)
-	MainDB_NativePrimMemFrameEnd(&db->primMem);
-#endif
 	db->primMem.cursor = db->primMem.start;
 	db->primMem.primitiveCount = 0;
 	db->otMem.cursor = db->otMem.start;
@@ -175,13 +194,13 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 				}
 
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, uVar3);
 #endif
 			}
 			else
 			{
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, -uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, -uVar3);
 #endif
 				psVar9->clockFlash--;
 			}
@@ -719,8 +738,6 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 #if defined(__vita__)
 		if (NativeAdhoc_IsSingleViewRenderActive())
 		{
-			// The single-view renderer uses the retail 1P state in slot zero even
-			// on the client, so mirror the local player's PVS into that slot.
 			visIndex = 0;
 		}
 #endif
@@ -785,7 +802,11 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		// records even though the camera record contains the driver's quad. That
 		// record still omits parts of the ship, so merge these two local PVS sets
 		// instead of disabling visibility for the whole level.
+#if defined(__vita__)
+		if ((gGT->levelID == CRASH_COVE) && !NativeAdhoc_IsSingleViewRenderActive())
+#else
 		if (gGT->levelID == CRASH_COVE)
+#endif
 		{
 			int hadDriverPVS = (camDC->flags & 0x2000) != 0;
 			int needsDriverPVS =

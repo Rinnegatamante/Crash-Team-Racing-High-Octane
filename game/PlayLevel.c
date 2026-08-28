@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum PlayLevelConstants
 {
 	PLAYLEVEL_DRIVER_COUNT = 8,
@@ -408,10 +412,16 @@ void PlayLevel_UpdateLapStats(void)
 		if ((PLAYLEVEL_UNSORTED_RANK < currRank) && (PLAYLEVEL_PASS_VOICELINE_DELAY < gGT->elapsedEventTime) &&
 		    ((s8)gGT->humanPlayerPositions[driverIndex] < currRank))
 		{
-			int characterID = data.characterIDs[gGT->driversInRaceOrder[currRank - 1]->driverID];
+			struct Driver *voiceDriver = gGT->driversInRaceOrder[currRank - 1];
+			int characterID = data.characterIDs[voiceDriver->driverID];
 
 			// Make driver talk
-			Voiceline_RequestPlay(PLAYLEVEL_PASS_VOICELINE, characterID, PLAYLEVEL_VOICELINE_FLAGS);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(voiceDriver->driverID))
+#endif
+			{
+				Voiceline_RequestPlay(PLAYLEVEL_PASS_VOICELINE, characterID, PLAYLEVEL_VOICELINE_FLAGS);
+			}
 		}
 		gGT->humanPlayerPositions[driverIndex] = currRank;
 	}

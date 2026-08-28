@@ -82,7 +82,18 @@ void RB_CrateAny_ThTick_Explode(struct Thread *t)
 	INSTANCE_Death(crateExplodeInst);
 }
 
-static void RB_CrateAny_ExplodeInit(struct Instance *crateInst, int color, b32 randomizeRotation)
+static int RB_CrateAny_ShouldPlayBreakSound(struct Driver *driver)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (driver != NULL) && (driver != (struct Driver *)1) && ((driver->actionsFlagSet & ACTION_BOT) == 0))
+	{
+		return NativeAdhoc_ShouldPresentDriver(driver->driverID);
+	}
+#endif
+	return 1;
+}
+
+static void RB_CrateAny_ExplodeInit(struct Instance *crateInst, int color, b32 randomizeRotation, int playSound)
 {
 	struct Instance *explosionInst;
 	MATRIX matrix;
@@ -130,7 +141,10 @@ static void RB_CrateAny_ExplodeInit(struct Instance *crateInst, int color, b32 r
 		explosionInst->matrix = crateInst->matrix;
 	}
 
-	PlaySound3D(0x3c, crateInst);
+	if (playSound)
+	{
+		PlaySound3D(0x3c, crateInst);
+	}
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b3d7c-0x800b3e7c.
@@ -237,9 +251,8 @@ int RB_CrateWeapon_ThCollide(struct Thread *crateThread, struct Thread *collidin
 
 		if (crateInst->scale.x == 0x1000)
 		{
-			RB_CrateAny_ExplodeInit(crateInst, 0xfafafa0, true);
-
 			driver = RB_CrateAny_GetDriver(collidingTh, sps);
+			RB_CrateAny_ExplodeInit(crateInst, 0xfafafa0, true, RB_CrateAny_ShouldPlayBreakSound(driver));
 			if ((int)driver == 1)
 			{
 				return 1;
@@ -369,9 +382,8 @@ int RB_CrateFruit_ThCollide(struct Thread *crateThread, struct Thread *colliding
 
 		if (crateInst->scale.x == 0x1000)
 		{
-			RB_CrateAny_ExplodeInit(crateInst, 0xf2953a0, false);
-
 			driver = RB_CrateAny_GetDriver(collidingTh, sps);
+			RB_CrateAny_ExplodeInit(crateInst, 0xf2953a0, false, RB_CrateAny_ShouldPlayBreakSound(driver));
 			if ((int)driver == 1)
 			{
 				return 1;
@@ -457,10 +469,9 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 
 		if (crateInst->scale.x == 0x1000)
 		{
-			RB_CrateAny_ExplodeInit(crateInst, 0x80ff000, true);
-
 			gGT = sdata->gGT;
 			driver = RB_CrateAny_GetDriver(driverTh, sps);
+			RB_CrateAny_ExplodeInit(crateInst, 0x80ff000, true, RB_CrateAny_ShouldPlayBreakSound(driver));
 			if ((int)driver == 1)
 			{
 				return 1;
@@ -492,7 +503,12 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 				gGT->frozenTimeRemaining += 0xb40;
 				gGT->timeCrateTypeSmashed = 3;
 
-				Voiceline_RequestPlay(0x13, data.characterIDs[driver->driverID], 0x10);
+#if defined(__vita__)
+				if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+				{
+					Voiceline_RequestPlay(0x13, data.characterIDs[driver->driverID], 0x10);
+				}
 			}
 
 			driver->PickupTimeboxHUD.cooldown = 10;

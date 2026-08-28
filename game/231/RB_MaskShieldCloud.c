@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 231 0x800afb70-0x800afdbc.
 void RB_MaskWeapon_FadeAway(struct Thread *t)
 {
@@ -573,7 +577,12 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	if ((player->actionsFlagSet & ACTION_BOT) == 0)
 	{
 		// make driver talk
-		Voiceline_RequestPlay(13, data.characterIDs[player->driverID], 0x10);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(player->driverID))
+#endif
+		{
+			Voiceline_RequestPlay(13, data.characterIDs[player->driverID], 0x10);
+		}
 	}
 
 	// copy position and rotation from one instance to another

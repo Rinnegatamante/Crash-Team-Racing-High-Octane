@@ -293,12 +293,15 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	if ((gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0)
 	{
 #if defined(__vita__)
-		if (NativeAdhoc_IsSingleViewRenderActive() && NativeAdhoc_IsSimulationActive() &&
-		    (gGT->trafficLightsTimer <= 0) && ((gGT->gameMode1 & END_OF_RACE) == 0))
+		if (NativeAdhoc_IsReturningToMainMenu())
 		{
-			// During active racing, advance any stale flag state without letting its
-			// G4 mesh leak into the single-view UI chain. Pre-race/loading and the
-			// traffic-light countdown must still draw the legitimate transition.
+			// Keep the loading state machine moving without emitting the flag or
+			// LOADING glyphs while the old race OT/PrimMem are being replaced.
+			(void)RaceFlag_GetOT();
+		}
+		else if (NativeAdhoc_IsSingleViewRenderActive() && NativeAdhoc_IsSimulationActive() &&
+		         (gGT->trafficLightsTimer <= 0) && ((gGT->gameMode1 & END_OF_RACE) == 0))
+		{
 			(void)RaceFlag_GetOT();
 		}
 		else
@@ -1114,10 +1117,6 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
 		}
 
-		// Adhoc renders through slot zero because DrawLevelOvr1P owns the 1P
-		// clip/render-list state there. MainFrame_VisMemFullFrame mirrors the local
-		// player's camera visibility into this presentation slot, so keep the retail
-		// PVS as the coarse visibility gate and let the fullscreen frustum refine it.
 		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
 		gGT->bspLeafsDrawn += RenderLists_Init1P2P(

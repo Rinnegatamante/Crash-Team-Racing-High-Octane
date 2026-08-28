@@ -188,8 +188,6 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			// skybox and 1P render data. LOAD_DriverMPK independently forces 2P
 			// character/robot assets below.
 			sdata->levelLOD = LOAD_LEVEL_LOD_1P;
-			Platform_Log("[CTR Adhoc] track LOD forced 1P, simulation players=%d p1=%u p2=%u\n",
-				gGT->numPlyrCurrGame, data.characterIDs[0], data.characterIDs[1]);
 		}
 		else
 #endif

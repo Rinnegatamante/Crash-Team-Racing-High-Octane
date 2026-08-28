@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002e7bc-0x8002e84c
 int GTE_GetSquaredDistance(s16 *pos1, s16 *pos2)
 {
@@ -370,19 +374,37 @@ void PlaySound3D(u32 soundID, struct Instance *inst)
 	u32 closestDistance = 9000;
 	int closestCamera = 0;
 
-	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
 	{
+		int i = NativeAdhoc_GetLocalPlayerIndex();
 		dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
 		dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);
 		dir[i][2] = CTR_MipsSubLo(inst->matrix.t[2], gGT->pushBuffer[i].pos.z);
-
-		distance[i] = GTE_GetSquaredLength(dir[i]);
-		distance[i] = SquareRoot0_stub(distance[i]);
-
-		if (distance[i] < closestDistance)
+		distance[i] = SquareRoot0_stub(GTE_GetSquaredLength(dir[i]));
+		if (distance[i] < 9000)
 		{
 			closestCamera = i;
 			closestDistance = distance[i];
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+		{
+			dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
+			dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);
+			dir[i][2] = CTR_MipsSubLo(inst->matrix.t[2], gGT->pushBuffer[i].pos.z);
+
+			distance[i] = GTE_GetSquaredLength(dir[i]);
+			distance[i] = SquareRoot0_stub(distance[i]);
+
+			if (distance[i] < closestDistance)
+			{
+				closestCamera = i;
+				closestDistance = distance[i];
+			}
 		}
 	}
 
@@ -434,24 +456,47 @@ void PlaySound3D_Flags(u32 *flags, u32 soundID, struct Instance *inst)
 		return;
 	}
 
-	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
 	{
+		int i = NativeAdhoc_GetLocalPlayerIndex();
 		dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
 		dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);
 		dir[i][2] = CTR_MipsSubLo(inst->matrix.t[2], gGT->pushBuffer[i].pos.z);
-
-		distance[i] = GTE_GetSquaredLength(dir[i]);
-		distance[i] = SquareRoot0_stub(distance[i]);
-
-		if (distance[i] < closestDistance)
+		distance[i] = SquareRoot0_stub(GTE_GetSquaredLength(dir[i]));
+		if (distance[i] < 9000)
 		{
 			closestCamera = i;
 			closestDistance = distance[i];
 		}
 	}
+	else
+#endif
+	{
+		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+		{
+			dir[i][0] = CTR_MipsSubLo(inst->matrix.t[0], gGT->pushBuffer[i].pos.x);
+			dir[i][1] = CTR_MipsSubLo(inst->matrix.t[1], gGT->pushBuffer[i].pos.y);
+			dir[i][2] = CTR_MipsSubLo(inst->matrix.t[2], gGT->pushBuffer[i].pos.z);
+
+			distance[i] = GTE_GetSquaredLength(dir[i]);
+			distance[i] = SquareRoot0_stub(distance[i]);
+
+			if (distance[i] < closestDistance)
+			{
+				closestCamera = i;
+				closestDistance = distance[i];
+			}
+		}
+	}
 
 	if (closestDistance == 9000)
 	{
+		if (*flags != 0)
+		{
+			OtherFX_Stop1(*flags);
+			*flags = 0;
+		}
 		return;
 	}
 

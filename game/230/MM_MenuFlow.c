@@ -478,12 +478,13 @@ static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
 		MM_NativeAdhocApplyText();
 		RECTMENU_ClearInput();
 
-		D230.menuRaceType.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY | NEEDS_TO_CLOSE);
-		D230.menuRaceType.ptrNextBox_InHierarchy = NULL;
-		D230.menuRaceType.ptrPrevBox_InHierarchy = &D230.menuMainMenu;
-		D230.menuRaceType.rowSelected = 0;
+		gGT->gameMode2 &= ~(CUP_ANY_KIND);
+		MM_NativeExtraDifficultyPrepare();
+		s_nativeExtraDifficultyMenu.ptrPrevBox_InHierarchy = &D230.menuMainMenu;
+		s_nativeExtraDifficultyMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeExtraDifficultyMenu.rowSelected = 0;
 
-		D230.menuMainMenu.ptrNextBox_InHierarchy = &D230.menuRaceType;
+		D230.menuMainMenu.ptrNextBox_InHierarchy = &s_nativeExtraDifficultyMenu;
 		D230.menuMainMenu.state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
 		D230.characterSelectTransitionState = IN_MENU;
 		return 1;
