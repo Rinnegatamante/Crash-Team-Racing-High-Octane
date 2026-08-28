@@ -694,6 +694,20 @@ static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerInde
 	}
 }
 
+#if defined(__vita__)
+static void MainFrame_VisMemAddPVSFaces(struct GameTracker *gGT, int visIndex, struct PVS *pvs)
+{
+	struct mesh_info *mesh = gGT->level1->ptr_mesh_info;
+
+	if ((pvs == NULL) || (pvs->visFaceSrc == NULL))
+	{
+		return;
+	}
+
+	MainFrame_OrPackedVisList(gGT->visMem1->visFaceList[visIndex], pvs->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800357b8-0x80035d30.
 void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 {
@@ -738,6 +752,8 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 #if defined(__vita__)
 		if (NativeAdhoc_IsSingleViewRenderActive())
 		{
+			// The single-view renderer uses the retail 1P state in slot zero even
+			// on the client, so mirror the local player's PVS into that slot.
 			visIndex = 0;
 		}
 #endif
@@ -745,11 +761,28 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		struct Driver *driver = gGT->drivers[playerIndex];
 		struct QuadBlock *driverQuad = driver->underDriver;
 		struct PVS *driverPVS = NULL;
+#if defined(__vita__)
+		int rebuildCrashCoveSingleViewPVS = 0;
+#endif
 
 		if (driverQuad != NULL)
 		{
 			driverPVS = driverQuad->pvs;
 		}
+
+#if defined(__vita__)
+		// Crash Cove's 1P camera PVS omits ship faces even when it contains the
+		// driver quad. Rebuild the camera masks before applying a face-only union,
+		// so AdHoc does not retain old driver bits or admit driver-only BSP leaves.
+		rebuildCrashCoveSingleViewPVS =
+		    (gGT->levelID == CRASH_COVE) && NativeAdhoc_IsSingleViewRenderActive() &&
+		    (camDC->visLeafSrc != NULL) && (camDC->visFaceSrc != NULL);
+		if (rebuildCrashCoveSingleViewPVS)
+		{
+			visMem->visLeafSrc[visIndex] = NULL;
+			visMem->visFaceSrc[visIndex] = NULL;
+		}
+#endif
 
 		camDC->flags &= ~0x4000;
 
@@ -796,6 +829,15 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 				camDC->flags |= 0x4000;
 			}
 		}
+
+#if defined(__vita__)
+		if (rebuildCrashCoveSingleViewPVS && ((camDC->flags & 0x2000) == 0) &&
+		    (driverPVS != NULL) && (driverPVS->visFaceSrc != NULL) &&
+		    (camDC->visFaceSrc != driverPVS->visFaceSrc))
+		{
+			MainFrame_VisMemAddPVSFaces(gGT, visIndex, driverPVS);
+		}
+#endif
 
 #ifdef CTR_NATIVE
 		// HACK: Crash Cove's ship can place the camera and driver in different PVS

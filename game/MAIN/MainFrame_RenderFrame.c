@@ -1117,6 +1117,10 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
 		}
 
+		// Adhoc renders through slot zero because DrawLevelOvr1P owns the 1P
+		// clip/render-list state there. MainFrame_VisMemFullFrame mirrors the local
+		// player's camera visibility into this presentation slot, so keep the retail
+		// PVS as the coarse visibility gate and let the fullscreen frustum refine it.
 		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
 		gGT->bspLeafsDrawn += RenderLists_Init1P2P(
