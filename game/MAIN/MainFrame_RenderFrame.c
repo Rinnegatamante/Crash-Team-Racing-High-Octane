@@ -1114,21 +1114,15 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
 		}
 
-		// The retail 2P PVS was built for the split-screen camera and is too
-		// restrictive for the wider single-view presentation. Keep gameplay/PVS
-		// state untouched, but make level rendering use the fullscreen frustum as
-		// the authoritative visibility test. DrawLevelOvr1P still requires a
-		// non-null face bitset, so expose all quad blocks for this render pass.
-		memset(
-			gGT->visMem1->visFaceList[renderSlot],
-			0xff,
-			((ptr_mesh_info->numQuadBlock + 0x1f) >> 5) << 2);
-
+		// Adhoc renders through slot zero because DrawLevelOvr1P owns the 1P
+		// clip/render-list state there. MainFrame_VisMemFullFrame mirrors the local
+		// player's camera visibility into this presentation slot, so keep the retail
+		// PVS as the coarse visibility gate and let the fullscreen frustum refine it.
 		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
 		gGT->bspLeafsDrawn += RenderLists_Init1P2P(
 			ptr_mesh_info->bspRoot,
-			NULL,
+			gGT->visMem1->visLeafList[renderSlot],
 			pushBuffer,
 			(u32)&gGT->LevRenderLists[renderSlot],
 			gGT->visMem1->bspList[renderSlot],

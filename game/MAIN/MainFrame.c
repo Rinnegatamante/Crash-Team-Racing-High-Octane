@@ -702,60 +702,6 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 	mesh = level->ptr_mesh_info;
 
-#if defined(__vita__)
-	if (NativeAdhoc_IsSingleViewRenderActive())
-	{
-		size_t leafBytes = ((mesh->numBspNodes + 0x1f) >> 5) << 2;
-		size_t faceBytes = ((mesh->numQuadBlock + 0x1f) >> 5) << 2;
-
-		if (visMem->visLeafList[0] != NULL)
-		{
-			memset(visMem->visLeafList[0], 0xff, leafBytes);
-		}
-		if (visMem->visFaceList[0] != NULL)
-		{
-			memset(visMem->visFaceList[0], 0xff, faceBytes);
-		}
-		visMem->visLeafSrc[0] = NULL;
-		visMem->visFaceSrc[0] = NULL;
-
-		if ((level->configFlags & 4) == 0)
-		{
-			size_t extraBytes = ((level->numWaterVertices + 0x1f) >> 5) << 2;
-			if ((visMem->visOVertList[0] != NULL) && (extraBytes != 0))
-			{
-				if (level->visOVertSrc != NULL)
-				{
-					memcpy(visMem->visOVertList[0], level->visOVertSrc, extraBytes);
-				}
-				else
-				{
-					memset(visMem->visOVertList[0], 0xff, extraBytes);
-				}
-			}
-			visMem->visOVertSrc[0] = level->visOVertSrc;
-		}
-		else
-		{
-			size_t extraBytes = ((level->numSCVert + 0x1f) >> 5) << 2;
-			if ((visMem->visSCVertList[0] != NULL) && (extraBytes != 0))
-			{
-				if (level->visSCVertSrc != NULL)
-				{
-					memcpy(visMem->visSCVertList[0], level->visSCVertSrc, extraBytes);
-				}
-				else
-				{
-					memset(visMem->visSCVertList[0], 0xff, extraBytes);
-				}
-			}
-			visMem->visSCVertSrc[0] = level->visSCVertSrc;
-		}
-
-		return;
-	}
-#endif
-
 	playerStart = 0;
 	playerEnd = gGT->numPlyrCurrGame;
 
@@ -773,6 +719,8 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 #if defined(__vita__)
 		if (NativeAdhoc_IsSingleViewRenderActive())
 		{
+			// The single-view renderer uses the retail 1P state in slot zero even
+			// on the client, so mirror the local player's PVS into that slot.
 			visIndex = 0;
 		}
 #endif
@@ -898,42 +846,42 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 		if ((level->configFlags & 4) == 0)
 		{
-			if (visMem->visOVertSrc[playerIndex] != camDC->visOVertSrc)
+			if (visMem->visOVertSrc[visIndex] != camDC->visOVertSrc)
 			{
-				visMem->visOVertSrc[playerIndex] = camDC->visOVertSrc;
+				visMem->visOVertSrc[visIndex] = camDC->visOVertSrc;
 
 				if (camDC->visOVertSrc != NULL)
 				{
-					MainFrame_ReplacePackedVisList(visMem->visOVertList[playerIndex], camDC->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+					MainFrame_ReplacePackedVisList(visMem->visOVertList[visIndex], camDC->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 				}
 				else
 				{
-					memcpy(visMem->visOVertList[playerIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+					memcpy(visMem->visOVertList[visIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 				}
 			}
-			else if (visMem->visOVertSrc[playerIndex] == NULL)
+			else if (visMem->visOVertSrc[visIndex] == NULL)
 			{
-				memcpy(visMem->visOVertList[playerIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+				memcpy(visMem->visOVertList[visIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 			}
 		}
 		else
 		{
-			if (visMem->visSCVertSrc[playerIndex] != camDC->visSCVertSrc)
+			if (visMem->visSCVertSrc[visIndex] != camDC->visSCVertSrc)
 			{
-				visMem->visSCVertSrc[playerIndex] = camDC->visSCVertSrc;
+				visMem->visSCVertSrc[visIndex] = camDC->visSCVertSrc;
 
 				if (camDC->visSCVertSrc != NULL)
 				{
-					MainFrame_ReplacePackedVisList(visMem->visSCVertList[playerIndex], camDC->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+					MainFrame_ReplacePackedVisList(visMem->visSCVertList[visIndex], camDC->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 				}
 				else
 				{
-					memcpy(visMem->visSCVertList[playerIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+					memcpy(visMem->visSCVertList[visIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 				}
 			}
-			else if (visMem->visSCVertSrc[playerIndex] == NULL)
+			else if (visMem->visSCVertSrc[visIndex] == NULL)
 			{
-				memcpy(visMem->visSCVertList[playerIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+				memcpy(visMem->visSCVertList[visIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 			}
 		}
 	}

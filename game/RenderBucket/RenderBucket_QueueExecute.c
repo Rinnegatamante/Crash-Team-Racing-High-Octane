@@ -2245,18 +2245,13 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 	if (NativeAdhoc_IsSingleViewRenderActive())
 	{
 		int player = NativeAdhoc_GetLocalPlayerIndex();
-		struct GameTracker *gGT = sdata->gGT;
-		struct Level *level = (gGT != NULL) ? gGT->level1 : NULL;
+		struct Instance **visInstSrc = cDC[player].visInstSrc;
 
-		if ((level != NULL) && (level->ptrInstDefs != NULL))
+		if (visInstSrc != NULL)
 		{
-			struct InstDef *instDef = level->ptrInstDefs;
-			for (u32 i = 0; i < level->numInstances; i++, instDef++)
+			for (; *visInstSrc != NULL; visInstSrc++)
 			{
-				if (instDef->ptrInstance != NULL)
-				{
-					entry = RenderBucket_QueueDraw(instDef->ptrInstance, entry, player, lodMask, gameMode1, &queueState);
-				}
+				entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
 			}
 		}
 	}
