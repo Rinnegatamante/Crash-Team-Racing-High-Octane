@@ -91,7 +91,6 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	if (NativeAdhoc_EnforcePreparedRaceConfig(gGT))
 	{
 		levelLOD = LOAD_LEVEL_LOD_2P;
-		Platform_Log("[CTR Adhoc] driver MPK forced 2P p1=%u p2=%u\n", data.characterIDs[0], data.characterIDs[1]);
 	}
 #endif
 	gameMode1 = gGT->gameMode1;

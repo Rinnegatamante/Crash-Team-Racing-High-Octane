@@ -370,7 +370,6 @@ void MainDB_OTMem(struct OTMem *otMem, u32 size);
 void MainDB_PrimMem(struct PrimMem *primMem, u32 size);
 #if defined(CTR_NATIVE)
 void MainDB_RebindNativePrimMem(struct GameTracker *gGT);
-void MainDB_NativePrimMemFrameEnd(struct PrimMem *primMem);
 #endif
 
 void MainDrawCb_Vsync(void);

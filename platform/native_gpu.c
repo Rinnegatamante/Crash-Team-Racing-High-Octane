@@ -65,19 +65,33 @@ internal s16 NativeGpu_SignExtend11(u32 value)
 	return (s16)((value ^ 0x400) - 0x400);
 }
 
-internal bool NativeGpu_IsGteSaturatedPoint(const VERTTYPE *point)
+internal bool NativeGpu_RejectOversizedPoly(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2, const VERTTYPE *p3, int count)
 {
-	return (point[0] == 1023) || (point[0] == -1024) || (point[1] == 1023) || (point[1] == -1024);
+	const VERTTYPE *points[4] = {p0, p1, p2, p3};
+	int minX = p0[0];
+	int maxX = p0[0];
+	int minY = p0[1];
+	int maxY = p0[1];
+
+	for (int i = 1; i < count; i++)
+	{
+		if (points[i][0] < minX) minX = points[i][0];
+		if (points[i][0] > maxX) maxX = points[i][0];
+		if (points[i][1] < minY) minY = points[i][1];
+		if (points[i][1] > maxY) maxY = points[i][1];
+	}
+
+	return ((maxX - minX) >= 1024) || ((maxY - minY) >= 512);
 }
 
-internal bool NativeGpu_RejectSaturatedTriangle(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2)
+internal bool NativeGpu_RejectOversizedTriangle(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2)
 {
-	return NativeGpu_IsGteSaturatedPoint(p0) || NativeGpu_IsGteSaturatedPoint(p1) || NativeGpu_IsGteSaturatedPoint(p2);
+	return NativeGpu_RejectOversizedPoly(p0, p1, p2, NULL, 3);
 }
 
-internal bool NativeGpu_RejectSaturatedQuad(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2, const VERTTYPE *p3)
+internal bool NativeGpu_RejectOversizedQuad(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2, const VERTTYPE *p3)
 {
-	return NativeGpu_IsGteSaturatedPoint(p0) || NativeGpu_IsGteSaturatedPoint(p1) || NativeGpu_IsGteSaturatedPoint(p2) || NativeGpu_IsGteSaturatedPoint(p3);
+	return NativeGpu_RejectOversizedPoly(p0, p1, p2, p3, 4);
 }
 
 DISPENV activeDispEnv;
@@ -133,7 +147,6 @@ typedef struct
 } NativeGpuState;
 
 global_variable NativeGpuState s_gpu;
-
 struct NativeGpuSnapshot
 {
 	u32 magic;
@@ -1659,7 +1672,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 	case 0x0:
 	{
 		POLY_F3 *poly = (POLY_F3 *)polyTag;
-		if (NativeGpu_RejectSaturatedTriangle(&poly->x0, &poly->x1, &poly->x2))
+		if (NativeGpu_RejectOversizedTriangle(&poly->x0, &poly->x1, &poly->x2))
 		{
 			return 4;
 		}
@@ -1679,7 +1692,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 	{
 		POLY_FT3 *poly = (POLY_FT3 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
-		if (NativeGpu_RejectSaturatedTriangle(&poly->x0, &poly->x1, &poly->x2))
+		if (NativeGpu_RejectOversizedTriangle(&poly->x0, &poly->x1, &poly->x2))
 		{
 			return 7;
 		}
@@ -1702,7 +1715,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 	case 0x8:
 	{
 		POLY_F4 *poly = (POLY_F4 *)polyTag;
-		if (NativeGpu_RejectSaturatedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
+		if (NativeGpu_RejectOversizedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
 		{
 			return 5;
 		}
@@ -1723,7 +1736,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 	{
 		POLY_FT4 *poly = (POLY_FT4 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
-		if (NativeGpu_RejectSaturatedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
+		if (NativeGpu_RejectOversizedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
 		{
 			return 9;
 		}
@@ -1757,7 +1770,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 	case 0x0:
 	{
 		POLY_G3 *poly = (POLY_G3 *)polyTag;
-		if (NativeGpu_RejectSaturatedTriangle(&poly->x0, &poly->x1, &poly->x2))
+		if (NativeGpu_RejectOversizedTriangle(&poly->x0, &poly->x1, &poly->x2))
 		{
 			return 6;
 		}
@@ -1777,7 +1790,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 	{
 		POLY_GT3 *poly = (POLY_GT3 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
-		if (NativeGpu_RejectSaturatedTriangle(&poly->x0, &poly->x1, &poly->x2))
+		if (NativeGpu_RejectOversizedTriangle(&poly->x0, &poly->x1, &poly->x2))
 		{
 			return 9;
 		}
@@ -1796,7 +1809,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 	case 0x8:
 	{
 		POLY_G4 *poly = (POLY_G4 *)polyTag;
-		if (NativeGpu_RejectSaturatedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
+		if (NativeGpu_RejectOversizedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
 		{
 			return 8;
 		}
@@ -1818,7 +1831,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 	{
 		POLY_GT4 *poly = (POLY_GT4 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
-		if (NativeGpu_RejectSaturatedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
+		if (NativeGpu_RejectOversizedQuad(&poly->x0, &poly->x1, &poly->x2, &poly->x3))
 		{
 			return 12;
 		}

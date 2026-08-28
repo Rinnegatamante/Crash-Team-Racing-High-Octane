@@ -1882,7 +1882,12 @@ void CAM_ThTick(struct Thread *t)
 	ptrZoomData = &data.NearCam4x3;
 	if (gGT->numPlyrCurrGame == 2)
 	{
-		ptrZoomData = &data.NearCam8x3;
+#if defined(CTR_NATIVE)
+		if (!NativeAdhoc_IsActive())
+#endif
+		{
+			ptrZoomData = &data.NearCam8x3;
+		}
 	}
 
 	ptrZoomData = &ptrZoomData[cDC->nearOrFar * 2];

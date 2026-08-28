@@ -117,11 +117,24 @@ u32 main(void)
 				gGT->numPlyrNextGame = 1;
 			}
 
+			if (gGT != NULL)
+			{
+				// Consume the pause-background restore while the race buffers and
+				// instance pool are still valid. Starting a load with RESTORE pending
+				// can make ElimBG_HandleState touch stale race memory afterwards.
+				ElimBG_Deactivate(gGT);
+				ElimBG_HandleState(gGT);
+			}
+
 			NativeAdhoc_AcknowledgeReturnToMainMenu();
 			NativeAdhoc_Shutdown();
 			if (gGT != NULL)
 			{
+				GhostTape_Destroy();
+				sdata->Loading.OnBegin.AddBitsConfig0 |= MAIN_MENU;
+				sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_ARENA;
 				sdata->mainMenuState = MAIN_MENU_TITLE;
+				gGT->gameMode1 &= ~PAUSE_1;
 				if (gGT->levelID != MAIN_MENU_LEVEL)
 				{
 					// Connection-loss teardown must not depend on the old race's
@@ -132,7 +145,7 @@ u32 main(void)
 				}
 				else if (LOAD_IsOpen_MainMenu())
 				{
-					RaceFlag_SetFullyOffScreen();
+					RaceFlag_SetFullyOnScreen();
 					MM_JumpTo_Title_Returning();
 				}
 			}
@@ -204,11 +217,7 @@ u32 main(void)
 			                                        gGT->levelID - NITRO_COURT < 7))
 				{
 #if defined(__vita__)
-					if (NativeAdhoc_IsConnected() && (uVar12 == AUDIO_RACE_INTRO))
-					{
-						Platform_Log("[CTR Adhoc] race intro audio deferred until simulation START\n");
-					}
-					else
+					if (!(NativeAdhoc_IsConnected() && (uVar12 == AUDIO_RACE_INTRO)))
 #endif
 					{
 						Audio_SetState_Safe(uVar12);
