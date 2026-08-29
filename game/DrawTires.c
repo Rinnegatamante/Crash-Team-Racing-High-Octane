@@ -532,7 +532,7 @@ static int DrawTiresSolid_EmitProjectedWheel(struct DrawTiresScratch *scratch, s
 }
 
 #if defined(__vita__)
-static int DrawTiresSolid_WheelFitsGteInput(const struct DrawTiresScratch *scratch, int wheelIndex)
+static int DrawTires_WheelFitsGteInput(const struct DrawTiresScratch *scratch, int wheelIndex)
 {
 	const struct DrawTiresWheelLocal *wheelLocal = &scratch->wheelLocal[wheelIndex];
 	const SVec3Slot *axisA = &scratch->tireAxisA[wheelIndex];
@@ -567,7 +567,7 @@ static int DrawTiresSolid_ProjectWheelQuads(struct DrawTiresScratch *scratch, st
 	for (int wheelIndex = 3; wheelIndex >= 0; wheelIndex--)
 	{
 #if defined(__vita__)
-		if (NativeAdhoc_IsSingleViewRenderActive() && !DrawTiresSolid_WheelFitsGteInput(scratch, wheelIndex))
+		if (!DrawTires_WheelFitsGteInput(scratch, wheelIndex))
 		{
 			continue;
 		}
@@ -1157,6 +1157,12 @@ static int DrawTiresReflection_ProjectWheelQuads(struct DrawTiresScratch *scratc
 	// reflected SXY scratch order used by the later jump-table primitive path.
 	for (int wheelIndex = 3; wheelIndex >= 0; wheelIndex--)
 	{
+#if defined(__vita__)
+		if (!DrawTires_WheelFitsGteInput(scratch, wheelIndex))
+		{
+			continue;
+		}
+#endif
 		DrawTiresReflection_LoadCorner(scratch, 0, wheelIndex, -1, -1);
 		DrawTiresReflection_LoadCorner(scratch, 1, wheelIndex, 1, -1);
 		DrawTiresReflection_LoadCorner(scratch, 2, wheelIndex, -1, 1);
