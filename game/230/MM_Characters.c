@@ -15,8 +15,13 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
 #if defined(__vita__)
 	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
+	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 0x10,
+	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
+	MM_CHARACTER_SELECT_TRANSITION_META_COUNT = 0x16,
 #else
 	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
+	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 0xf,
+	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x10,
 #endif
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
@@ -33,8 +38,6 @@ enum
 	MM_CHARACTER_SELECT_LAYOUT_4P = 3,
 	MM_CHARACTER_SELECT_LAYOUT_1P_LIMITED = 4,
 	MM_CHARACTER_SELECT_LAYOUT_2P_LIMITED = 5,
-	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 15,
-	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x10,
 	MM_CHARACTER_SELECT_3P_TITLE_X = 0x9c,
 	MM_CHARACTER_SELECT_3P_SELECT_Y = 0x14,
 	MM_CHARACTER_SELECT_3P_CHARACTER_Y = 0x26,
@@ -431,6 +434,70 @@ internal struct CharacterSelectMeta *MM_Characters_GetOxideMetaForLayout(s32 lay
 	default:
 		return D230.characterSelectMetaByLayout[layoutIndex];
 	}
+}
+
+static struct TransitionMeta s_oxideCharacterSelectTransition1P2P[MM_CHARACTER_SELECT_TRANSITION_META_COUNT];
+static struct TransitionMeta s_oxideCharacterSelectTransition3P[MM_CHARACTER_SELECT_TRANSITION_META_COUNT];
+static struct TransitionMeta s_oxideCharacterSelectTransition4P[MM_CHARACTER_SELECT_TRANSITION_META_COUNT];
+static b32 s_oxideCharacterSelectTransitionsInitialized;
+
+static void MM_Characters_InitOxideTransitions(void)
+{
+	if (s_oxideCharacterSelectTransitionsInitialized)
+	{
+		return;
+	}
+
+	struct TransitionMeta *sources[3] = {
+		D230.characterSelectTransition1P2P,
+		D230.characterSelectTransition3P,
+		D230.characterSelectTransition4P,
+	};
+	struct TransitionMeta *destinations[3] = {
+		s_oxideCharacterSelectTransition1P2P,
+		s_oxideCharacterSelectTransition3P,
+		s_oxideCharacterSelectTransition4P,
+	};
+	const s16 oxideHeadStarts[3] = {1, 5, 3};
+
+	for (s32 layout = 0; layout < 3; layout++)
+	{
+		struct TransitionMeta *src = sources[layout];
+		struct TransitionMeta *dst = destinations[layout];
+
+		for (s32 i = 0; i < 0xf; i++)
+		{
+			dst[i] = src[i];
+		}
+
+		dst[0xf].distX = src[0xe].distX;
+		dst[0xf].distY = src[0xe].distY;
+		dst[0xf].headStart = oxideHeadStarts[layout];
+		dst[0xf].currX = 0;
+		dst[0xf].currY = 0;
+
+		for (s32 i = 0xf; i < 0x15; i++)
+		{
+			dst[i + 1] = src[i];
+		}
+	}
+
+	s_oxideCharacterSelectTransitionsInitialized = true;
+}
+
+static struct TransitionMeta *MM_Characters_GetOxideTransitionsForPlayerCount(s32 numPlayers)
+{
+	MM_Characters_InitOxideTransitions();
+
+	if (numPlayers <= 2)
+	{
+		return s_oxideCharacterSelectTransition1P2P;
+	}
+	if (numPlayers == 3)
+	{
+		return s_oxideCharacterSelectTransition3P;
+	}
+	return s_oxideCharacterSelectTransition4P;
 }
 #endif
 
@@ -832,7 +899,11 @@ void MM_Characters_SetMenuLayout(void)
 
 	D230.characterSelectNameTextY = D230.characterSelectLayout.textY[layoutIndex];
 
+#if defined(__vita__)
+	D230.characterSelectTransitionMeta = MM_Characters_GetOxideTransitionsForPlayerCount(numPlyrNextGame);
+#else
 	D230.characterSelectTransitionMeta = D230.characterSelectTransitionByPlayerCount[numPlyrNextGame - 1];
+#endif
 
 	return;
 }
