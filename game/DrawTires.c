@@ -531,6 +531,33 @@ static int DrawTiresSolid_EmitProjectedWheel(struct DrawTiresScratch *scratch, s
 	return 1;
 }
 
+#if defined(__vita__)
+static int DrawTiresSolid_WheelFitsGteInput(const struct DrawTiresScratch *scratch, int wheelIndex)
+{
+	const struct DrawTiresWheelLocal *wheelLocal = &scratch->wheelLocal[wheelIndex];
+	const SVec3Slot *axisA = &scratch->tireAxisA[wheelIndex];
+	const SVec3Slot *axisB = &scratch->tireAxisB[wheelIndex];
+	static const int axisSign[4] = {-1, 1, -1, 1};
+	static const int rimSign[4] = {-1, -1, 1, 1};
+
+	for (int corner = 0; corner < 4; corner++)
+	{
+		int x = wheelLocal->center.x + axisSign[corner] * axisA->x + rimSign[corner] * axisB->x;
+		int y = wheelLocal->center.y + axisSign[corner] * axisA->y + rimSign[corner] * axisB->y;
+		int z = wheelLocal->center.z.lo + axisSign[corner] * axisA->z + rimSign[corner] * axisB->z;
+
+		if ((x < -0x8000) || (x > 0x7fff) ||
+		    (y < -0x8000) || (y > 0x7fff) ||
+		    (z < -0x8000) || (z > 0x7fff))
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+#endif
+
 static int DrawTiresSolid_ProjectWheelQuads(struct DrawTiresScratch *scratch, struct PrimMem *primMem, int *primCount)
 {
 	// NOTE(aalhendi): PSX-backfeed blocker: retail DrawTires_Solid walks the
@@ -539,6 +566,12 @@ static int DrawTiresSolid_ProjectWheelQuads(struct DrawTiresScratch *scratch, st
 	// depth-bias scratch updates, UV copy, and OT linking.
 	for (int wheelIndex = 3; wheelIndex >= 0; wheelIndex--)
 	{
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive() && !DrawTiresSolid_WheelFitsGteInput(scratch, wheelIndex))
+		{
+			continue;
+		}
+#endif
 		DrawTiresSolid_LoadCorner(scratch, 0, wheelIndex, -1, -1);
 		DrawTiresSolid_LoadCorner(scratch, 1, wheelIndex, 1, -1);
 		DrawTiresSolid_LoadCorner(scratch, 2, wheelIndex, -1, 1);

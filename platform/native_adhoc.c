@@ -14,7 +14,7 @@
 #include <vitasdk.h>
 
 #define NATIVE_ADHOC_MAGIC 0x41485443u
-#define NATIVE_ADHOC_VERSION 7u
+#define NATIVE_ADHOC_VERSION 8u
 #define NATIVE_ADHOC_PORT 31847
 #define NATIVE_ADHOC_PDP_BUFSIZE 0x8000
 #define NATIVE_ADHOC_NET_MEMORY_SIZE (1024 * 1024)
@@ -38,6 +38,7 @@
 CTR_STATIC_ASSERT((NATIVE_ADHOC_INPUT_RING_SIZE & NATIVE_ADHOC_INPUT_RING_MASK) == 0);
 
 extern int cfg_language;
+extern int gNativeMirrorModeEnabled;
 
 enum NativeAdhocPacketType
 {
@@ -76,6 +77,10 @@ struct NativeAdhocWelcomePacket
 {
 	struct NativeAdhocPacketHeader header;
 	u32 sessionId;
+	u32 build;
+	u32 unlocks[GAME_PROGRESS_UNLOCK_WORD_COUNT];
+	u8 mirrorMode;
+	u8 reserved[3];
 };
 
 struct NativeAdhocMenuInputPacket
@@ -113,6 +118,7 @@ struct NativeAdhocSessionPacket
 	s32 arcadeDifficulty;
 	s32 numLaps;
 	s32 language;
+	s32 mirrorMode;
 	s16 characterIDs[8];
 	u32 randomNumber;
 	u32 deadcoed0;
@@ -132,6 +138,7 @@ struct NativeAdhocReadyPacket
 	s32 arcadeDifficulty;
 	s32 numLaps;
 	s32 language;
+	s32 mirrorMode;
 	s16 characterIDs[8];
 };
 
@@ -229,7 +236,8 @@ struct NativeAdhocRaceConfigPacket
 	s32 language;
 	u8 p1Character;
 	u8 p2Character;
-	u8 reserved[2];
+	u8 mirrorMode;
+	u8 reserved;
 };
 
 struct NativeAdhocRaceConfigAckPacket
@@ -283,6 +291,9 @@ struct NativeAdhocContext
 	u32 lastPeerTime;
 	struct PlatformInputPadSnapshot remoteMenuPad;
 	int remoteMenuPadValid;
+	int sessionSettingsOverrideActive;
+	u32 localUnlocksBackup[GAME_PROGRESS_UNLOCK_WORD_COUNT];
+	int localMirrorModeBackup;
 
 	int raceSyncPending;
 	int raceLoadPrepared;
@@ -364,6 +375,36 @@ static int s_nativeAdhocConnectionLostNoticePending;
 
 static void NativeAdhoc_InitHeader(struct NativeAdhocPacketHeader *header, int type);
 static int NativeAdhoc_SendRaw(const SceNetEtherAddr *dst, const void *packet, int len);
+
+static void NativeAdhoc_ApplyHostSessionSettings(const struct NativeAdhocWelcomePacket *packet)
+{
+	if ((packet == NULL) || (sdata == NULL))
+	{
+		return;
+	}
+
+	if (!s_nativeAdhoc.sessionSettingsOverrideActive)
+	{
+		memcpy(s_nativeAdhoc.localUnlocksBackup, sdata->gameProgress.unlocks, sizeof(s_nativeAdhoc.localUnlocksBackup));
+		s_nativeAdhoc.localMirrorModeBackup = gNativeMirrorModeEnabled;
+		s_nativeAdhoc.sessionSettingsOverrideActive = 1;
+	}
+
+	memcpy(sdata->gameProgress.unlocks, packet->unlocks, sizeof(packet->unlocks));
+	gNativeMirrorModeEnabled = packet->mirrorMode != 0;
+}
+
+static void NativeAdhoc_RestoreLocalSessionSettings(void)
+{
+	if (!s_nativeAdhoc.sessionSettingsOverrideActive || (sdata == NULL))
+	{
+		return;
+	}
+
+	memcpy(sdata->gameProgress.unlocks, s_nativeAdhoc.localUnlocksBackup, sizeof(s_nativeAdhoc.localUnlocksBackup));
+	gNativeMirrorModeEnabled = s_nativeAdhoc.localMirrorModeBackup;
+	s_nativeAdhoc.sessionSettingsOverrideActive = 0;
+}
 
 static const SceNetEtherAddr s_nativeAdhocBroadcastMac =
 {
@@ -506,6 +547,7 @@ static void NativeAdhoc_FillRaceConfig(struct NativeAdhocRaceConfigPacket *packe
 	packet->language = cfg_language;
 	packet->p1Character = data.characterIDs[0];
 	packet->p2Character = s_nativeAdhoc.raceProposalP2;
+	packet->mirrorMode = gNativeMirrorModeEnabled != 0;
 }
 
 static void NativeAdhoc_SendRaceConfig(void)
@@ -549,6 +591,7 @@ static void NativeAdhoc_ApplyRaceConfig(const struct NativeAdhocRaceConfigPacket
 	cfg_language = packet->language;
 	data.characterIDs[0] = packet->p1Character;
 	data.characterIDs[1] = packet->p2Character;
+	gNativeMirrorModeEnabled = packet->mirrorMode != 0;
 }
 
 static void NativeAdhoc_PumpRaceConfig(u32 now)
@@ -805,6 +848,12 @@ static void NativeAdhoc_SendWelcome(const SceNetEtherAddr *dst)
 	memset(&packet, 0, sizeof(packet));
 	NativeAdhoc_InitHeader(&packet.header, NATIVE_ADHOC_PACKET_WELCOME);
 	packet.sessionId = s_nativeAdhoc.sessionId;
+	packet.build = BUILD;
+	if (sdata != NULL)
+	{
+		memcpy(packet.unlocks, sdata->gameProgress.unlocks, sizeof(packet.unlocks));
+	}
+	packet.mirrorMode = gNativeMirrorModeEnabled != 0;
 	NativeAdhoc_SendRaw(dst, &packet, sizeof(packet));
 }
 
@@ -1082,6 +1131,7 @@ static void NativeAdhoc_FillSession(struct NativeAdhocSessionPacket *packet, con
 	packet->arcadeDifficulty = gGT->arcadeDifficulty;
 	packet->numLaps = gGT->numLaps;
 	packet->language = cfg_language;
+	packet->mirrorMode = gNativeMirrorModeEnabled != 0;
 	memcpy(packet->characterIDs, data.characterIDs, sizeof(packet->characterIDs));
 	if (s_nativeAdhoc.raceLoadPrepared)
 	{
@@ -1119,7 +1169,8 @@ static int NativeAdhoc_SessionMatchesLocal(const struct NativeAdhocSessionPacket
 	}
 
 	if ((packet->build != BUILD) || (packet->levelID != gGT->levelID) || (packet->currLEV != gGT->currLEV) ||
-		(packet->arcadeDifficulty != gGT->arcadeDifficulty) || (packet->numLaps != gGT->numLaps) || (packet->language != cfg_language))
+		(packet->arcadeDifficulty != gGT->arcadeDifficulty) || (packet->numLaps != gGT->numLaps) || (packet->language != cfg_language) ||
+		(packet->mirrorMode != (gNativeMirrorModeEnabled != 0)))
 	{
 		return 0;
 	}
@@ -1139,6 +1190,7 @@ static void NativeAdhoc_ApplySessionConfig(const struct NativeAdhocSessionPacket
 	}
 
 	memcpy(data.characterIDs, packet->characterIDs, sizeof(packet->characterIDs));
+	gNativeMirrorModeEnabled = packet->mirrorMode != 0;
 	NativeAdhoc_ApplySessionSeeds(packet, gGT);
 }
 
@@ -1188,6 +1240,7 @@ static void NativeAdhoc_SendReady(void)
 	packet.arcadeDifficulty = gGT->arcadeDifficulty;
 	packet.numLaps = gGT->numLaps;
 	packet.language = cfg_language;
+	packet.mirrorMode = gNativeMirrorModeEnabled != 0;
 	memcpy(packet.characterIDs, data.characterIDs, sizeof(packet.characterIDs));
 	NativeAdhoc_SendRaw(&s_nativeAdhoc.peerMac, &packet, sizeof(packet));
 }
@@ -1201,6 +1254,7 @@ static int NativeAdhoc_ReadyMatchesSession(const struct NativeAdhocReadyPacket *
 		(packet->arcadeDifficulty == s_nativeAdhoc.session.arcadeDifficulty) &&
 		(packet->numLaps == s_nativeAdhoc.session.numLaps) &&
 		(packet->language == s_nativeAdhoc.session.language) &&
+		(packet->mirrorMode == s_nativeAdhoc.session.mirrorMode) &&
 		(memcmp(packet->characterIDs, s_nativeAdhoc.session.characterIDs, sizeof(packet->characterIDs)) == 0);
 }
 
@@ -1692,7 +1746,14 @@ static void NativeAdhoc_ReceivePackets(void)
 			if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT)
 			{
 				struct NativeAdhocWelcomePacket *packet = (struct NativeAdhocWelcomePacket *)buffer;
+				if (packet->build != BUILD)
+				{
+					Platform_Log("[CTR Adhoc] host build mismatch %u/%u\n", packet->build, (u32)BUILD);
+					s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
+					continue;
+				}
 				s_nativeAdhoc.sessionId = packet->sessionId;
+				NativeAdhoc_ApplyHostSessionSettings(packet);
 				NativeAdhoc_SetPeer(&src);
 			}
 			continue;
@@ -2173,6 +2234,7 @@ int NativeAdhoc_Begin(int role)
 
 void NativeAdhoc_Shutdown(void)
 {
+	NativeAdhoc_RestoreLocalSessionSettings();
 	NativeAdhoc_FreeSnapshotBuffers();
 	if (s_nativeAdhoc.dialogRunning)
 	{
@@ -2554,6 +2616,18 @@ int NativeAdhoc_ShouldPresentDriver(int driverID)
 	return driverID == NativeAdhoc_GetLocalPlayerIndex();
 }
 
+int NativeAdhoc_ShouldPresentInteractionVoice(int speakerDriverID, int otherDriverID)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	if (!NativeAdhoc_IsConnected() || (gGT == NULL) || (gGT->numPlyrCurrGame != 2) || ((gGT->gameMode1 & MAIN_MENU) != 0))
+	{
+		return 1;
+	}
+
+	int localDriverID = NativeAdhoc_GetLocalPlayerIndex();
+	return (speakerDriverID == localDriverID) || (otherDriverID == localDriverID);
+}
+
 int NativeAdhoc_ShouldReturnToMainMenu(void)
 {
 	return s_nativeAdhocReturnToMainMenuPending;
@@ -2765,6 +2839,13 @@ int NativeAdhoc_IsDialogRunning(void)
 int NativeAdhoc_ShouldPresentDriver(int driverID)
 {
 	(void)driverID;
+	return 1;
+}
+
+int NativeAdhoc_ShouldPresentInteractionVoice(int speakerDriverID, int otherDriverID)
+{
+	(void)speakerDriverID;
+	(void)otherDriverID;
 	return 1;
 }
 

@@ -41,6 +41,7 @@ int NativeAdhoc_IsConnected(void);
 int NativeAdhoc_IsSimulationActive(void);
 int NativeAdhoc_IsDialogRunning(void);
 int NativeAdhoc_ShouldPresentDriver(int driverID);
+int NativeAdhoc_ShouldPresentInteractionVoice(int speakerDriverID, int otherDriverID);
 int NativeAdhoc_ShouldReturnToMainMenu(void);
 void NativeAdhoc_RequestReturnToMainMenu(void);
 void NativeAdhoc_AcknowledgeReturnToMainMenu(void);

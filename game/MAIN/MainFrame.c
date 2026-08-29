@@ -802,11 +802,7 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		// records even though the camera record contains the driver's quad. That
 		// record still omits parts of the ship, so merge these two local PVS sets
 		// instead of disabling visibility for the whole level.
-#if defined(__vita__)
-		if ((gGT->levelID == CRASH_COVE) && !NativeAdhoc_IsSingleViewRenderActive())
-#else
 		if (gGT->levelID == CRASH_COVE)
-#endif
 		{
 			int hadDriverPVS = (camDC->flags & 0x2000) != 0;
 			int needsDriverPVS =

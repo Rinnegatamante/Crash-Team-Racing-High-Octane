@@ -1135,10 +1135,6 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			gGT->visMem1->visFaceList[renderSlot],
 			level1->ptr_tex_waterEnvMap);
 
-		// DrawLevelOvr1P is free to leave OFX/OFY/H changed. Retail normally
-		// inherits a matching viewport here; the synthetic fullscreen PushBuffer
-		// must restore it explicitly before DrawSky_Full performs its RTPT tests.
-		PushBuffer_SetPsyqGeom(pushBuffer);
 		DrawSky_Full(level1->ptr_skybox, pushBuffer, &gGT->backBuffer->primMem);
 
 		if ((level1->configFlags & 1) != 0)

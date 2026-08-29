@@ -2503,11 +2503,13 @@ void VehPhysProc_SpinFirst_Init(struct Thread *t, struct Driver *d)
 	}
 
 #if defined(__vita__)
-	if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+	int interactionDriverID = d->pendingDamageAttacker != NULL ? d->pendingDamageAttacker->driverID : -1;
+	if (NativeAdhoc_ShouldPresentInteractionVoice(d->driverID, interactionDriverID))
 #endif
 	{
 		Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, data.characterIDs[d->driverID], VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
 	}
+	d->pendingDamageAttacker = NULL;
 
 	// if spinning left
 	d->KartStates.Spinning.spinDir = 1;

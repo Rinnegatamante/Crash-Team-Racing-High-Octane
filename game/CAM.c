@@ -310,9 +310,20 @@ void CAM_ClearScreen(struct GameTracker *gGT)
 	struct DB *backDB = gGT->backBuffer;
 	TILE *tile = backDB->primMem.cursor;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		numPlyr = 1;
+	}
+#endif
+
 	for (s32 loop = 0; loop < numPlyr; loop++)
 	{
+#if defined(__vita__)
+		struct PushBuffer *pb = NativeAdhoc_IsSingleViewRenderActive() ? NativeAdhoc_GetRenderPushBuffer() : &gGT->pushBuffer[loop];
+#else
 		struct PushBuffer *pb = &gGT->pushBuffer[loop];
+#endif
 		uint32_t *endOT = &pb->ptrOT[0x3FF];
 
 		s16 x = pb->rect.x;
