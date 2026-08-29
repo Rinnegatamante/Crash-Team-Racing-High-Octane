@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<livearea style="ad0" format-ver="01.00" content-rev="1"> 
+	<livearea-background>
+		<image>bg.png</image> 
+	</livearea-background>
+
+	<frame id='frame1' multi='o' autoflip='1' >  
+		<liveitem> 
+			<target>psla:eboot</target>
+			<image y="5" x="-105" width="285" height="161">startup.png</image>  
+		</liveitem>
+	</frame>
+
+	<frame id="frame3">
+		<liveitem>
+			<text align="left" text-align="left" word-wrap="off" ellipsis="on">
+				<str size="22" color="#05b1f0" shadow="on">By Rinnegatamante</str>
+			</text>
+		</liveitem>
+	</frame>
+</livearea>
