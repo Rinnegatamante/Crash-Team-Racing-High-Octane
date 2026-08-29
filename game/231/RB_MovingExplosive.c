@@ -190,28 +190,6 @@ LAB_800adc08:;
 		inst->animFrame = 0;
 	}
 
-#if defined(CTR_NATIVE)
-	if (
-	    // if missile
-	    (modelID == DYNAMIC_ROCKET) &&
-
-	    // numPlyrCurrGame < 2
-	    (sdata->gGT->numPlyrCurrGame < 2))
-	{
-		// Make Instane in Particle Pool
-		struct Particle *p;
-		// NOTE(aalhendi): Native uses retail emitter bytes from 0x800b2ae4.
-		p = Particle_Init(0, gGT->iconGroup[0], &R231.emSet_Missile[0]);
-
-		if (p != 0)
-		{
-			p->axis[0].startVal = inst->matrix.t[0] << 8;
-			p->axis[1].startVal = inst->matrix.t[1] << 8;
-			p->axis[2].startVal = inst->matrix.t[2] << 8;
-		}
-	}
-#endif
-
 	int elapsedTime = gGT->elapsedTimeMS;
 	inst->matrix.t[0] += (((int)tw->vel.x * elapsedTime) >> 5);
 	inst->matrix.t[1] += (((int)tw->vel.y * elapsedTime) >> 5);
