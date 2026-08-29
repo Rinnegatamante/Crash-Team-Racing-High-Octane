@@ -2717,24 +2717,58 @@ u32 NativeAdhoc_GetSimulationFrame(void)
 	return s_nativeAdhoc.simulationFrame;
 }
 
+enum NativeAdhocStatusText
+{
+	NATIVE_ADHOC_TEXT_SYNCHRONIZING = 0,
+	NATIVE_ADHOC_TEXT_SETUP,
+	NATIVE_ADHOC_TEXT_WAITING_CLIENT,
+	NATIVE_ADHOC_TEXT_SEARCHING_HOST,
+	NATIVE_ADHOC_TEXT_PLAYER_CONNECTED,
+	NATIVE_ADHOC_TEXT_CONNECTION_ERROR,
+	NATIVE_ADHOC_TEXT_ADHOC,
+	NATIVE_ADHOC_TEXT_COUNT,
+};
+
+static const char *s_nativeAdhocStatusText[6][NATIVE_ADHOC_TEXT_COUNT] =
+{
+	{"SYNCING GAME", "SETUP ADHOC", "WAITING CLIENT", "SEARCHING HOST", "PLAYER CONNECTED", "CONNECTION ERROR", "ADHOC"},
+	{"SYNCHRO JEU", "CONFIG ADHOC", "ATTENTE CLIENT", "CHERCHE HOTE", "JOUEUR CONNECTE", "ERREUR CONNEXION", "ADHOC"},
+	{"SPIEL SYNCHRO", "ADHOC SETUP", "WARTE AUF CLIENT", "SUCHE HOST", "SPIELER ONLINE", "NETZWERKFEHLER", "ADHOC"},
+	{"SYNC PARTITA", "CONFIGURA ADHOC", "ATTESA CLIENT", "RICERCA HOST", "GIOCATORE ONLINE", "ERRORE RETE", "ADHOC"},
+	{"SINC. JUEGO", "CONFIGURA ADHOC", "ESPERA CLIENTE", "BUSCANDO HOST", "JUGADOR CONECTADO", "ERROR CONEXION", "ADHOC"},
+	{"SPEL SYNCHRO", "ADHOC INSTELLEN", "WACHT OP CLIENT", "HOST ZOEKEN", "SPELER VERBONDEN", "VERBINDINGSFOUT", "ADHOC"},
+};
+
+static int NativeAdhoc_GetStatusLanguageRow(void)
+{
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		return cfg_language - 2;
+	}
+	return 0;
+}
+
 const char *NativeAdhoc_GetStatusText(void)
 {
+	const char **text = s_nativeAdhocStatusText[NativeAdhoc_GetStatusLanguageRow()];
+
 	if ((s_nativeAdhoc.status == NATIVE_ADHOC_STATUS_CONNECTED) && s_nativeAdhoc.localLevelReady && !s_nativeAdhoc.simulationActive)
 	{
-		return "SYNCHRONIZING GAME";
+		return text[NATIVE_ADHOC_TEXT_SYNCHRONIZING];
 	}
+
 	switch (s_nativeAdhoc.status)
 	{
 	case NATIVE_ADHOC_STATUS_DIALOG:
-		return "SELECT ADHOC NETWORK";
+		return text[NATIVE_ADHOC_TEXT_SETUP];
 	case NATIVE_ADHOC_STATUS_WAITING:
-		return s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST ? "WAITING FOR PLAYER" : "SEARCHING FOR HOST";
+		return text[s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST ? NATIVE_ADHOC_TEXT_WAITING_CLIENT : NATIVE_ADHOC_TEXT_SEARCHING_HOST];
 	case NATIVE_ADHOC_STATUS_CONNECTED:
-		return "PLAYER CONNECTED";
+		return text[NATIVE_ADHOC_TEXT_PLAYER_CONNECTED];
 	case NATIVE_ADHOC_STATUS_ERROR:
-		return "ADHOC CONNECTION ERROR";
+		return text[NATIVE_ADHOC_TEXT_CONNECTION_ERROR];
 	default:
-		return "ADHOC";
+		return text[NATIVE_ADHOC_TEXT_ADHOC];
 	}
 }
 
