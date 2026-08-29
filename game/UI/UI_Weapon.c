@@ -15,7 +15,6 @@ enum UIWeaponConstants
 	UI_WEAPON_ITEM_ROULETTE = HELD_ITEM_ROULETTE,
 	UI_WEAPON_ICON_BASE = 5,
 	UI_WEAPON_JUICED_ICON_BASE = 0x11,
-	UI_WEAPON_MASK_GOOD_CHARACTER_BITS = 0xc9,
 	UI_WEAPON_MASK_UKA_ICON = 0x32,
 	UI_WEAPON_ROULETTE_RACING_COUNT = 0xc,
 	UI_WEAPON_ROULETTE_BATTLE_COUNT = 0xe,
@@ -43,7 +42,6 @@ CTR_STATIC_ASSERT(UI_WEAPON_ITEM_NONE == 0xf);
 CTR_STATIC_ASSERT(UI_WEAPON_ITEM_ROULETTE == 0x10);
 CTR_STATIC_ASSERT(UI_WEAPON_ICON_BASE == 5);
 CTR_STATIC_ASSERT(UI_WEAPON_JUICED_ICON_BASE == 0x11);
-CTR_STATIC_ASSERT(UI_WEAPON_MASK_GOOD_CHARACTER_BITS == 0xc9);
 CTR_STATIC_ASSERT(UI_WEAPON_MASK_UKA_ICON == 0x32);
 CTR_STATIC_ASSERT(UI_WEAPON_ROULETTE_RACING_COUNT == 0xc);
 CTR_STATIC_ASSERT(UI_WEAPON_ROULETTE_BATTLE_COUNT == 0xe);
@@ -64,7 +62,6 @@ static const u32 UI_WEAPON_BG_SHINE_COLOR = 0xff0000u;
 void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 
 {
-	u32 characterID;
 	int itemID;
 	int iconID;
 	SVec2 pos;
@@ -84,17 +81,12 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 		iconID = itemID + UI_WEAPON_ICON_BASE;
 		sdata->s_spacebar[0] = d->numHeldItems + '0';
 
-		// character ID
-		characterID = data.characterIDs[d->driverID];
 
 		// if mask item
 		if (itemID == UI_WEAPON_ITEM_MASK)
 		{
-			// Crash, Coco, Pura, Polar, NO Penta
-			u32 goodMaskCharacterBits = UI_WEAPON_MASK_GOOD_CHARACTER_BITS;
-
 			// This is a bad guy, change icon to Uka
-			if (((goodMaskCharacterBits >> characterID) & 1) == 0)
+			if (!VehPickupItem_MaskBoolGoodGuy(d))
 			{
 				iconID = UI_WEAPON_MASK_UKA_ICON;
 			}
