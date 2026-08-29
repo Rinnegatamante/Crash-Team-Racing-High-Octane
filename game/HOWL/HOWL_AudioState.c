@@ -142,88 +142,118 @@ void Audio_AdvHub_SwapSong(int levelID)
 	}
 }
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d554-0x8002d67c
+static int Audio_GetActiveMaskSongForDriver(struct Driver *driver)
+{
+	if ((driver == NULL) || ((driver->actionsFlagSet & ACTION_BOT) != 0) || (driver->instSelf == NULL) || (driver->instSelf->thread == NULL))
+	{
+		return 0;
+	}
+
+	if ((driver->kartState == KS_MASK_GRABBED) || (driver->kartState == KS_ENGINE_REVVING))
+	{
+		return 0;
+	}
+
+	for (struct Thread *itemThread = driver->instSelf->thread->childThread; itemThread != NULL; itemThread = itemThread->siblingThread)
+	{
+		if ((itemThread->flags & THREAD_FLAG_DEAD) != 0)
+		{
+			continue;
+		}
+
+		if ((itemThread->modelIndex != STATIC_AKUAKU) && (itemThread->modelIndex != STATIC_UKAUKA))
+		{
+			continue;
+		}
+
+		if (itemThread->funcThTick != RB_MaskWeapon_ThTick)
+		{
+			continue;
+		}
+
+		struct MaskHeadWeapon *mask = itemThread->object;
+		if ((mask == NULL) || (mask->duration <= 0))
+		{
+			continue;
+		}
+
+		return (itemThread->modelIndex == STATIC_AKUAKU) ? CSEQ_SONG_AKU : CSEQ_SONG_UKA;
+	}
+
+	return 0;
+}
+
+static void Audio_ApplyMaskSong(struct GameTracker *gGT, int songID, u32 tempo)
+{
+	Music_Adjust((u32)songID, tempo, 0, 0);
+
+	gGT->gameMode1 &= ~(UKA_SONG | AKU_SONG);
+	if (songID == CSEQ_SONG_AKU)
+	{
+		gGT->gameMode1 |= AKU_SONG;
+	}
+	else if (songID == CSEQ_SONG_UKA)
+	{
+		gGT->gameMode1 |= UKA_SONG;
+	}
+}
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d554-0x8002d67c.
 void Audio_SetMaskSong(u32 tempo)
 {
-	s32 i;
-	u8 isMaskUsed;
-	u32 songID;
 	struct GameTracker *gGT = sdata->gGT;
-	u32 gameMode = gGT->gameMode1;
 
 #if defined(__vita__)
 	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2))
 	{
 		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
-		struct Driver *localDriver = gGT->drivers[localPlayer];
-		int localSongID = 0;
+		int songID = 0;
 
-		if ((localDriver != NULL) && ((localDriver->actionsFlagSet & ACTION_MASK_WEAPON) != 0) && (localDriver->instSelf != NULL) &&
-		    (localDriver->instSelf->thread != NULL))
+		if ((localPlayer >= 0) && (localPlayer < len(gGT->drivers)))
 		{
-			for (struct Thread *itemThread = localDriver->instSelf->thread->childThread; itemThread != NULL; itemThread = itemThread->siblingThread)
-			{
-				if (itemThread->modelIndex == STATIC_AKUAKU)
-				{
-					localSongID = 1;
-					break;
-				}
-				if (itemThread->modelIndex == STATIC_UKAUKA)
-				{
-					localSongID = 2;
-					break;
-				}
-			}
+			songID = Audio_GetActiveMaskSongForDriver(gGT->drivers[localPlayer]);
 		}
 
-		Music_Adjust(localSongID, tempo, 0, 0);
+		Audio_ApplyMaskSong(gGT, songID, tempo);
 		return;
 	}
 #endif
 
-	// Assume no player is using a mask
-	isMaskUsed = false;
+	b32 hasAku = false;
+	b32 hasUka = false;
 
-	for (i = 0; i < gGT->numPlyrCurrGame; i++)
+	for (s32 i = 0; i < gGT->numPlyrCurrGame; i++)
 	{
-		if ((gGT->drivers[i]->actionsFlagSet & ACTION_MASK_WEAPON) != 0)
+		int driverSongID = Audio_GetActiveMaskSongForDriver(gGT->drivers[i]);
+		if (driverSongID == CSEQ_SONG_AKU)
 		{
-			// There is at least one player using a mask
-			isMaskUsed = true;
+			hasAku = true;
+		}
+		else if (driverSongID == CSEQ_SONG_UKA)
+		{
+			hasUka = true;
 		}
 	}
 
-	// If any player is using a mask
-	if (isMaskUsed)
+	int songID = 0;
+	if (((gGT->gameMode1 & UKA_SONG) != 0) && hasUka)
 	{
-		// Uka song is playing
-		songID = 2;
-
-		if (
-		    // If Uka song is playing
-		    ((gameMode & UKA_SONG) != 0) ||
-
-		    (
-		        // Aku song is playing
-		        songID = 1,
-
-		        // If Aku song is playing
-		        (gameMode & AKU_SONG) != 0))
-		{
-			Music_Adjust(songID, tempo, 0, 0);
-		}
+		songID = CSEQ_SONG_UKA;
+	}
+	else if (((gGT->gameMode1 & AKU_SONG) != 0) && hasAku)
+	{
+		songID = CSEQ_SONG_AKU;
+	}
+	else if (hasAku)
+	{
+		songID = CSEQ_SONG_AKU;
+	}
+	else if (hasUka)
+	{
+		songID = CSEQ_SONG_UKA;
 	}
 
-	// If no players are using mask
-	else
-	{
-		Music_Adjust(0, tempo, 0, 0);
-
-		if ((gameMode & (UKA_SONG | AKU_SONG)) != 0)
-		{
-			gGT->gameMode1 &= ~(UKA_SONG | AKU_SONG);
-		}
-	}
+	Audio_ApplyMaskSong(gGT, songID, tempo);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d67c-0x8002dc4c; CTR_NATIVE guards demo null-driver reads.
