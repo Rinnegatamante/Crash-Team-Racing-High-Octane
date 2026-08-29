@@ -52,6 +52,7 @@ It focuses on new features, enhancements and optimization.
 - Optimized the missiles powerup rendering effect. Now there won't be anymore framedrops when missiles are on screen.
 - Fixed a bug in vanilla game that was causing Penta Penguin powerup HUD to show Uka-Uka instead of Aku-Aku.
 - Fixed a bug causing the Uka-Uka/Aku-Aku powerup to occasionally enter in stale setups, resulting in audio glitches (eg: powerup music playing permanently or playing when you were recovered from an out of track).
+- Added ability to skip the intro from the very first frame of the SCEA copyright screen by pressing START.
 
 ## Credits
 
