@@ -75,6 +75,13 @@ u32 main(void)
 	struct GamepadSystem *gGS;
 	gGS = sdata->gGamepads;
 
+#ifdef CTR_NATIVE
+	int nativeAdhocRunSimulation = 1;
+#endif
+#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
+	int nativeReplayFrameActive = 0;
+#endif
+
 	// NOTE(aalhendi): Retail main calls __main before the state loop. Native has
 	// no linked __main body, so keep this as a CTR_NATIVE-only divergence.
 #ifndef CTR_NATIVE
@@ -95,6 +102,59 @@ u32 main(void)
 		LOAD_NextQueuedFile();
 		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c5d0-0x8003c5dc for per-frame XA pause handling.
 		CDSYS_XAPauseAtEnd();
+
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldReturnToMainMenu() && (sdata->Loading.stage == LOAD_IDLE))
+		{
+			gGT = sdata->gGT;
+			gGS = sdata->gGamepads;
+			if (gGT != NULL)
+			{
+				// The adhoc race uses a 1P LEV with 2P gameplay. Once adhoc is shut
+				// down, any residual loading/checkered-flag frames must not fall back
+				// to the retail 2P visibility path on that 1P LEV.
+				gGT->numPlyrCurrGame = 1;
+				gGT->numPlyrNextGame = 1;
+			}
+
+			if (gGT != NULL)
+			{
+				// Consume the pause-background restore while the race buffers and
+				// instance pool are still valid. Starting a load with RESTORE pending
+				// can make ElimBG_HandleState touch stale race memory afterwards.
+				ElimBG_Deactivate(gGT);
+				ElimBG_HandleState(gGT);
+			}
+
+			NativeAdhoc_AcknowledgeReturnToMainMenu();
+			NativeAdhoc_Shutdown();
+			if (gGT != NULL)
+			{
+				GhostTape_Destroy();
+				sdata->Loading.OnBegin.AddBitsConfig0 |= MAIN_MENU;
+				sdata->Loading.OnBegin.RemBitsConfig0 |= ADVENTURE_ARENA;
+				sdata->mainMenuState = MAIN_MENU_TITLE;
+				gGT->gameMode1 &= ~PAUSE_1;
+				if (gGT->levelID != MAIN_MENU_LEVEL)
+				{
+					// Connection-loss teardown must not depend on the old race's
+					// RaceFlag transition reaching LOAD_REQUESTED. Cover the old
+					// scene immediately and start the menu load directly.
+					RaceFlag_SetFullyOnScreen();
+					MainRaceTrack_StartLoad(MAIN_MENU_LEVEL);
+				}
+				else if (LOAD_IsOpen_MainMenu())
+				{
+					RaceFlag_SetFullyOnScreen();
+					MM_JumpTo_Title_Returning();
+				}
+			}
+
+			// MainRaceTrack_RequestLoad can invalidate the current level visibility
+			// data immediately. Never execute one more game/render frame against it.
+			continue;
+		}
+#endif
 
 		switch (sdata->mainGameState)
 		{
@@ -161,7 +221,7 @@ u32 main(void)
 			// Arcade-Style track starts with intro cutscene
 			uVar12 = 9;
 
-			if (
+				if (
 			    // If Level ID is less than 18, it's one of the race tracks
 			    (gGT->levelID < NITRO_COURT) || (
 			                                        // Battle-Style track starts with traffic lights
@@ -169,10 +229,18 @@ u32 main(void)
 			                                        // Level ID >= 18 and < 23
 			                                        // Battle tracks
 			                                        gGT->levelID - NITRO_COURT < 7))
-			{
-				Audio_SetState_Safe(uVar12);
-			}
-			sdata->mainGameState = 3;
+				{
+#if defined(__vita__)
+					if (!(NativeAdhoc_IsConnected() && (uVar12 == AUDIO_RACE_INTRO)))
+#endif
+					{
+						Audio_SetState_Safe(uVar12);
+					}
+				}
+#ifdef CTR_NATIVE
+				NativeAdhoc_NotifyLevelReady(gGT);
+#endif
+				sdata->mainGameState = 3;
 			gGT->clockEffectEnabled &= 0xfffe;
 			break;
 
@@ -312,9 +380,37 @@ u32 main(void)
 				}
 			}
 
-			// =========== Main Game Loop ======================
+				// =========== Main Game Loop ======================
 
-			if ((
+#ifdef CTR_NATIVE
+				nativeAdhocRunSimulation = NativeAdhoc_BeginSimulationFrame(gGT);
+				if (!nativeAdhocRunSimulation)
+				{
+#if defined(__vita__)
+					if (NativeAdhoc_ShouldReturnToMainMenu())
+					{
+						continue;
+					}
+#endif
+					NativeAdhoc_WaitForFrame();
+					continue;
+				}
+#endif
+#if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
+				nativeReplayFrameActive = 0;
+				{
+					struct NativePerfFrameInfo perfFrameInfo = MainPerf_FrameInfo(gGT);
+
+					NativePerf_BeginFrame(&perfFrameInfo);
+				}
+#endif
+
+#ifdef CTR_NATIVE
+				if (nativeAdhocRunSimulation)
+				{
+#endif
+
+				if ((
 			        // Check value of traffic lights
 			        (-960 < gGT->trafficLightsTimer) &&
 			        // if not drawing intro race cutscene and if not paused
@@ -343,22 +439,26 @@ u32 main(void)
 				{
 					return 0;
 				}
-				NativeSaveState_BeginFrame();
-				gGT = sdata->gGT;
-				gGS = sdata->gGamepads;
-			}
-			{
-				struct NativePerfFrameInfo perfFrameInfo = MainPerf_FrameInfo(gGT);
-
-				NativePerf_BeginFrame(&perfFrameInfo);
-			}
+					NativeSaveState_BeginFrame();
+					gGT = sdata->gGT;
+					gGS = sdata->gGamepads;
+					nativeReplayFrameActive = 1;
+				}
 #endif
-			GAMEPAD_ProcessAnyoneVars(gGS);
+					GAMEPAD_ProcessAnyoneVars(gGS);
 
-			// Start new frame (ClearOTagR)
-			MainFrame_ResetDB(gGT);
+#ifdef CTR_NATIVE
+				}
+#endif
 
-			if (
+					// Start new frame (ClearOTagR)
+				MainFrame_ResetDB(gGT);
+
+#ifdef CTR_NATIVE
+				if (nativeAdhocRunSimulation)
+				{
+#endif
+				if (
 			    // If you're in Demo Mode
 			    (gGT->boolDemoMode != 0) &&
 
@@ -422,9 +522,14 @@ u32 main(void)
 #endif
 				MainFrame_GameLogic(gGT, gGS);
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
-				NativePerf_EndScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
+					NativePerf_EndScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
 #endif
-			}
+				}
+
+#ifdef CTR_NATIVE
+					NativeAdhoc_EndSimulationFrame(gGT);
+				}
+#endif
 
 			// If you are in demo mode
 			if (gGT->boolDemoMode != '\0')
@@ -458,8 +563,9 @@ u32 main(void)
 				AH_MaskHint_Update();
 			}
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
-			{
-				struct NativeReplaySchedulerFrameInfo replayFrameInfo = MainReplayScheduler_FrameInfo(gGT);
+				if (nativeReplayFrameActive)
+				{
+					struct NativeReplaySchedulerFrameInfo replayFrameInfo = MainReplayScheduler_FrameInfo(gGT);
 
 				if (NativeReplayScheduler_EndFrame(&replayFrameInfo) != 0)
 				{

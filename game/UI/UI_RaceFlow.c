@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum UIRaceEndMenuOption
 {
 	UI_RACE_END_OPTION_QUIT = 3,
@@ -121,6 +125,19 @@ void UI_RaceStart_IntroText1P(void)
 	int colors[2];
 
 	gGT = sdata->gGT;
+	struct CameraDC *introCamera = &gGT->cameraDC[0];
+	struct PushBuffer *introPB = &gGT->pushBuffer[0];
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() && (gGT->numPlyrCurrGame == 2))
+	{
+		introCamera = &gGT->cameraDC[NativeAdhoc_GetLocalPlayerIndex()];
+		struct PushBuffer *displayPB = NativeAdhoc_GetRenderPushBuffer();
+		if (displayPB != NULL)
+		{
+			introPB = displayPB;
+		}
+	}
+#endif
 
 	// by default, do not transition
 	// title bars to off-screen
@@ -210,10 +227,10 @@ void UI_RaceStart_IntroText1P(void)
 LAB_80055930:
 
 	// if fly-in animation is one second away from finishing
-	if (gGT->cameraDC->transitionFrame < UI_RACE_START_TITLE_EXIT_FRAME)
+	if (introCamera->transitionFrame < UI_RACE_START_TITLE_EXIT_FRAME)
 	{
 		// use this to transition title bars to off-screen
-		titleTransition = UI_RACE_START_TITLE_EXIT_BASE_FRAME - gGT->cameraDC->transitionFrame;
+		titleTransition = UI_RACE_START_TITLE_EXIT_BASE_FRAME - introCamera->transitionFrame;
 	}
 
 	// RaceFlag_IsFullyOnScreen
@@ -237,13 +254,13 @@ LAB_80055930:
 		    (((gGT->gameMode2 & CUP_ANY_KIND) == 0)))
 		{
 			// X-value, X + W/2
-			posX = gGT->pushBuffer[0].rect.x + ((gGT->pushBuffer[0].rect.w << 0x10) >> 0x11);
+			posX = introPB->rect.x + ((introPB->rect.w << 0x10) >> 0x11);
 
 			// string of top title bar
 			titleText = sdata->lngStrings[textID];
 
 			// Y-value that transitions title text to off-screen
-			titleY = gGT->pushBuffer[0].rect.y - (barTransition - UI_RACE_START_TITLE_TOP_Y_BIAS);
+			titleY = introPB->rect.y - (barTransition - UI_RACE_START_TITLE_TOP_Y_BIAS);
 		}
 
 		// If you are in any cup of any kind
@@ -254,9 +271,9 @@ LAB_80055930:
 			// uVar9 * 4
 			DecalFont_DrawLine(sdata->lngStrings[textID],
 
-			                   gGT->pushBuffer[0].rect.x + ((gGT->pushBuffer[0].rect.w << 0x10) >> 0x11),
+			                   introPB->rect.x + ((introPB->rect.w << 0x10) >> 0x11),
 
-			                   ((gGT->pushBuffer[0].rect.y - (titleTransition - UI_RACE_START_TITLE_TOP_Y_BIAS)) + UI_RACE_START_CUP_TITLE_Y_OFFSET), FONT_BIG,
+			                   ((introPB->rect.y - (titleTransition - UI_RACE_START_TITLE_TOP_Y_BIAS)) + UI_RACE_START_CUP_TITLE_Y_OFFSET), FONT_BIG,
 			                   (JUSTIFY_CENTER | ORANGE));
 
 			// Track 1/4, 2/4, 3/4, 4/4 in cup
@@ -277,7 +294,7 @@ LAB_80055930:
 			font = FONT_SMALL;
 
 			// Y-value that transitions title text to off-screen
-			titleY = (gGT->pushBuffer[0].rect.y - (titleTransition - UI_RACE_START_TITLE_TOP_Y_BIAS)) + UI_RACE_START_CUP_TRACK_Y_OFFSET;
+			titleY = (introPB->rect.y - (titleTransition - UI_RACE_START_TITLE_TOP_Y_BIAS)) + UI_RACE_START_CUP_TRACK_Y_OFFSET;
 		}
 
 		// Print top title text "Arcade, Time Trial, etc"
@@ -293,14 +310,14 @@ LAB_80055930:
 		    // Level ID
 		    sdata->lngStrings[data.metaDataLEV[gGT->levelID].name_LNG],
 
-		    gGT->pushBuffer[0].rect.x + ((gGT->pushBuffer[0].rect.w << 0x10) >> 0x11),
+		    introPB->rect.x + ((introPB->rect.w << 0x10) >> 0x11),
 
-		    (gGT->pushBuffer[0].rect.y + gGT->pushBuffer[0].rect.h + titleTransition + UI_RACE_START_LEVEL_TITLE_Y_OFFSET), FONT_BIG,
+		    (introPB->rect.y + introPB->rect.h + titleTransition + UI_RACE_START_LEVEL_TITLE_Y_OFFSET), FONT_BIG,
 		    (JUSTIFY_CENTER | ORANGE));
 
 		// same for all
-		rect.x = gGT->pushBuffer[0].rect.x;
-		rect.w = gGT->pushBuffer[0].rect.w;
+		rect.x = introPB->rect.x;
+		rect.w = introPB->rect.w;
 
 		// 2-pixel height
 		// random generic color
@@ -308,7 +325,7 @@ LAB_80055930:
 		rect.h = UI_RACE_START_DIVIDER_HEIGHT;
 
 		// Draw tiny rectangle near big black title bar (first)
-		rect.y = gGT->pushBuffer[0].rect.y - (barTransition - UI_RACE_START_DIVIDER_TOP_Y_OFFSET);
+		rect.y = introPB->rect.y - (barTransition - UI_RACE_START_DIVIDER_TOP_Y_OFFSET);
 
 		Color color;
 		color.self = colors[0];
@@ -318,7 +335,7 @@ LAB_80055930:
 		CTR_Box_DrawSolidBox(&rect, color, ot);
 
 		// Draw tiny rectangle near big black title bar (second)
-		rect.y = gGT->pushBuffer[0].rect.y + gGT->pushBuffer[0].rect.h + barTransition + UI_RACE_START_DIVIDER_BOTTOM_Y_OFFSET;
+		rect.y = introPB->rect.y + introPB->rect.h + barTransition + UI_RACE_START_DIVIDER_BOTTOM_Y_OFFSET;
 		CTR_Box_DrawSolidBox(&rect, color, ot);
 
 		// 30-pixel height
@@ -328,11 +345,11 @@ LAB_80055930:
 		rect.h = UI_RACE_START_BAR_HEIGHT;
 
 		// draw big black title bar (first)
-		rect.y = gGT->pushBuffer[0].rect.y - barTransition;
+		rect.y = introPB->rect.y - barTransition;
 		CTR_Box_DrawSolidBox(&rect, color, ot);
 
 		// draw big black title bar (second)
-		rect.y = gGT->pushBuffer[0].rect.y + gGT->pushBuffer[0].rect.h + barTransition + UI_RACE_START_DIVIDER_BOTTOM_Y_OFFSET;
+		rect.y = introPB->rect.y + introPB->rect.h + barTransition + UI_RACE_START_DIVIDER_BOTTOM_Y_OFFSET;
 		CTR_Box_DrawSolidBox(&rect, color, ot);
 	}
 	return;
@@ -417,6 +434,14 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 
 		// go back to main menu
 		sdata->mainMenuState = MAIN_MENU_TITLE;
+
+#if defined(__vita__)
+		if (NativeAdhoc_IsActive())
+		{
+			NativeAdhoc_RequestReturnToMainMenu();
+			break;
+		}
+#endif
 
 		// load LEV of main menu
 		MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);

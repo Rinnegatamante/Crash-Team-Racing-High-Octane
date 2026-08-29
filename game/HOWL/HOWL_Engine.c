@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // Initialize car engine audio system for one driver
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80028880-0x800289b0
 b32 EngineAudio_InitOnce(u32 soundID, u32 flags)
@@ -315,8 +319,15 @@ void EngineSound_Player(struct Driver *driver)
 	}
 
 	u32 echo = ((driver->actionsFlagSet & ACTION_ENGINE_ECHO) != 0) ? 1 : 0;
-
-	EngineAudio_Recalculate(((engine * 4) + id) & 0xffff, HowlSfx_Pack(lr, distortion, volume, echo));
+	u32 engineSlot = ((engine * 4) + id) & 0xffff;
+#if defined(__vita__)
+	if (!NativeAdhoc_ShouldPresentDriver(id))
+	{
+		EngineAudio_Stop(engineSlot);
+		return;
+	}
+#endif
+	EngineAudio_Recalculate(engineSlot, HowlSfx_Pack(lr, distortion, volume, echo));
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002fc28-0x8002fc64

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // budget: 4624
 // curr: 4380
 
@@ -507,7 +511,12 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 			}
 
 			// sound of getting weapon
-			OtherFX_Play(itemSound, hasJuicedWumpa);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+			{
+				OtherFX_Play(itemSound, hasJuicedWumpa);
+			}
 		}
 
 		// if Item roll is not done
@@ -2035,7 +2044,12 @@ void VehPhysProc_PowerSlide_Update(struct Thread *t, struct Driver *d)
 			// If bar is full
 			if (meterLeft == 0)
 			{
-				OtherFX_Play_Echo(VEH_PHYS_PROC_DRIFT_METER_FULL_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+#if defined(__vita__)
+				if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+				{
+					OtherFX_Play_Echo(VEH_PHYS_PROC_DRIFT_METER_FULL_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+				}
 
 
 				// Add to your number of boost attempts, this makes it
@@ -2488,7 +2502,14 @@ void VehPhysProc_SpinFirst_Init(struct Thread *t, struct Driver *d)
 		RB_Player_ModifyWumpa(d, -1);
 	}
 
-	Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, data.characterIDs[d->driverID], VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
+#if defined(__vita__)
+	int interactionDriverID = d->pendingDamageAttacker != NULL ? d->pendingDamageAttacker->driverID : -1;
+	if (NativeAdhoc_ShouldPresentInteractionVoice(d->driverID, interactionDriverID))
+#endif
+	{
+		Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, data.characterIDs[d->driverID], VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
+	}
+	d->pendingDamageAttacker = NULL;
 
 	// if spinning left
 	d->KartStates.Spinning.spinDir = 1;

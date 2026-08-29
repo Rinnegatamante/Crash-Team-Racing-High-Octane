@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800abbb4-0x800abefc.
 void RB_Player_KillPlayer(struct Driver *attacker, struct Driver *victim)
 {
@@ -193,7 +197,12 @@ void RB_Player_ModifyWumpa(struct Driver *driver, int wumpaDelta)
 	    (driver->numWumpas == DRIVER_WUMPA_JUICED_COUNT))
 	{
 		// Play "juiced up" sound
-		OtherFX_Play(0x41, 1);
+#if defined(__vita__)
+		if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
+#endif
+		{
+			OtherFX_Play(0x41, 1);
+		}
 
 		driver->BattleHUD.juicedUpCooldown = DRIVER_WUMPA_JUICED_HUD_COOLDOWN_FRAMES;
 	}

@@ -87,6 +87,12 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	int gameMode1;
 
 	struct GameTracker *gGT = sdata->gGT;
+#if defined(__vita__)
+	if (NativeAdhoc_EnforcePreparedRaceConfig(gGT))
+	{
+		levelLOD = LOAD_LEVEL_LOD_2P;
+	}
+#endif
 	gameMode1 = gGT->gameMode1;
 
 	int lastFileIndexMPK;

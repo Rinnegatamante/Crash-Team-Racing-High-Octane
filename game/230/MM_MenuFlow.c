@@ -30,6 +30,41 @@ enum MMNativeExtraDifficultyConstants
 	MM_NATIVE_DIFFICULTY_COUNT,
 };
 
+#if defined(__vita__)
+enum MMNativeAdhocMenuStage
+{
+	MM_NATIVE_ADHOC_STAGE_MAIN = 0,
+	MM_NATIVE_ADHOC_STAGE_MODE,
+	MM_NATIVE_ADHOC_STAGE_ROLE,
+	MM_NATIVE_ADHOC_STAGE_WAIT,
+	MM_NATIVE_ADHOC_STAGE_GAME_FLOW,
+	MM_NATIVE_ADHOC_MAIN_ROW = 6,
+};
+
+static const char *s_nativeAdhocHostText[MM_NATIVE_LANGUAGE_COUNT] =
+{
+	"HOST GAME",
+	"CREER PARTIE",
+	"SPIEL HOSTEN",
+	"CREA PARTITA",
+	"CREAR PARTIDA",
+	"SPEL HOSTEN",
+};
+
+static const char *s_nativeAdhocJoinText[MM_NATIVE_LANGUAGE_COUNT] =
+{
+	"JOIN GAME",
+	"REJOINDRE",
+	"BEITRETEN",
+	"UNISCITI",
+	"UNIRSE",
+	"DEELNEMEN",
+};
+
+static s16 s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
+static s16 s_nativeAdhocSuppressInputFrames;
+#endif
+
 static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1] =
 {
 	{LNG_EASY, 0, 1, 0, 0},
@@ -59,6 +94,55 @@ static struct MenuRow s_nativeLanguageRows[MM_NATIVE_LANGUAGE_COUNT + 1] =
 	{RECTMENU_STRING_NONE},
 };
 
+#if defined(__vita__)
+static void MM_NativeAdhocModeProc(struct RectMenu *menu);
+static void MM_NativeAdhocRoleProc(struct RectMenu *menu);
+static void MM_NativeAdhocWaitProc(struct RectMenu *menu);
+
+static struct MenuRow s_nativeAdhocModeRows[] =
+{
+	{LNG_ARCADE, 0, 0, 0, 0},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeAdhocRoleRows[] =
+{
+	{LNG_NA_241, 0, 1, 0, 0},
+	{LNG_NA_242, 0, 1, 1, 1},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeAdhocWaitRows[] =
+{
+	{LNG_CANCEL, 0, 0, 0, 0},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct RectMenu s_nativeAdhocModeMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_ADHOC,
+	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeAdhocModeRows,
+	.funcPtr = MM_NativeAdhocModeProc,
+};
+
+static struct RectMenu s_nativeAdhocRoleMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_ADHOC,
+	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeAdhocRoleRows,
+	.funcPtr = MM_NativeAdhocRoleProc,
+};
+
+static struct RectMenu s_nativeAdhocWaitMenu =
+{
+	.stringIndexTitle = LNG_NA_241,
+	.state = CENTER_ON_X | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeAdhocWaitRows,
+	.funcPtr = MM_NativeAdhocWaitProc,
+};
+#endif
+
 static struct MenuRow s_nativeMainMenuBasic[] =
 {
 	{LNG_ADVENTURE, 0, 1, 0, 0},
@@ -67,7 +151,12 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
+#if defined(__vita__)
+	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
+	{LNG_OPTIONS, 6, 7, 7, 7},
+#else
 	{LNG_OPTIONS, 5, 6, 6, 6},
+#endif
 	{RECTMENU_STRING_NONE},
 };
 
@@ -79,8 +168,14 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
+#if defined(__vita__)
+	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
+	{LNG_OPTIONS, 6, 8, 7, 7},
+	{LNG_SCRAPBOOK, 7, 8, 8, 8},
+#else
 	{LNG_OPTIONS, 5, 7, 6, 6},
 	{LNG_SCRAPBOOK, 6, 7, 7, 7},
+#endif
 	{RECTMENU_STRING_NONE},
 };
 
@@ -247,6 +342,227 @@ static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu)
 
 	parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
 }
+
+#if defined(__vita__)
+static s16 MM_NativeAdhocLanguageRow(void)
+{
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		return (s16)(cfg_language - 2);
+	}
+	return 0;
+}
+
+static void MM_NativeAdhocApplyText(void)
+{
+	s16 languageRow = MM_NativeAdhocLanguageRow();
+
+	if ((sdata->lngStrings == NULL) || (sdata->numLngStrings <= LNG_NA_242))
+	{
+		return;
+	}
+
+	switch (s_nativeAdhocMenuStage)
+	{
+	case MM_NATIVE_ADHOC_STAGE_ROLE:
+		sdata->lngStrings[LNG_NA_241] = (char *)s_nativeAdhocHostText[languageRow];
+		sdata->lngStrings[LNG_NA_242] = (char *)s_nativeAdhocJoinText[languageRow];
+		break;
+
+	case MM_NATIVE_ADHOC_STAGE_WAIT:
+		if (NativeAdhoc_GetRole() == NATIVE_ADHOC_ROLE_CLIENT)
+		{
+			sdata->lngStrings[LNG_NA_241] = (char *)NativeAdhoc_GetStatusText();
+			sdata->lngStrings[LNG_NA_242] = (char *)s_nativeAdhocJoinText[languageRow];
+			s_nativeAdhocWaitMenu.stringIndexTitle = LNG_NA_241;
+		}
+		else
+		{
+			sdata->lngStrings[LNG_NA_241] = (char *)s_nativeAdhocHostText[languageRow];
+			sdata->lngStrings[LNG_NA_242] = (char *)NativeAdhoc_GetStatusText();
+			s_nativeAdhocWaitMenu.stringIndexTitle = LNG_NA_242;
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+static void MM_NativeAdhocSetMainBreadcrumb(s16 stringIndex)
+{
+	s_nativeMainMenuBasic[MM_NATIVE_ADHOC_MAIN_ROW].stringIndex = stringIndex;
+	s_nativeMainMenuWithScrapbook[MM_NATIVE_ADHOC_MAIN_ROW].stringIndex = stringIndex;
+}
+
+static void MM_NativeAdhocResetHierarchy(void)
+{
+	D230.menuMainMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+	D230.menuMainMenu.ptrNextBox_InHierarchy = NULL;
+
+	s_nativeAdhocModeMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+	s_nativeAdhocModeMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocModeMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeAdhocModeMenu.rowSelected = 0;
+
+	s_nativeAdhocRoleMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+	s_nativeAdhocRoleMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocRoleMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeAdhocRoleMenu.rowSelected = 0;
+
+	s_nativeAdhocWaitMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+	s_nativeAdhocWaitMenu.ptrNextBox_InHierarchy = NULL;
+	s_nativeAdhocWaitMenu.ptrPrevBox_InHierarchy = NULL;
+	s_nativeAdhocWaitMenu.rowSelected = 0;
+	s_nativeAdhocWaitMenu.stringIndexTitle = LNG_NA_241;
+	s_nativeAdhocSuppressInputFrames = 0;
+}
+
+static void MM_NativeAdhocReturnToMain(void)
+{
+	NativeAdhoc_Shutdown();
+	MM_NativeAdhocResetHierarchy();
+	MM_NativeAdhocSetMainBreadcrumb(NATIVE_MENU_STRING_ADHOC);
+	s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
+	RECTMENU_ClearInput();
+	sdata->ptrDesiredMenu = &D230.menuMainMenu;
+}
+
+static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
+{
+	int dialogWasRunning;
+
+	if (s_nativeAdhocMenuStage != MM_NATIVE_ADHOC_STAGE_WAIT)
+	{
+		return 0;
+	}
+
+	dialogWasRunning = NativeAdhoc_IsDialogRunning();
+	NativeAdhoc_Update();
+	MM_NativeAdhocApplyText();
+
+	if (dialogWasRunning || NativeAdhoc_IsDialogRunning())
+	{
+		s_nativeAdhocSuppressInputFrames = 2;
+	}
+	if (s_nativeAdhocSuppressInputFrames > 0)
+	{
+		RECTMENU_ClearInput();
+		s_nativeAdhocSuppressInputFrames--;
+	}
+
+	if (NativeAdhoc_IsConnected())
+	{
+		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+		gGT->gameMode2 &= ~(CUP_ANY_KIND);
+		gGT->gameMode1 |= ARCADE_MODE;
+		gGT->numPlyrNextGame = 2;
+		gGT->numLaps = MM_DEFAULT_LAP_COUNT;
+		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
+		{
+			gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
+		}
+
+		MM_NativeAdhocResetHierarchy();
+		MM_NativeAdhocSetMainBreadcrumb(LNG_ARCADE);
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_GAME_FLOW;
+		RECTMENU_ClearInput();
+
+		gGT->gameMode2 &= ~(CUP_ANY_KIND);
+		MM_NativeExtraDifficultyPrepare();
+		s_nativeExtraDifficultyMenu.ptrPrevBox_InHierarchy = &D230.menuMainMenu;
+		s_nativeExtraDifficultyMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeExtraDifficultyMenu.rowSelected = 0;
+
+		D230.menuMainMenu.ptrNextBox_InHierarchy = &s_nativeExtraDifficultyMenu;
+		D230.menuMainMenu.state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+		D230.characterSelectTransitionState = IN_MENU;
+		return 1;
+	}
+
+	if (NativeAdhoc_GetStatus() == NATIVE_ADHOC_STATUS_ERROR)
+	{
+		MM_NativeAdhocReturnToMain();
+		return 1;
+	}
+
+	return 0;
+}
+
+static void MM_NativeAdhocModeProc(struct RectMenu *menu)
+{
+	MM_NativeAdhocApplyText();
+
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	if (menu->rowSelected < 0)
+	{
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
+		if (menu->ptrPrevBox_InHierarchy != NULL)
+		{
+			menu->ptrPrevBox_InHierarchy->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		}
+		return;
+	}
+
+	if (menu->rowSelected == 0)
+	{
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_ROLE;
+		MM_NativeAdhocApplyText();
+		s_nativeAdhocRoleMenu.rowSelected = 0;
+		menu->ptrNextBox_InHierarchy = &s_nativeAdhocRoleMenu;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+	}
+}
+
+static void MM_NativeAdhocRoleProc(struct RectMenu *menu)
+{
+	MM_NativeAdhocApplyText();
+
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	if (menu->rowSelected < 0)
+	{
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MODE;
+		if (menu->ptrPrevBox_InHierarchy != NULL)
+		{
+			menu->ptrPrevBox_InHierarchy->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		}
+		return;
+	}
+
+	if ((menu->rowSelected == 0) || (menu->rowSelected == 1))
+	{
+		int role = menu->rowSelected == 0 ? NATIVE_ADHOC_ROLE_HOST : NATIVE_ADHOC_ROLE_CLIENT;
+		if (!NativeAdhoc_Begin(role))
+		{
+			MM_NativeAdhocReturnToMain();
+			return;
+		}
+
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_WAIT;
+		s_nativeAdhocSuppressInputFrames = 2;
+		MM_NativeAdhocApplyText();
+		s_nativeAdhocWaitMenu.rowSelected = 0;
+		menu->ptrNextBox_InHierarchy = &s_nativeAdhocWaitMenu;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+	}
+}
+
+static void MM_NativeAdhocWaitProc(struct RectMenu *menu)
+{
+	if ((menu->funcState == RECTMENU_FUNC_STATE_INPUT) && (menu->rowSelected <= 0))
+	{
+		MM_NativeAdhocReturnToMain();
+	}
+}
+#endif
 
 static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 {
@@ -439,6 +755,22 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	struct GameTracker *gGT = sdata->gGT;
 
 #if defined(CTR_NATIVE)
+#if defined(__vita__)
+	if ((mainMenu->funcState == RECTMENU_FUNC_STATE_UPDATE) && MM_NativeAdhocPollWait(gGT))
+	{
+		return;
+	}
+
+	if ((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
+	{
+		if (NativeAdhoc_IsActive())
+		{
+			NativeAdhoc_Shutdown();
+		}
+		MM_NativeAdhocSetMainBreadcrumb(NATIVE_MENU_STRING_ADHOC);
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
+	}
+#endif
 
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
@@ -668,6 +1000,26 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	}
 
 #if defined(CTR_NATIVE)
+#if defined(__vita__)
+	if (choose == NATIVE_MENU_STRING_ADHOC)
+	{
+		s_nativeAdhocModeMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		s_nativeAdhocModeMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeAdhocRoleMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		s_nativeAdhocRoleMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeAdhocWaitMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		s_nativeAdhocWaitMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeAdhocSuppressInputFrames = 0;
+		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MODE;
+		s_nativeAdhocModeMenu.rowSelected = 0;
+		s_nativeAdhocModeMenu.ptrPrevBox_InHierarchy = mainMenu;
+
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeAdhocModeMenu;
+		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+#endif
+
 	// Options
 	if (choose == LNG_OPTIONS)
 	{

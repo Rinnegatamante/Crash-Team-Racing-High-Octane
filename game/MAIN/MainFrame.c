@@ -1,6 +1,8 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+
 static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 {
 	static const char *const primLabels[2] = {"db0 prim", "db1 prim"};
@@ -24,6 +26,28 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 	{
 		NativeGpuLinks_RegisterRangeChecked(swapchainLabels[i], gGT->otSwapchainDB[i], swapchainOTBytes);
 	}
+}
+#endif
+
+#if defined(CTR_NATIVE)
+static void MainFrame_DrawClockEffect(struct GameTracker *gGT, struct Driver *driver, struct PushBuffer *retailPushBuffer, int strength)
+{
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT != NULL) && (gGT->numPlyrCurrGame == 2))
+	{
+		if ((driver == NULL) || !NativeAdhoc_ShouldPresentDriver(driver->driverID))
+		{
+			return;
+		}
+
+		struct PushBuffer fullscreenPushBuffer;
+		memset(&fullscreenPushBuffer, 0, sizeof(fullscreenPushBuffer));
+		PushBuffer_Init(&fullscreenPushBuffer, NativeAdhoc_GetLocalPlayerIndex(), 1);
+		DISPLAY_Blur_Main(&fullscreenPushBuffer, strength);
+		return;
+	}
+#endif
+	DISPLAY_Blur_Main(retailPushBuffer, strength);
 }
 #endif
 
@@ -170,13 +194,13 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 				}
 
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, uVar3);
 #endif
 			}
 			else
 			{
 #if defined(CTR_NATIVE)
-				DISPLAY_Blur_Main(pushBuffer, -uVar3);
+				MainFrame_DrawClockEffect(gGT, psVar9, pushBuffer, -uVar3);
 #endif
 				psVar9->clockFlash--;
 			}
@@ -211,6 +235,12 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 #endif
 #if defined(CTR_NATIVE)
 		NativeGhostInput_ProcessFrameTiming(&gGT->elapsedTimeMS);
+#endif
+#if defined(__vita__)
+		if (NativeAdhoc_IsSimulationActive())
+		{
+			gGT->elapsedTimeMS = 0x20;
+		}
 #endif
 		gGT->msInThisLEV += gGT->elapsedTimeMS;
 		if (gGT->trafficLightsTimer < 1)
@@ -563,6 +593,13 @@ b32 MainFrame_HaveAllPads(s16 numPlyrNextGame)
 	if (sdata->Loading.stage == LOAD_IDLE)
 	{
 		struct GamepadBuffer *gb = &sdata->gGamepads->gamepad[0];
+#if defined(__vita__)
+		int adhocRemotePlayer = -1;
+			if (NativeAdhoc_IsActive() && (numPlyrNextGame == 2))
+		{
+			adhocRemotePlayer = NativeAdhoc_GetRemotePlayerIndex();
+		}
+#endif
 
 		if (numPlyrNextGame == 0)
 		{
@@ -571,6 +608,14 @@ b32 MainFrame_HaveAllPads(s16 numPlyrNextGame)
 
 		for (int i = 0; i < numPlyrNextGame; i++)
 		{
+		#if defined(__vita__)
+			if (i == adhocRemotePlayer)
+			{
+				gb++;
+				continue;
+			}
+		#endif
+
 			struct ControllerPacket *packet = gb->ptrControllerPacket;
 
 			if (packet == NULL)
@@ -623,7 +668,7 @@ static int MainFrame_VisMemHasQuad(const int *visFaceList, const struct QuadBloc
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80035684-0x800357b8, unnamed in syms926.
-static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerIndex)
+static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerIndex, int visIndex)
 {
 	struct Driver *driver = gGT->drivers[playerIndex];
 	struct mesh_info *mesh = gGT->level1->ptr_mesh_info;
@@ -643,12 +688,12 @@ static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerInde
 
 	if (pvs->visLeafSrc != NULL)
 	{
-		MainFrame_OrPackedVisList(gGT->visMem1->visLeafList[playerIndex], pvs->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+		MainFrame_OrPackedVisList(gGT->visMem1->visLeafList[visIndex], pvs->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
 	}
 
 	if (pvs->visFaceSrc != NULL)
 	{
-		MainFrame_OrPackedVisList(gGT->visMem1->visFaceList[playerIndex], pvs->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+		MainFrame_OrPackedVisList(gGT->visMem1->visFaceList[visIndex], pvs->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
 	}
 }
 
@@ -658,6 +703,8 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 	struct VisMem *visMem;
 	struct mesh_info *mesh;
 	int playerIndex;
+	int playerStart;
+	int playerEnd;
 
 	visMem = gGT->visMem1;
 	if (visMem == NULL)
@@ -677,8 +724,26 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 	mesh = level->ptr_mesh_info;
 
-	for (playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
+	playerStart = 0;
+	playerEnd = gGT->numPlyrCurrGame;
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
 	{
+		playerStart = NativeAdhoc_GetLocalPlayerIndex();
+		playerEnd = playerStart + 1;
+	}
+#endif
+
+	for (playerIndex = playerStart; playerIndex < playerEnd; playerIndex++)
+	{
+		int visIndex = playerIndex;
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive())
+		{
+			visIndex = 0;
+		}
+#endif
 		struct CameraDC *camDC = &gGT->cameraDC[playerIndex];
 		struct Driver *driver = gGT->drivers[playerIndex];
 		struct QuadBlock *driverQuad = driver->underDriver;
@@ -695,31 +760,31 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		{
 			if ((driverPVS != NULL) && (driverPVS->visLeafSrc != NULL))
 			{
-				visMem->visLeafSrc[playerIndex] = driverPVS->visLeafSrc;
-				MainFrame_ReplacePackedVisList(visMem->visLeafList[playerIndex], driverPVS->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+				visMem->visLeafSrc[visIndex] = driverPVS->visLeafSrc;
+				MainFrame_ReplacePackedVisList(visMem->visLeafList[visIndex], driverPVS->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
 			}
 		}
-		else if (visMem->visLeafSrc[playerIndex] != camDC->visLeafSrc)
+		else if (visMem->visLeafSrc[visIndex] != camDC->visLeafSrc)
 		{
-			visMem->visLeafSrc[playerIndex] = camDC->visLeafSrc;
-			MainFrame_ReplacePackedVisList(visMem->visLeafList[playerIndex], camDC->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+			visMem->visLeafSrc[visIndex] = camDC->visLeafSrc;
+			MainFrame_ReplacePackedVisList(visMem->visLeafList[visIndex], camDC->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
 		}
 
 		if (camDC->visFaceSrc == NULL)
 		{
 			if ((driverPVS != NULL) && (driverPVS->visFaceSrc != NULL))
 			{
-				visMem->visFaceSrc[playerIndex] = driverPVS->visFaceSrc;
-				MainFrame_ReplacePackedVisList(visMem->visFaceList[playerIndex], driverPVS->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+				visMem->visFaceSrc[visIndex] = driverPVS->visFaceSrc;
+				MainFrame_ReplacePackedVisList(visMem->visFaceList[visIndex], driverPVS->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
 			}
 		}
-		else if (visMem->visFaceSrc[playerIndex] != camDC->visFaceSrc)
+		else if (visMem->visFaceSrc[visIndex] != camDC->visFaceSrc)
 		{
-			visMem->visFaceSrc[playerIndex] = camDC->visFaceSrc;
-			MainFrame_ReplacePackedVisList(visMem->visFaceList[playerIndex], camDC->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+			visMem->visFaceSrc[visIndex] = camDC->visFaceSrc;
+			MainFrame_ReplacePackedVisList(visMem->visFaceList[visIndex], camDC->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
 
 			if ((driverPVS == NULL) || (driverPVS->visLeafSrc == NULL) || (driverPVS->visFaceSrc == NULL) || (driverPVS->visInstSrc == NULL) ||
-			    MainFrame_VisMemHasQuad(visMem->visFaceList[playerIndex], driverQuad, mesh))
+			    MainFrame_VisMemHasQuad(visMem->visFaceList[visIndex], driverQuad, mesh))
 			{
 				camDC->flags &= ~0x2000;
 			}
@@ -730,7 +795,7 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 			if ((camDC->flags & 0x2000) != 0)
 			{
-				MainFrame_VisMemAddDriverPVS(gGT, playerIndex);
+				MainFrame_VisMemAddDriverPVS(gGT, playerIndex, visIndex);
 				camDC->flags |= 0x4000;
 			}
 		}
@@ -772,18 +837,18 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 					if (leafSrc != NULL)
 					{
-						MainFrame_ReplacePackedVisList(visMem->visLeafList[playerIndex], leafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+						MainFrame_ReplacePackedVisList(visMem->visLeafList[visIndex], leafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
 					}
 					if (faceSrc != NULL)
 					{
-						MainFrame_ReplacePackedVisList(visMem->visFaceList[playerIndex], faceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+						MainFrame_ReplacePackedVisList(visMem->visFaceList[visIndex], faceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
 					}
 				}
 			}
 
 			if (needsDriverPVS && ((camDC->flags & 0x4000) == 0))
 			{
-				MainFrame_VisMemAddDriverPVS(gGT, playerIndex);
+				MainFrame_VisMemAddDriverPVS(gGT, playerIndex, visIndex);
 				camDC->flags |= 0x4000;
 			}
 		}
@@ -791,7 +856,7 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 		if ((camDC->flags & 0x5000) == 0x1000)
 		{
-			MainFrame_VisMemAddDriverPVS(gGT, playerIndex);
+			MainFrame_VisMemAddDriverPVS(gGT, playerIndex, visIndex);
 		}
 
 		if ((camDC->cameraMode == 0) && ((camDC->flags & 0x2000) != 0) && (driverPVS != NULL) && (driverPVS->visInstSrc != NULL))
@@ -801,42 +866,42 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 		if ((level->configFlags & 4) == 0)
 		{
-			if (visMem->visOVertSrc[playerIndex] != camDC->visOVertSrc)
+			if (visMem->visOVertSrc[visIndex] != camDC->visOVertSrc)
 			{
-				visMem->visOVertSrc[playerIndex] = camDC->visOVertSrc;
+				visMem->visOVertSrc[visIndex] = camDC->visOVertSrc;
 
 				if (camDC->visOVertSrc != NULL)
 				{
-					MainFrame_ReplacePackedVisList(visMem->visOVertList[playerIndex], camDC->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+					MainFrame_ReplacePackedVisList(visMem->visOVertList[visIndex], camDC->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 				}
 				else
 				{
-					memcpy(visMem->visOVertList[playerIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+					memcpy(visMem->visOVertList[visIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 				}
 			}
-			else if (visMem->visOVertSrc[playerIndex] == NULL)
+			else if (visMem->visOVertSrc[visIndex] == NULL)
 			{
-				memcpy(visMem->visOVertList[playerIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+				memcpy(visMem->visOVertList[visIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 			}
 		}
 		else
 		{
-			if (visMem->visSCVertSrc[playerIndex] != camDC->visSCVertSrc)
+			if (visMem->visSCVertSrc[visIndex] != camDC->visSCVertSrc)
 			{
-				visMem->visSCVertSrc[playerIndex] = camDC->visSCVertSrc;
+				visMem->visSCVertSrc[visIndex] = camDC->visSCVertSrc;
 
 				if (camDC->visSCVertSrc != NULL)
 				{
-					MainFrame_ReplacePackedVisList(visMem->visSCVertList[playerIndex], camDC->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+					MainFrame_ReplacePackedVisList(visMem->visSCVertList[visIndex], camDC->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 				}
 				else
 				{
-					memcpy(visMem->visSCVertList[playerIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+					memcpy(visMem->visSCVertList[visIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 				}
 			}
-			else if (visMem->visSCVertSrc[playerIndex] == NULL)
+			else if (visMem->visSCVertSrc[visIndex] == NULL)
 			{
-				memcpy(visMem->visSCVertList[playerIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
+				memcpy(visMem->visSCVertList[visIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 			}
 		}
 	}

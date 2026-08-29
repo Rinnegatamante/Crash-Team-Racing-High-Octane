@@ -80,6 +80,28 @@ void MainInit_RainBuffer(struct GameTracker *gGT)
 	}
 }
 
+#if defined(CTR_NATIVE)
+#define MAININIT_ADHOC_OXIDE_PRIMMEM_RECLAIM 0x4000
+
+static int MainInit_HasPlayableOxide(const struct GameTracker *gGT)
+{
+	if ((gGT == NULL) || ((gGT->gameMode1 & MAIN_MENU) != 0))
+	{
+		return 0;
+	}
+
+	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+	{
+		if (data.characterIDs[i] == NITROS_OXIDE)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+#endif
+
 static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 {
 	int levelID;
@@ -147,6 +169,13 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 void MainInit_PrimMem(struct GameTracker *gGT)
 {
 	int size = MainInit_GetPrimMemSize(gGT);
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) && MainInit_HasPlayableOxide(gGT))
+	{
+		size -= MAININIT_ADHOC_OXIDE_PRIMMEM_RECLAIM;
+	}
+#endif
 
 	if (size == 0)
 	{
@@ -278,7 +307,13 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 	JitPool_Init(&gGT->JitPools.thread, (renderBucketSize * 3) >> 7, sizeof(struct Thread), rdata.s_ThreadPool);
 	JitPool_Init(&gGT->JitPools.instance, renderBucketSize >> 5, sizeof(struct Instance) + (sizeof(struct InstDrawPerPlayer) * gGT->numPlyrCurrGame),
 	             rdata.s_InstancePool);
-	int useOxideExternalPools = ((gameMode & MAIN_MENU) == 0) && (data.characterIDs[0] == NITROS_OXIDE);
+	int useOxideExternalPools = MainInit_HasPlayableOxide(gGT);
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2))
+	{
+		useOxideExternalPools = 0;
+	}
+#endif
 
 	if (useOxideExternalPools)
 	{
@@ -316,8 +351,7 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 #ifndef CTR_NATIVE
 	gGT->ptrRenderBucketInstance = MEMPACK_AllocMem(renderBucketSize);
 #else
-	// NOTE(aalhendi): Native reuses static RDATA scratch for existing PC memory headroom.
-	gGT->ptrRenderBucketInstance = (void *)((uintptr_t)&rdata.s_STATIC_GNORMALZ[0] + 148);
+	gGT->ptrRenderBucketInstance = RenderBucket_GetNativeStorage();
 #endif
 
 	for (int i = 0; i < 3; i++)
@@ -340,6 +374,9 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003b6d0-0x8003b934; CTR_NATIVE gates TT ghost model publication.
 void MainInit_Drivers(struct GameTracker *gGT)
 {
+#if defined(__vita__)
+	NativeAdhoc_EnforcePreparedRaceConfig(gGT);
+#endif
 	u8 numPlyrCurrGame = gGT->numPlyrCurrGame;
 	u8 numDrivers;
 	int gameMode = gGT->gameMode1;

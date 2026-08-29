@@ -118,7 +118,6 @@ typedef struct
 } NativeGpuState;
 
 global_variable NativeGpuState s_gpu;
-
 struct NativeGpuSnapshot
 {
 	u32 magic;

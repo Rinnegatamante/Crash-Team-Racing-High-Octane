@@ -24,6 +24,7 @@
 #include "platform/native_perf.h"
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
+#include "platform/native_adhoc.h"
 
 #ifdef __vita__
 #include <vitasdk.h>
@@ -82,6 +83,7 @@ DIR *__wrap_opendir(const char *fname) {
 #include "platform/native_gte_core.c"
 #include "platform/native_glad.c"
 #include "platform/native_input.c"
+#include "platform/native_adhoc.c"
 #include "platform/native_inline_c.c"
 #include "platform/native_libapi.c"
 #include "platform/native_libetc.c"

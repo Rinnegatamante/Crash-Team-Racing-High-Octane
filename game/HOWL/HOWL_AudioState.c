@@ -151,6 +151,36 @@ void Audio_SetMaskSong(u32 tempo)
 	struct GameTracker *gGT = sdata->gGT;
 	u32 gameMode = gGT->gameMode1;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2))
+	{
+		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+		struct Driver *localDriver = gGT->drivers[localPlayer];
+		int localSongID = 0;
+
+		if ((localDriver != NULL) && ((localDriver->actionsFlagSet & ACTION_MASK_WEAPON) != 0) && (localDriver->instSelf != NULL) &&
+		    (localDriver->instSelf->thread != NULL))
+		{
+			for (struct Thread *itemThread = localDriver->instSelf->thread->childThread; itemThread != NULL; itemThread = itemThread->siblingThread)
+			{
+				if (itemThread->modelIndex == STATIC_AKUAKU)
+				{
+					localSongID = 1;
+					break;
+				}
+				if (itemThread->modelIndex == STATIC_UKAUKA)
+				{
+					localSongID = 2;
+					break;
+				}
+			}
+		}
+
+		Music_Adjust(localSongID, tempo, 0, 0);
+		return;
+	}
+#endif
+
 	// Assume no player is using a mask
 	isMaskUsed = false;
 

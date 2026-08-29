@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80043b30-0x80043c04.
 void QueueLoadTrack_MenuProc(struct RectMenu *menu)
@@ -34,6 +38,12 @@ void QueueLoadTrack_MenuProc(struct RectMenu *menu)
 		gGT->gameMode1 &= ~(POINT_LIMIT | LIFE_LIMIT | TIME_LIMIT);
 	}
 
+#if defined(__vita__)
+	if (!NativeAdhoc_PrepareRaceLoad(gGT))
+	{
+		return;
+	}
+#endif
 	MainRaceTrack_RequestLoad(gGT->currLEV);
 
 	RECTMENU_Hide(menu);

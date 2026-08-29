@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 
 enum
 {
@@ -306,9 +310,20 @@ void CAM_ClearScreen(struct GameTracker *gGT)
 	struct DB *backDB = gGT->backBuffer;
 	TILE *tile = backDB->primMem.cursor;
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		numPlyr = 1;
+	}
+#endif
+
 	for (s32 loop = 0; loop < numPlyr; loop++)
 	{
+#if defined(__vita__)
+		struct PushBuffer *pb = NativeAdhoc_IsSingleViewRenderActive() ? NativeAdhoc_GetRenderPushBuffer() : &gGT->pushBuffer[loop];
+#else
 		struct PushBuffer *pb = &gGT->pushBuffer[loop];
+#endif
 		uint32_t *endOT = &pb->ptrOT[0x3FF];
 
 		s16 x = pb->rect.x;
@@ -509,7 +524,11 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 
 		// if 1 or less screens
 		cDC->transitionFrame = 0xA5;
+#if defined(__vita__)
+		if (!NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame > 1))
+#else
 		if (gGT->numPlyrCurrGame > 1)
+#endif
 		{
 			cDC->transitionFrame = 1;
 		}
@@ -1874,7 +1893,12 @@ void CAM_ThTick(struct Thread *t)
 	ptrZoomData = &data.NearCam4x3;
 	if (gGT->numPlyrCurrGame == 2)
 	{
-		ptrZoomData = &data.NearCam8x3;
+#if defined(CTR_NATIVE)
+		if (!NativeAdhoc_IsActive())
+#endif
+		{
+			ptrZoomData = &data.NearCam8x3;
+		}
 	}
 
 	ptrZoomData = &ptrZoomData[cDC->nearOrFar * 2];

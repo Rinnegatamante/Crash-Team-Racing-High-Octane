@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	UI_BATTLE_HEAD_ARROW_Y_OFFSET_1P2P = 3,
@@ -256,6 +260,19 @@ void UI_TrackerSelf(struct Driver *d)
 	// get index of driver in driver array
 	driverID = d->driverID;
 
+	struct PushBuffer *presentationPB = &gGT->pushBuffer[driverID];
+	int presentationEnabled = 1;
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		presentationEnabled = driverID == (u16)NativeAdhoc_GetLocalPlayerIndex();
+		if (presentationEnabled)
+		{
+			presentationPB = NativeAdhoc_GetRenderPushBuffer();
+		}
+	}
+#endif
+
 	timer = data.trackerTimer[driverID];
 
 	if (
@@ -342,7 +359,7 @@ UpdateTrackerState:
 		data.trackerTimer[driverID]--;
 	}
 
-	MATRIX *viewProj = &gGT->pushBuffer[driverID].matrix_ViewProj;
+	MATRIX *viewProj = &presentationPB->matrix_ViewProj;
 	gte_SetRotMatrix(viewProj);
 	gte_SetTransMatrix(viewProj);
 
@@ -388,7 +405,7 @@ UpdateTrackerState:
 		// red
 		bgColor = UI_TRACKER_BG_RED;
 
-		if ((gGT->timer % beepRate) == 0)
+		if (presentationEnabled && ((gGT->timer % beepRate) == 0))
 		{
 			if ((gGT->gameMode1 & PAUSE_ALL) == 0)
 			{
@@ -426,6 +443,13 @@ UpdateTrackerState:
 			data.trackerType[driverID] = UI_TRACKER_TYPE_MISSILE;
 		}
 	}
+
+#if defined(__vita__)
+	if (!presentationEnabled)
+	{
+		return;
+	}
+#endif
 
 	// driver screenspace x and y
 	screenPosX = screenPos.x;
@@ -488,7 +512,7 @@ UpdateTrackerState:
 			poly->y1 = screenPosY - UI_TRACKER_SIDE_TIP_OFFSET;
 			poly->y2 = screenPosY - UI_TRACKER_SIDE_TIP_OFFSET;
 
-			ot = gGT->pushBuffer[driverID].ptrOT;
+			ot = presentationPB->ptrOT;
 
 			poly->tag = CtrGpu_PackOTTag(*ot, UI_TRACKER_POLY_G3_OT_TAG);
 			*ot = CtrGpu_PrimToOTLink24(poly);
@@ -545,7 +569,7 @@ UpdateTrackerState:
 
 	    screenPosX - (x >> UI_TRACKER_BG_X_SHIFT), screenPosY - ((y * UI_TRACKER_BG_Y_SCALE) >> UI_TRACKER_BG_Y_SHIFT),
 
-	    &gGT->backBuffer->primMem, gGT->pushBuffer[driverID].ptrOT, UI_TRACKER_BG_TRANSPARENCY, x, y, bgColor);
+	    &gGT->backBuffer->primMem, presentationPB->ptrOT, UI_TRACKER_BG_TRANSPARENCY, x, y, bgColor);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8005045c-0x80050528.

@@ -111,6 +111,7 @@ global_variable void *s_nativeCheckpointPointerSlots[NATIVE_CHECKPOINT_POINTER_S
 global_variable void *s_nativeCheckpointPointerSlotHash[NATIVE_CHECKPOINT_POINTER_HASH_CAP];
 global_variable u32 s_nativeCheckpointPointerSlotCount;
 
+internal int NativeCheckpoint_InitHeaderMode(struct NativeCheckpointHeader *header, b32 includeNativeState);
 internal int NativeCheckpoint_InitHeader(struct NativeCheckpointHeader *header);
 
 internal u32 NativeCheckpoint_Align4(u32 value)
@@ -2019,21 +2020,21 @@ internal int NativeCheckpoint_RestoreRegion(u32 kind, const void *src, int srcSi
 	return 1;
 }
 
-internal int NativeCheckpoint_InitHeader(struct NativeCheckpointHeader *header)
+internal int NativeCheckpoint_InitHeaderMode(struct NativeCheckpointHeader *header, b32 includeNativeState)
 {
 	u32 offset = NativeCheckpoint_Align4((u32)sizeof(*header));
 	u32 i;
-	local_persist const u32 regionKinds[] = {
+	local_persist const u32 gameplayRegionKinds[] = {
 	    NATIVE_CHECKPOINT_REGION_RDATA, NATIVE_CHECKPOINT_REGION_DATA, NATIVE_CHECKPOINT_REGION_SDATA, NATIVE_CHECKPOINT_REGION_D230,
 	    NATIVE_CHECKPOINT_REGION_V230,  NATIVE_CHECKPOINT_REGION_D231, NATIVE_CHECKPOINT_REGION_D232,  NATIVE_CHECKPOINT_REGION_D233,
 	    NATIVE_CHECKPOINT_REGION_GAR3,  NATIVE_CHECKPOINT_REGION_CRD3, NATIVE_CHECKPOINT_REGION_MPAK,  NATIVE_CHECKPOINT_REGION_SCRP,
-	    NATIVE_CHECKPOINT_REGION_PMAP,  NATIVE_CHECKPOINT_REGION_NATS,
+	    NATIVE_CHECKPOINT_REGION_PMAP,
 	};
 
 	memset(header, 0, sizeof(*header));
 	header->magic = NATIVE_CHECKPOINT_MAGIC;
 	header->version = NATIVE_CHECKPOINT_VERSION;
-	header->regionCount = (u32)len(regionKinds);
+	header->regionCount = (u32)len(gameplayRegionKinds) + (includeNativeState ? 1u : 0u);
 	if (!NativeCheckpoint_PtrToU32((const void *)(uintptr_t)&NativeCheckpoint_GetSize, &header->codeAnchor))
 	{
 		return 0;
@@ -2050,14 +2051,16 @@ internal int NativeCheckpoint_InitHeader(struct NativeCheckpointHeader *header)
 
 	for (i = 0; i < header->regionCount; i++)
 	{
-		const int regionSize = NativeCheckpoint_GetRegionSize(regionKinds[i]);
+		const u32 regionKind =
+			(i < (u32)len(gameplayRegionKinds)) ? gameplayRegionKinds[i] : NATIVE_CHECKPOINT_REGION_NATS;
+		const int regionSize = NativeCheckpoint_GetRegionSize(regionKind);
 
 		if (regionSize <= 0)
 		{
 			return 0;
 		}
 
-		header->regions[i].kind = regionKinds[i];
+		header->regions[i].kind = regionKind;
 		header->regions[i].offset = offset;
 		header->regions[i].size = (u32)regionSize;
 		offset = NativeCheckpoint_Align4(offset + (u32)regionSize);
@@ -2067,7 +2070,12 @@ internal int NativeCheckpoint_InitHeader(struct NativeCheckpointHeader *header)
 	return 1;
 }
 
-internal int NativeCheckpoint_ValidateHeader(const struct NativeCheckpointHeader *header, int srcSize)
+internal int NativeCheckpoint_InitHeader(struct NativeCheckpointHeader *header)
+{
+	return NativeCheckpoint_InitHeaderMode(header, true);
+}
+
+internal int NativeCheckpoint_ValidateHeaderMode(const struct NativeCheckpointHeader *header, int srcSize, b32 includeNativeState)
 {
 	struct NativeCheckpointHeader liveHeader;
 	u32 i;
@@ -2084,7 +2092,7 @@ internal int NativeCheckpoint_ValidateHeader(const struct NativeCheckpointHeader
 	{
 		return 0;
 	}
-	if (!NativeCheckpoint_InitHeader(&liveHeader))
+	if (!NativeCheckpoint_InitHeaderMode(&liveHeader, includeNativeState))
 	{
 		return 0;
 	}
@@ -2131,11 +2139,16 @@ internal int NativeCheckpoint_ValidateHeader(const struct NativeCheckpointHeader
 	return 1;
 }
 
-int NativeCheckpoint_GetSize(void)
+internal int NativeCheckpoint_ValidateHeader(const struct NativeCheckpointHeader *header, int srcSize)
+{
+	return NativeCheckpoint_ValidateHeaderMode(header, srcSize, true);
+}
+
+internal int NativeCheckpoint_GetSizeMode(b32 includeNativeState)
 {
 	struct NativeCheckpointHeader header;
 
-	if (!NativeCheckpoint_InitHeader(&header))
+	if (!NativeCheckpoint_InitHeaderMode(&header, includeNativeState))
 	{
 		return 0;
 	}
@@ -2143,13 +2156,13 @@ int NativeCheckpoint_GetSize(void)
 	return (int)header.size;
 }
 
-int NativeCheckpoint_Capture(void *dst, int dstSize)
+internal int NativeCheckpoint_CaptureMode(void *dst, int dstSize, b32 includeNativeState)
 {
 	struct NativeCheckpointHeader header;
 	u8 *bytes = (u8 *)dst;
 	u32 i;
 
-	if (!NativeCheckpoint_InitHeader(&header))
+	if (!NativeCheckpoint_InitHeaderMode(&header, includeNativeState))
 	{
 		return 0;
 	}
@@ -2178,7 +2191,7 @@ int NativeCheckpoint_Capture(void *dst, int dstSize)
 	return 1;
 }
 
-int NativeCheckpoint_Restore(const void *src, int srcSize)
+internal int NativeCheckpoint_RestoreMode(const void *src, int srcSize, b32 includeNativeState)
 {
 	const struct NativeCheckpointHeader *header = (const struct NativeCheckpointHeader *)src;
 	const u8 *bytes = (const u8 *)src;
@@ -2187,11 +2200,11 @@ int NativeCheckpoint_Restore(const void *src, int srcSize)
 	struct NativeCheckpointHeader liveHeader;
 	u32 i;
 
-	if (!NativeCheckpoint_ValidateHeader(header, srcSize))
+	if (!NativeCheckpoint_ValidateHeaderMode(header, srcSize, includeNativeState))
 	{
 		return 0;
 	}
-	if (!NativeCheckpoint_InitHeader(&liveHeader))
+	if (!NativeCheckpoint_InitHeaderMode(&liveHeader, includeNativeState))
 	{
 		return 0;
 	}
@@ -2236,14 +2249,44 @@ int NativeCheckpoint_Restore(const void *src, int srcSize)
 	}
 	Platform_RepairResidentPointers(header->activeMempackIndex);
 
-	if (nativeStateRegion == NULL)
+	if (includeNativeState && (nativeStateRegion == NULL))
 	{
 		return 0;
 	}
-	if (!NativeState_Restore(&bytes[nativeStateRegion->offset], (int)nativeStateRegion->size))
+	if (includeNativeState && !NativeState_Restore(&bytes[nativeStateRegion->offset], (int)nativeStateRegion->size))
 	{
 		return 0;
 	}
 
 	return 1;
+}
+
+int NativeCheckpoint_GetSize(void)
+{
+	return NativeCheckpoint_GetSizeMode(true);
+}
+
+int NativeCheckpoint_Capture(void *dst, int dstSize)
+{
+	return NativeCheckpoint_CaptureMode(dst, dstSize, true);
+}
+
+int NativeCheckpoint_Restore(const void *src, int srcSize)
+{
+	return NativeCheckpoint_RestoreMode(src, srcSize, true);
+}
+
+int NativeCheckpoint_GetGameplaySize(void)
+{
+	return NativeCheckpoint_GetSizeMode(false);
+}
+
+int NativeCheckpoint_CaptureGameplay(void *dst, int dstSize)
+{
+	return NativeCheckpoint_CaptureMode(dst, dstSize, false);
+}
+
+int NativeCheckpoint_RestoreGameplay(const void *src, int srcSize)
+{
+	return NativeCheckpoint_RestoreMode(src, srcSize, false);
 }

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	BOTS_ADV_MAX_LOSS_DIFFICULTY_INDEX = 10,
@@ -2968,7 +2972,12 @@ u32 BOTS_ChangeState(struct Driver *driverVictim, int damageType, struct Driver 
 
 		if ((driverAttacker->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(1, data.characterIDs[driverVictim->driverID], 0x10);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(driverVictim->driverID))
+#endif
+			{
+				Voiceline_RequestPlay(1, data.characterIDs[driverVictim->driverID], 0x10);
+			}
 		}
 		break;
 	case 3:

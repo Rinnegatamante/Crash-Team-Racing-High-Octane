@@ -1,5 +1,28 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
+#if defined(__vita__)
+static struct MenuRow s_nativeAdhocPauseRows[] =
+{
+	{LNG_RESUME, 1, 1, 0, 0},
+	{LNG_QUIT, 0, 0, 1, 1},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct RectMenu s_nativeAdhocPauseMenu =
+{
+	.stringIndexTitle = LNG_PAUSED,
+	.posX_curr = 0x100,
+	.posY_curr = 0x6c,
+	.state = ALL_PLAYERS_USE_MENU | RECTMENU_STATE_SMALL_EXEC_CENTERED | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeAdhocPauseRows,
+	.funcPtr = MainFreeze_MenuPtrDefault,
+	.drawStyle = 4,
+};
+#endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800379f4-0x80037bc0.
 void MainFreeze_ConfigDrawNPC105(s16 startX, s16 startY, s16 radius, int angleStep, s16 angle, char *color, uint32_t *otMem, struct PrimMem *primMem)
@@ -800,6 +823,16 @@ void MainFreeze_MenuPtrQuit(struct RectMenu *menu)
 		row = menu->rowSelected;
 		if (row == 0)
 		{
+#if defined(__vita__)
+			if (NativeAdhoc_IsActive())
+			{
+				GhostTape_Destroy();
+				gGT->gameMode1 &= ~PAUSE_1;
+				MainFrame_TogglePauseAudio(0);
+				NativeAdhoc_RequestReturnToMainMenu();
+				return;
+			}
+#endif
 			// Erase ghost of previous race from RAM
 			GhostTape_Destroy();
 
@@ -950,6 +983,16 @@ void MainFreeze_MenuPtrDefault(struct RectMenu *menu)
 	RECTMENU_Hide(menu);
 
 	MainFreeze_SafeAdvDestroy();
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsActive() && ((stringID == 1) || (stringID == 4) || (stringID == 5) || (stringID == 6)))
+	{
+		gGT->gameMode1 &= ~PAUSE_1;
+		MainFrame_TogglePauseAudio(0);
+		NativeAdhoc_RequestReturnToMainMenu();
+		return;
+	}
+#endif
 
 	// careful, it's stringID MINUS one
 	switch (stringID)
@@ -1122,6 +1165,12 @@ struct RectMenu *MainFreeze_GetMenuPtr(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
 	u32 gameMode = gGT->gameMode1;
+#if defined(__vita__)
+	if (NativeAdhoc_IsActive())
+	{
+		return &s_nativeAdhocPauseMenu;
+	}
+#endif
 
 	if ((gameMode & ADVENTURE_ARENA) != 0)
 	{

@@ -9,6 +9,7 @@
 #include <SDL3/SDL.h>
 
 #include "platform/native_gpu.h"
+#include "platform/native_adhoc.h"
 #include "platform/native_glad.h"
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
@@ -2830,7 +2831,18 @@ void NativeRenderer_PresentVRAMDisplay(void)
 void NativeRenderer_SwapWindow(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
+#ifdef __vita__
+	if (NativeAdhoc_IsDialogRunning())
+	{
+		vglSwapBuffers(GL_TRUE);
+	}
+	else
+	{
+		SDL_GL_SwapWindow(g_window);
+	}
+#else
 	SDL_GL_SwapWindow(g_window);
+#endif
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
 }
 

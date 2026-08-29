@@ -1,6 +1,7 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
 extern int gNativeMirrorModeRenderActive;
 extern int gNativeMirrorModeDoubleFlipActive;
 #endif
@@ -18,10 +19,35 @@ struct RenderBucketQueueState
 	uint32_t *otBase;
 	uint32_t *otCurr;
 	uint32_t *otEndMinusOne;
+#if defined(CTR_NATIVE)
+	struct RenderBucketEntry *entryEnd;
+#endif
 };
 CTR_STATIC_ASSERT(sizeof(struct RenderBucketEntry) == 0x8);
 CTR_STATIC_ASSERT(offsetof(struct RenderBucketEntry, inst) == 0x0);
 CTR_STATIC_ASSERT(offsetof(struct RenderBucketEntry, instPlayerBase) == 0x4);
+#if defined(CTR_NATIVE)
+enum
+{
+	NATIVE_RENDER_BUCKET_ENTRY_CAPACITY = 2048,
+};
+static struct RenderBucketEntry s_nativeRenderBucketStorage[NATIVE_RENDER_BUCKET_ENTRY_CAPACITY];
+
+void *RenderBucket_GetNativeStorage(void)
+{
+	return s_nativeRenderBucketStorage;
+}
+
+u32 RenderBucket_GetNativeStorageSize(void)
+{
+	return sizeof(s_nativeRenderBucketStorage);
+}
+
+static void RenderBucket_InitEntryBounds(struct RenderBucketQueueState *queueState)
+{
+	queueState->entryEnd = &s_nativeRenderBucketStorage[NATIVE_RENDER_BUCKET_ENTRY_CAPACITY - 1];
+}
+#endif
 CTR_STATIC_ASSERT(offsetof(struct Item, next) == 0x0);
 CTR_STATIC_ASSERT(offsetof(struct Item, prev) == 0x4);
 CTR_STATIC_ASSERT(sizeof(struct Item) == 0x8);
@@ -2060,10 +2086,26 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	}
 #endif
 
+#if defined(CTR_NATIVE)
+	if ((queueState->entryEnd != NULL) && (rbi >= queueState->entryEnd))
+	{
+		return rbi;
+	}
+#endif
+
 	queuedFlags = inst->flags;
 	instPlayerBase = RenderBucket_InstancePlayerBase(inst, playerIndex);
 	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
 	pb = idpp->pushBuffer;
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive() &&
+	    (playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+	    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+	{
+		pb = NativeAdhoc_GetRenderPushBuffer();
+	}
+#endif
 
 	if ((queuedFlags & lodMask) == 0)
 	{
@@ -2130,7 +2172,19 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	}
 #endif
 
-	RenderBucket_AdvanceInstanceAnimWord(inst, gameMode1, playerIndex, lastFrameAdvance, &queuedFlags);
+	{
+		int animationPlayerIndex = playerIndex;
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive())
+		{
+			// Retail advances shared Instance animation only during the P1 draw.
+			// Single-view adhoc still needs exactly one advance on both consoles,
+			// even when the client is rendering canonical player 2.
+			animationPlayerIndex = 0;
+		}
+#endif
+		RenderBucket_AdvanceInstanceAnimWord(inst, gameMode1, animationPlayerIndex, lastFrameAdvance, &queuedFlags);
+	}
 	idpp->ptrCurrFrame = frame;
 	idpp->ptrNextFrame = nextFrame;
 	RenderBucket_StoreMatrixWords(&idpp->m3x3, matrixState.m0, matrixState.m1, matrixState.m2, matrixState.m3, matrixState.m4);
@@ -2162,6 +2216,9 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 	struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
 	struct RenderBucketQueueState queueState = {0};
 	int count = (int)(u8)numPlyr;
+#if defined(CTR_NATIVE)
+	RenderBucket_InitEntryBounds(&queueState);
+#endif
 
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80070720-0x8007084c.
 	// Retail enters QueueDraw through a scratch/register
@@ -2176,6 +2233,22 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 		queueState.otEndMinusOne = otState->end - 1;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int player = NativeAdhoc_GetLocalPlayerIndex();
+		struct Instance **visInstSrc = cDC[player].visInstSrc;
+
+		if (visInstSrc != 0)
+		{
+			for (; *visInstSrc != 0; visInstSrc++)
+			{
+				entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
+			}
+		}
+	}
+	else
+#endif
 	for (int player = count - 1; player >= 0; player--)
 	{
 		struct Instance **visInstSrc = cDC[player].visInstSrc;
@@ -2206,6 +2279,9 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 	struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
 	struct RenderBucketQueueState queueState = {0};
 	int count = (int)(u8)numPlyr;
+#if defined(CTR_NATIVE)
+	RenderBucket_InitEntryBounds(&queueState);
+#endif
 
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8007084c-0x80070950.
 	// Retail enters QueueDraw through a scratch/register
@@ -2220,6 +2296,47 @@ void *RenderBucket_QueueNonLevInstances(struct Item *item, struct OTMem *otState
 		queueState.otEndMinusOne = otState->end - 1;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int player = NativeAdhoc_GetLocalPlayerIndex();
+		for (struct Item *curr = item; curr != 0; curr = curr->next)
+		{
+			struct Instance *inst = (struct Instance *)curr;
+			int presentationPlayer = player;
+
+			if ((inst->model != NULL) &&
+			    ((inst->model->id == STATIC_FRUITDISP) || (inst->model->id == STATIC_BIG1)))
+			{
+				int owner = -1;
+				for (int i = 0; i < 2; i++)
+				{
+					struct Driver *driver = sdata->gGT->drivers[i];
+					if ((driver != NULL) &&
+					    (((inst->model->id == STATIC_FRUITDISP) && (driver->instFruitDisp == inst)) ||
+					     ((inst->model->id == STATIC_BIG1) && (driver->instBigNum == inst))))
+					{
+						owner = i;
+						break;
+					}
+				}
+
+				if (owner != player)
+				{
+					continue;
+				}
+
+				// These HUD instances are born with their custom draw PushBuffer in
+				// IDPP 0 only. The logical owner is filtered above; slot zero is only
+				// the presentation metadata used to render it.
+				presentationPlayer = 0;
+			}
+
+			entry = RenderBucket_QueueDraw(inst, entry, presentationPlayer, lodMask, gameMode1, &queueState);
+		}
+	}
+	else
+#endif
 	for (int player = count - 1; player >= 0; player--)
 	{
 		for (struct Item *curr = item; curr != 0; curr = curr->next)
@@ -5224,6 +5341,17 @@ static int RenderBucket_PrepareDrawContext(struct RenderBucketDrawContext *ctx, 
 
 	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
 	pb = idpp->pushBuffer;
+#if defined(__vita__)
+	if (NativeAdhoc_IsSingleViewRenderActive())
+	{
+		int playerIndex = (int)(((u8 *)instPlayerBase - (u8 *)inst) / sizeof(struct InstDrawPerPlayer));
+		if ((playerIndex == NativeAdhoc_GetLocalPlayerIndex()) &&
+		    (pb == &sdata->gGT->pushBuffer[playerIndex]))
+		{
+			pb = NativeAdhoc_GetRenderPushBuffer();
+		}
+	}
+#endif
 	if (pb == 0)
 	{
 		return 0;

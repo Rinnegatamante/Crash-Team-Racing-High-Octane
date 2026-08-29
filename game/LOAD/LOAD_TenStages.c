@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(__vita__)
+#include "platform/native_adhoc.h"
+#endif
+
 #if defined(CTR_NATIVE)
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook, MM_NativeBossFight_JumpToBossSelect};
 #else
@@ -116,6 +120,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		gGT->level1 = 0;
 		gGT->level2 = 0;
+#if defined(__vita__)
+		int nativeAdhocRacePrepared = NativeAdhoc_EnforcePreparedRaceConfig(gGT);
+#endif
 		gGT->numPlyrCurrGame = gGT->numPlyrNextGame;
 		strcpy(gGT->levelName, data.metaDataLEV[levelID].name_Debug);
 
@@ -189,6 +196,17 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 
 		// main menu or adv garage
+#if defined(__vita__)
+		if (nativeAdhocRacePrepared)
+		{
+			// Adhoc simulates retail 2P, but presents one fullscreen camera. Load the
+			// 1P track package so the fullscreen renderer gets the complete geometry,
+			// skybox and 1P render data. LOAD_DriverMPK independently forces 2P
+			// character/robot assets below.
+			sdata->levelLOD = LOAD_LEVEL_LOD_1P;
+		}
+		else
+#endif
 		if ((gGT->gameMode1 & MAIN_MENU) != 0)
 		{
 			sdata->levelLOD = LOAD_LEVEL_LOD_1P;

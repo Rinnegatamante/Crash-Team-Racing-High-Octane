@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_EMITTER_AXIS_COUNT = 3,
@@ -741,9 +745,17 @@ static void VehEmitter_TerrainEffects(struct Thread *thread, struct Driver *d, s
 	if (thread->modelIndex == DYNAMIC_PLAYER)
 	{
 		u32 echo = ((d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
-		u32 flags = HowlSfx_Pack(HOWL_SFX_LR_CENTER, HOWL_SFX_DISTORTION_NONE, (u32)(s16)d->engineVol, echo);
-
-		OtherFX_RecycleNew(&d->driverAudioPtrs[2], wallSound, flags);
+#if defined(__vita__)
+		if (!NativeAdhoc_ShouldPresentDriver(d->driverID))
+		{
+			OtherFX_RecycleMute(&d->driverAudioPtrs[2]);
+		}
+		else
+#endif
+		{
+			u32 flags = HowlSfx_Pack(HOWL_SFX_LR_CENTER, HOWL_SFX_DISTORTION_NONE, (u32)(s16)d->engineVol, echo);
+			OtherFX_RecycleNew(&d->driverAudioPtrs[2], wallSound, flags);
+		}
 	}
 }
 
@@ -765,7 +777,16 @@ static void VehEmitter_TerrainAudioAndFeedback(struct Thread *thread, struct Dri
 	int distort = VehCalc_MapToRange(absSpeedApprox, 0, VEH_EMITTER_TERRAIN_AUDIO_DISTORT_SPEED_MAX, VEH_EMITTER_TERRAIN_AUDIO_DISTORT_MIN,
 	                                 VEH_EMITTER_TERRAIN_AUDIO_DISTORT_MAX);
 	u32 echo = ((d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
-	OtherFX_RecycleNew(&d->driverAudioPtrs[1], soundID, HowlSfx_Pack(HOWL_SFX_LR_CENTER, (u32)distort, (u32)vol, echo));
+#if defined(__vita__)
+	if (!NativeAdhoc_ShouldPresentDriver(d->driverID))
+	{
+		OtherFX_RecycleMute(&d->driverAudioPtrs[1]);
+	}
+	else
+#endif
+	{
+		OtherFX_RecycleNew(&d->driverAudioPtrs[1], soundID, HowlSfx_Pack(HOWL_SFX_LR_CENTER, (u32)distort, (u32)vol, echo));
+	}
 
 	if ((d->actionsFlagSet & ACTION_BOT) == 0)
 	{
@@ -841,9 +862,17 @@ static void VehEmitter_SkidmarkAudio(struct Thread *thread, struct Driver *d, st
 		int panOffset = CTR_MipsSra(CTR_MipsSll((u8)d->simpTurnState, 24), 26);
 		u32 lr = (u32)CTR_MipsSubLo(HOWL_SFX_LR_CENTER, panOffset);
 		u32 echo = ((d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
-		u32 flags = HowlSfx_Pack(lr, (u32)distort, (u32)(vol + (absTurn >> 1)), echo);
-
-		OtherFX_RecycleNew(&d->driverAudioPtrs[0], terrain->skidSound, flags);
+#if defined(__vita__)
+		if (!NativeAdhoc_ShouldPresentDriver(d->driverID))
+		{
+			OtherFX_RecycleMute(&d->driverAudioPtrs[0]);
+		}
+		else
+#endif
+		{
+			u32 flags = HowlSfx_Pack(lr, (u32)distort, (u32)(vol + (absTurn >> 1)), echo);
+			OtherFX_RecycleNew(&d->driverAudioPtrs[0], terrain->skidSound, flags);
+		}
 	}
 
 	VehEmitter_Skidmarks(thread, d, terrainFlags);
