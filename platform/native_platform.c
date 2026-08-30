@@ -458,6 +458,7 @@ void Platform_PinTextureDisplay(unsigned int texture, int contentHeight, int dis
 
 void Platform_PollHostEvents(void)
 {
+#ifndef __vita__
 	SDL_Event event;
 
 	while (SDL_PollEvent(&event))
@@ -551,11 +552,14 @@ void Platform_PollHostEvents(void)
 		}
 		}
 	}
+#endif
 }
 
 int Platform_PollInput(void)
 {
+#ifndef __vita__
 	Platform_PollHostEvents();
+#endif
 	Platform_InputUpdate();
 	return 1;
 }

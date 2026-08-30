@@ -912,10 +912,10 @@ void Platform_InputUpdate(void)
 		return;
 	}
 
-	SDL_PumpEvents();
 #ifdef __vita__
 	keyboardButtons = 0xffff;
 #else
+	SDL_PumpEvents();
 	keyboardButtons = NativeInput_KeyboardSuppressed() ? 0xffff : NativeInput_ReadKeyboard();
 #endif
 
