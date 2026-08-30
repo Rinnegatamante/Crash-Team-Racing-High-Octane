@@ -290,6 +290,7 @@ void DrawOTag(void *p)
 
 		if (Platform_BeginScene())
 		{
+			NativeGpu_ResetOrderDepth();
 			ClearSplits();
 		}
 
@@ -309,6 +310,7 @@ void DrawPrim(void *p)
 
 	if (Platform_BeginScene())
 	{
+		NativeGpu_ResetOrderDepth();
 		ClearSplits();
 	}
 

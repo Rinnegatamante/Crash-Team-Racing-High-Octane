@@ -16,6 +16,7 @@ extern DRAWENV activeDrawEnv;
 extern int g_GPUDisabledState;
 
 int NativeGpu_HasPendingSplits(void);
+void NativeGpu_ResetOrderDepth(void);
 void ClearSplits(void);
 void DrawAllSplits(void);
 void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive);

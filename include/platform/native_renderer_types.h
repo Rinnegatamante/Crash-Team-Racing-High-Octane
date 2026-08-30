@@ -31,6 +31,7 @@ typedef struct
 	u8 r, g, b, a;
 
 	s8 tcx, tcy, _p0, _p1;
+	u16 orderDepth;
 } GrVertex;
 #pragma pack(pop)
 
@@ -40,6 +41,7 @@ typedef enum
 	a_texcoord,
 	a_color,
 	a_extra,
+	a_order_depth,
 } ShaderAttrib;
 
 typedef enum
