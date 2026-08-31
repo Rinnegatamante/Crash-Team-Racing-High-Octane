@@ -439,7 +439,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		warppadObj->spinRot_Prize.x = 0;
 		warppadObj->spinRot_Prize.z = 0;
 
-		warppadObj->spinRot_Prize.y += AH_WP_SPIN_PRIZE_STEP;
+		warppadObj->spinRot_Prize.y += FPS_HALF(AH_WP_SPIN_PRIZE_STEP);
 
 		struct Instance *closedItemInst = instArr[WPIS_CLOSED_ITEM];
 
@@ -474,7 +474,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		// If Gem, change colors every 2 seconds
 		if (modelID == STATIC_GEM)
 		{
-			i = (gGT->timer / 0x3C) % 5;
+			i = (gGT->timer / FPS_DOUBLE(0x3C)) % 5;
 
 			closedItemInst->colorRGBA = INST_PackColorRGB(data.AdvCups[i].color[0], data.AdvCups[i].color[1], data.AdvCups[i].color[2]);
 		}
@@ -570,7 +570,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		warppadObj->boolEnteredWarppad = 1;
 		warppadObj->framesWarping++;
 		gGT->drivers[0]->funcPtrs[DRIVER_FUNC_INIT] = VehStuckProc_Warp_Init;
-		if (warppadObj->framesWarping < AH_WP_WARP_LOAD_FRAMES)
+		if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_WARP_LOAD_FRAMES))
 		{
 			goto WarpPad_AnimateOpen;
 		}
@@ -594,7 +594,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		warppadObj->boolEnteredWarppad = 1;
 		warppadObj->framesWarping++;
 		gGT->drivers[0]->funcPtrs[DRIVER_FUNC_INIT] = VehStuckProc_Warp_Init;
-		if (warppadObj->framesWarping < AH_WP_WARP_LOAD_FRAMES)
+		if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_WARP_LOAD_FRAMES))
 		{
 			goto WarpPad_AnimateOpen;
 		}
@@ -609,7 +609,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		warppadObj->boolEnteredWarppad = 1;
 		warppadObj->framesWarping++;
 		gGT->drivers[0]->funcPtrs[DRIVER_FUNC_INIT] = VehStuckProc_Warp_Init;
-		if (warppadObj->framesWarping < AH_WP_WARP_LOAD_FRAMES)
+		if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_WARP_LOAD_FRAMES))
 		{
 			goto WarpPad_AnimateOpen;
 		}
@@ -639,7 +639,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 		{
 			if (gGT->currAdvProfile.numTrophies >= data.metaDataLEV[levelID].numTrophiesToOpen)
 			{
-				if (warppadObj->framesWarping < AH_WP_WARP_LOAD_FRAMES)
+				if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_WARP_LOAD_FRAMES))
 				{
 					goto WarpPad_TrophyAnimateOnly;
 				}
@@ -712,7 +712,7 @@ void AH_WarpPad_ThTick(struct Thread *t)
 	warppadObj->boolEnteredWarppad = 1;
 	warppadObj->framesWarping++;
 	gGT->drivers[0]->funcPtrs[DRIVER_FUNC_INIT] = VehStuckProc_Warp_Init;
-	if (warppadObj->framesWarping < AH_WP_WARP_LOAD_FRAMES)
+	if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_WARP_LOAD_FRAMES))
 	{
 		goto WarpPad_AnimateOpen;
 	}
@@ -727,7 +727,7 @@ WarpPad_RequestLoad:
 
 WarpPad_TrophyAnimateOnly:
 
-	if (warppadObj->framesWarping < AH_WP_TROPHY_PORTAL_HOLD_FRAMES)
+	if (warppadObj->framesWarping < FPS_DOUBLE(AH_WP_TROPHY_PORTAL_HOLD_FRAMES))
 	{
 		warppadObj->framesWarping++;
 	}
@@ -738,7 +738,7 @@ WarpPad_TrophyAnimateOnly:
 
 WarpPad_AnimateOpen:
 
-	if ((instArr[WPIS_OPEN_BEAM] != 0) && ((gGT->timer & 1) != 0))
+	if ((instArr[WPIS_OPEN_BEAM] != 0) && ((!CTR_NATIVE_60FPS_ACTIVE && ((gGT->timer & 1) != 0)) || (CTR_NATIVE_60FPS_ACTIVE && ((gGT->timer & 3) == 3))))
 	{
 		warppadObj->spinRot_Beam.x = 0;
 		warppadObj->spinRot_Beam.z = 0;
@@ -752,7 +752,7 @@ WarpPad_AnimateOpen:
 		ConvertRotToMatrix(&instArr[WPIS_OPEN_BEAM]->matrix, &warppadObj->spinRot_Beam);
 	}
 
-	wispRiseRate = AH_WP_WISP_RISE_RATE;
+	wispRiseRate = FPS_HALF(AH_WP_WISP_RISE_RATE);
 
 	wispMaxHeight = AH_WP_WISP_FAR_MAX_HEIGHT;
 
@@ -769,7 +769,7 @@ WarpPad_AnimateOpen:
 			warppadObj->spinRot_Wisp[i].x = 0;
 			warppadObj->spinRot_Wisp[i].z = 0;
 
-			warppadObj->spinRot_Wisp[i].y += AH_WP_SPIN_WISP_STEP;
+			warppadObj->spinRot_Wisp[i].y += FPS_HALF(AH_WP_SPIN_WISP_STEP);
 
 			// converted to TEST in rebuildPS1
 			ConvertRotToMatrix(&instArr[WPIS_OPEN_RING1 + i]->matrix, &warppadObj->spinRot_Wisp[i]);
@@ -781,10 +781,10 @@ WarpPad_AnimateOpen:
 
 				// if height hasn't reached 4x RiseRate,
 				// first 4 frames of rising
-				if (instArr[WPIS_OPEN_RING1 + i]->matrix.t[1] < (warppadInst->matrix.t[1] + wispRiseRate * AH_WP_WISP_FIRST_FRAMES))
+				if (instArr[WPIS_OPEN_RING1 + i]->matrix.t[1] < (warppadInst->matrix.t[1] + wispRiseRate * FPS_DOUBLE(AH_WP_WISP_FIRST_FRAMES)))
 				{
 					// reduce transparency
-					instArr[WPIS_OPEN_RING1 + i]->alphaScale -= AH_WP_WISP_FADE_IN_STEP;
+					instArr[WPIS_OPEN_RING1 + i]->alphaScale -= FPS_HALF(AH_WP_WISP_FADE_IN_STEP);
 				}
 
 				// after first 4 frames
@@ -816,10 +816,10 @@ WarpPad_AnimateOpen:
 			}
 		}
 
-		wispRiseRate += AH_WP_WISP_RISE_RATE_STEP;
+		wispRiseRate += FPS_HALF(AH_WP_WISP_RISE_RATE_STEP);
 	}
 
-	warppadObj->spinRot_Prize.y += AH_WP_SPIN_PRIZE_REWARD_STEP;
+	warppadObj->spinRot_Prize.y += FPS_HALF(AH_WP_SPIN_PRIZE_REWARD_STEP);
 
 	rewardScale = 0x100;
 
@@ -876,8 +876,8 @@ WarpPad_AnimateOpen:
 			}
 		}
 
-		warppadObj->thirds[i] += AH_WP_REWARD_PHASE_STEP;
-		warppadObj->spinRot_Rewards.y += AH_WP_SPIN_REWARD_RING_STEP;
+		warppadObj->thirds[i] += FPS_HALF(AH_WP_REWARD_PHASE_STEP);
+		warppadObj->spinRot_Rewards.y += FPS_HALF(AH_WP_SPIN_REWARD_RING_STEP);
 	}
 
 	if (instArr[WPIS_CLOSED_1S] != 0)

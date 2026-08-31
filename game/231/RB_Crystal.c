@@ -4,7 +4,7 @@ SVec3 crystalLightDir = {{0x94F, 0x94F, 0x94F}};
 
 static void RB_Crystal_RotateStep(struct Instance *crystalInst, struct Crystal *crystalObj)
 {
-	crystalObj->rot.y += 0x40;
+	crystalObj->rot.y += FPS_HALF(0x40);
 	ConvertRotToMatrix(&crystalInst->matrix, &crystalObj->rot);
 }
 

@@ -145,7 +145,7 @@ void AH_Garage_ThTick(struct Thread *t)
 	else
 	{
 		// Increment animation by 0x20 in either direction
-		move = inst->matrix.t[1] + garage->direction * AH_GARAGE_DOOR_MOVE_STEP;
+		move = inst->matrix.t[1] + garage->direction * FPS_HALF(AH_GARAGE_DOOR_MOVE_STEP);
 		inst->matrix.t[1] = move;
 
 		top = inst->instDef->pos.y + AH_GARAGE_DOOR_HEIGHT;
@@ -183,7 +183,7 @@ void AH_Garage_ThTick(struct Thread *t)
 		else if (garage->garageTopInst != 0)
 		{
 			// Update rotation of garagetop
-			garage->rot.x += (s16)garage->direction * AH_GARAGE_TOP_ROT_STEP;
+			garage->rot.x += (s16)garage->direction * FPS_HALF(AH_GARAGE_TOP_ROT_STEP);
 
 			// converted to TEST in rebuildPS1
 			ConvertRotToMatrix(&garage->garageTopInst->matrix, &garage->rot);

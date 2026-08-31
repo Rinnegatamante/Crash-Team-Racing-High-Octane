@@ -1770,6 +1770,11 @@ void VehStuckProc_Warp_AddDustPuff2(struct Driver *d, struct DriverWarpState *wa
 void VehStuckProc_Warp_PhysAngular(struct Thread *th, struct Driver *d)
 {
 	(void)th;
+	if (CTR_NATIVE_60FPS_ACTIVE && ((sdata->gGT->timer & 1) == 0))
+	{
+		d->actionsFlagSet |= ACTION_WARP;
+		return;
+	}
 	int warpTimer;
 	SVec4 flarePos;
 

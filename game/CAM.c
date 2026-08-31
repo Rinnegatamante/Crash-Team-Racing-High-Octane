@@ -1088,7 +1088,7 @@ void CAM_SetDesiredPosRot(struct CameraDC *cDC, const SVec3 *pos, const SVec3 *r
 	cDC->transitionTo.rot = *rot;
 
 	// 1 second, 30 frames
-	cDC->transitionFrameCount = 0x1e;
+	cDC->transitionFrameCount = FPS_DOUBLE(0x1e);
 
 	cDC->transitionFrame = 0;
 	cDC->transitionBlend = 0x1000;

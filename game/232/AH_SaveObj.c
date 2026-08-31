@@ -163,7 +163,7 @@ void AH_SaveObj_ThTick(struct Thread *t)
 		save->flags = AH_SAVEOBJ_FLAG_NONE;
 	}
 
-	save->scanlineFrame = AH_SAVEOBJ_SCANLINE_START_FRAME;
+	save->scanlineFrame = FPS_DOUBLE(AH_SAVEOBJ_SCANLINE_START_FRAME);
 
 LAB_800af72c:
 
