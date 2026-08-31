@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 SDL_Window *g_window = NULL;
 int g_dbg_polygonSelected = 0;
@@ -48,6 +49,52 @@ global_variable int s_pinnedDisplayTextureHeight = 0;
 #define NATIVE_FPS_REPORT_FRAME_WINDOW 2000
 global_variable int s_fpsFrameCount = 0;
 global_variable u64 s_fpsLastCounter = 0;
+
+#ifdef __vita__
+typedef struct
+{
+	char windowName[128];
+	int width;
+	int height;
+	int result;
+} NativePlatformRendererInitTask;
+
+internal void NativePlatform_BackendRendererInit(void *arg)
+{
+	NativePlatformRendererInitTask *task = (NativePlatformRendererInitTask *)arg;
+	task->result = 0;
+	if (!NativeRenderer_InitialiseRender(task->windowName, task->width, task->height, 0))
+	{
+		return;
+	}
+	if (!NativeRenderer_InitialisePSX())
+	{
+		return;
+	}
+	task->result = 1;
+}
+
+internal void NativePlatform_BackendRendererShutdown(void *arg)
+{
+	(void)arg;
+#if defined(CTR_INTERNAL)
+	NativeRenderer_FinishGpuMeasurements();
+#endif
+	NativeRenderer_Shutdown();
+	if (g_window != NULL)
+	{
+		SDL_DestroyWindow(g_window);
+		g_window = NULL;
+	}
+}
+
+internal void NativePlatform_BackendPresentVRAM(void *arg)
+{
+	(void)arg;
+	Platform_BeginScene();
+	Platform_EndScene();
+}
+#endif
 
 internal void Platform_CalcFPS(void)
 {
@@ -99,6 +146,9 @@ internal void Platform_HandleWindowResize(int width, int height)
 {
 	g_windowWidth = width;
 	g_windowHeight = height;
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+#endif
 	NativeRenderer_ResetDevice();
 }
 
@@ -126,6 +176,9 @@ internal void Platform_HandleFullscreenToggle(void)
 	SDL_SetWindowFullscreen(g_window, fullscreen == 0);
 	SDL_GetWindowSize(g_window, &g_windowWidth, &g_windowHeight);
 	Platform_UpdateCursorVisibility();
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+#endif
 	NativeRenderer_ResetDevice();
 }
 
@@ -216,6 +269,9 @@ internal void Platform_HandleKey(int key, char down)
 			break;
 		case SDL_SCANCODE_F7:
 			Platform_LogWarn("[CTR Native] saving VRAM.TGA\n");
+#ifdef __vita__
+			NativeGpu_SyncBackend();
+#endif
 			NativeRenderer_SaveVRAM("VRAM.TGA", 0, 0, VRAM_WIDTH, VRAM_HEIGHT, 1);
 			break;
 		case SDL_SCANCODE_F12:
@@ -246,29 +302,54 @@ void Platform_Init(const char *title, int width, int height)
 
 	Platform_Log("[CTR Native] Initialising platform\n");
 
+#ifdef __vita__
+	if (!NativeGpu_InitBackend(width, height))
+	{
+		Platform_LogError("[CTR Native] Failed to initialise renderer thread\n");
+		Platform_LogShutdown();
+		return;
+	}
+#endif
+
 	if (SDL_Init(SDL_INIT_VIDEO) == 0)
 	{
 		Platform_LogError("[CTR Native] Failed to initialise SDL\n");
+#ifdef __vita__
+		NativeGpu_ShutdownBackend();
+#endif
 		Platform_LogShutdown();
 		return;
 	}
 
 	s_platformInitialized = 1;
 
+#ifdef __vita__
+	NativePlatformRendererInitTask rendererInit;
+	memset(&rendererInit, 0, sizeof(rendererInit));
+	strncpy(rendererInit.windowName, windowName, sizeof(rendererInit.windowName) - 1);
+	rendererInit.width = width;
+	rendererInit.height = height;
+	NativeGpu_RunBackendTaskSync(NativePlatform_BackendRendererInit, &rendererInit);
+	if (!rendererInit.result)
+	{
+		Platform_LogError("[CTR Native] Failed to initialise renderer\n");
+		Platform_Shutdown();
+		return;
+	}
+#else
 	if (!NativeRenderer_InitialiseRender(windowName, width, height, 0))
 	{
 		Platform_LogError("[CTR Native] Failed to initialise window\n");
 		Platform_Shutdown();
 		return;
 	}
-
 	if (!NativeRenderer_InitialisePSX())
 	{
 		Platform_LogError("[CTR Native] Failed to initialise PSX renderer state\n");
 		Platform_Shutdown();
 		return;
 	}
-
+#endif
 	atexit(Platform_Shutdown);
 	Platform_UpdateCursorVisibility();
 	Platform_InputInit();
@@ -283,7 +364,6 @@ void Platform_Shutdown(void)
 
 	s_platformInitialized = 0;
 #if defined(CTR_INTERNAL)
-	NativeRenderer_FinishGpuMeasurements();
 	NativePerf_Shutdown();
 	NativeReplayScheduler_Shutdown();
 #endif
@@ -292,13 +372,20 @@ void Platform_Shutdown(void)
 	NativeCD_Shutdown();
 	NativeAudio_Shutdown();
 	NativeSTR_Shutdown();
+#ifdef __vita__
+	NativeGpu_RunBackendTaskSync(NativePlatform_BackendRendererShutdown, NULL);
+	NativeGpu_ShutdownBackend();
+#else
+#if defined(CTR_INTERNAL)
+	NativeRenderer_FinishGpuMeasurements();
+#endif
 	NativeRenderer_Shutdown();
-
 	if (g_window != NULL)
 	{
 		SDL_DestroyWindow(g_window);
 		g_window = NULL;
 	}
+#endif
 
 	SDL_Quit();
 
@@ -307,9 +394,9 @@ void Platform_Shutdown(void)
 
 void Platform_BeginFrame(void)
 {
-	// NOTE(aalhendi): Normal rendering begins from DrawOTag after the current
-	// draw env is installed. Starting a host scene here clears the previous env
-	// and can force the host GL driver to block before the retail render-submit path.
+#ifdef __vita__
+	NativeGpu_BeginFrontendFrame();
+#endif
 }
 
 int Platform_BeginScene(void)
@@ -330,12 +417,12 @@ int Platform_BeginScene(void)
 
 	NativeRenderer_BeginScene();
 
-	if (activeDrawEnv.isbg)
+	if (NativeGpu_GetRenderDrawEnv()->isbg)
 	{
-		const RECT16 clipenv = activeDrawEnv.clip;
-		const u8 r = activeDrawEnv.r0;
-		const u8 g = activeDrawEnv.g0;
-		const u8 b = activeDrawEnv.b0;
+		const RECT16 clipenv = NativeGpu_GetRenderDrawEnv()->clip;
+		const u8 r = NativeGpu_GetRenderDrawEnv()->r0;
+		const u8 g = NativeGpu_GetRenderDrawEnv()->g0;
+		const u8 b = NativeGpu_GetRenderDrawEnv()->b0;
 
 		NativeRenderer_Clear(clipenv.x, clipenv.y, clipenv.w, clipenv.h, r, g, b);
 	}
@@ -388,11 +475,11 @@ void Platform_EndScene(void)
 
 	// NOTE(aalhendi): Keep the displayed VRAM region current for screen-copy
 	// effects without forcing a CPU readback.
-	NativeRenderer_StoreFrameBuffer(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+	NativeRenderer_StoreFrameBuffer(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
 #ifdef __vita__
 	NativeRenderer_PresentMainRenderTarget();
 #else
-	NativeRenderer_PresentVRAMRect(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+	NativeRenderer_PresentVRAMRect(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
 #endif
 	NativeRenderer_EndGpuFrame();
 	NativeRenderer_SwapWindow();
@@ -404,7 +491,10 @@ void Platform_EndScene(void)
 void Platform_EndFrame(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_PLATFORM_END_FRAME);
-	Platform_EndScene();
+	if (!NativeGpu_SubmitFrontendFrame())
+	{
+		Platform_EndScene();
+	}
 	Platform_CalcFPS();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_FRAME);
 }
@@ -412,12 +502,26 @@ void Platform_EndFrame(void)
 void Platform_PresentVRAMDisplay(void)
 {
 	Platform_PinVRAMDisplayFrames(1);
+#ifdef __vita__
+	if (NativeGpu_IsSynchronousFrame())
+	{
+		NativeGpu_FinishSynchronousFrame();
+	}
+	else
+	{
+		NativeGpu_RunBackendTaskSync(NativePlatform_BackendPresentVRAM, NULL);
+	}
+#else
 	Platform_BeginScene();
 	Platform_EndFrame();
+#endif
 }
 
 void Platform_PinVRAMDisplayFrames(int frameCount)
 {
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+#endif
 	if (frameCount > s_pinnedVramDisplayFrames)
 	{
 		s_pinnedVramDisplayFrames = frameCount;
@@ -428,6 +532,9 @@ void Platform_PinVRAMDisplayFrames(int frameCount)
 
 void Platform_PinVRAMDisplayRect(int x, int y, int w, int h, int frameCount)
 {
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+#endif
 	if ((frameCount <= 0) || (w <= 0) || (h <= 0))
 	{
 		return;
@@ -444,6 +551,9 @@ void Platform_PinVRAMDisplayRect(int x, int y, int w, int h, int frameCount)
 
 void Platform_PinTextureDisplay(unsigned int texture, int contentHeight, int displayHeight, int frameCount)
 {
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+#endif
 	if ((texture == 0) || (contentHeight <= 0) || (displayHeight < contentHeight) || (frameCount <= 0))
 	{
 		return;

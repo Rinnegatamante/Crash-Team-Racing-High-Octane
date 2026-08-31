@@ -2,6 +2,7 @@
 #include <platform/native_assets.h>
 #include <platform/native_audio.h>
 #include <platform/native_disc_image.h>
+#include <platform/native_gpu.h>
 #include <platform/native_renderer.h>
 #include <platform/native_str.h>
 #include <psx/libgpu.h>
@@ -103,11 +104,50 @@ struct NativeSTRAcGroup
 
 global_variable struct NativeSTRState s_str;
 
+#ifdef __vita__
+typedef struct
+{
+	u32 texture;
+	s32 width;
+	s32 height;
+	const u8 *pixels;
+} NativeSTRBackendTextureTask;
+
+internal void NativeSTR_BackendDestroyTexture(void *arg)
+{
+	NativeSTRBackendTextureTask *task = (NativeSTRBackendTextureTask *)arg;
+	NativeRenderer_DestroyStreamingTexture(task->texture);
+}
+
+internal void NativeSTR_BackendCreateTexture(void *arg)
+{
+	NativeSTRBackendTextureTask *task = (NativeSTRBackendTextureTask *)arg;
+	task->texture = NativeRenderer_CreateStreamingTexture(task->width, task->height);
+}
+
+internal void NativeSTR_BackendUpdateTexture(void *arg)
+{
+	NativeSTRBackendTextureTask *task = (NativeSTRBackendTextureTask *)arg;
+	NativeRenderer_UpdateStreamingTexture(task->texture, task->width, task->height, task->pixels);
+}
+
+internal void NativeSTR_BackendUpdateVRAM(void *arg)
+{
+	(void)arg;
+	NativeRenderer_UpdateVRAM();
+}
+#endif
+
 internal void NativeSTR_DestroyFrameTextures(void)
 {
 	for (s32 i = 0; i < NATIVE_STR_STREAM_TEXTURE_COUNT; i++)
 	{
+#ifdef __vita__
+		NativeSTRBackendTextureTask task = {s_str.frameTextures[i], 0, 0, NULL};
+		NativeGpu_RunBackendTaskSync(NativeSTR_BackendDestroyTexture, &task);
+#else
 		NativeRenderer_DestroyStreamingTexture(s_str.frameTextures[i]);
+#endif
 		s_str.frameTextures[i] = 0;
 	}
 
@@ -127,7 +167,13 @@ internal s32 NativeSTR_EnsureFrameTextures(void)
 	NativeSTR_DestroyFrameTextures();
 	for (s32 i = 0; i < NATIVE_STR_STREAM_TEXTURE_COUNT; i++)
 	{
+#ifdef __vita__
+		NativeSTRBackendTextureTask task = {0, s_str.width, s_str.height, NULL};
+		NativeGpu_RunBackendTaskSync(NativeSTR_BackendCreateTexture, &task);
+		s_str.frameTextures[i] = task.texture;
+#else
 		s_str.frameTextures[i] = NativeRenderer_CreateStreamingTexture(s_str.width, s_str.height);
+#endif
 		if (s_str.frameTextures[i] == 0)
 		{
 			NativeSTR_DestroyFrameTextures();
@@ -1001,7 +1047,11 @@ s32 NativeSTR_UploadNextFrame(s32 dstX, s32 dstY)
 	LoadImage(&rect, s_str.rgb555);
 	// Scrapbook playback still follows the retail VRAM path. LoadImage is
 	// GPU-visible immediately, so refresh the host VRAM texture at that boundary.
+#ifdef __vita__
+	NativeGpu_RunBackendTaskSync(NativeSTR_BackendUpdateVRAM, NULL);
+#else
 	NativeRenderer_UpdateVRAM();
+#endif
 	return 1;
 }
 
@@ -1043,7 +1093,12 @@ s32 NativeSTR_UploadNextFrameToTexture(void)
 
 	s_str.frameTextureIndex = (s_str.frameTextureIndex + 1) % NATIVE_STR_STREAM_TEXTURE_COUNT;
 	s_str.displayTexture = s_str.frameTextures[s_str.frameTextureIndex];
+#ifdef __vita__
+	NativeSTRBackendTextureTask task = {s_str.displayTexture, s_str.width, s_str.height, s_str.rgba8888};
+	NativeGpu_RunBackendTaskSync(NativeSTR_BackendUpdateTexture, &task);
+#else
 	NativeRenderer_UpdateStreamingTexture(s_str.displayTexture, s_str.width, s_str.height, s_str.rgba8888);
+#endif
 	return 1;
 }
 

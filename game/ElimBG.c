@@ -1,7 +1,7 @@
 #include <common.h>
 
 #ifdef CTR_NATIVE
-#include <platform/native_renderer.h>
+#include <platform/native_gpu.h>
 #endif
 
 enum ElimBGPauseState
@@ -130,7 +130,7 @@ void ElimBG_SaveScreenshot_Full(struct GameTracker *gGT)
 	rSrc.h = ELIM_BG_STRIP_H;
 
 #ifdef CTR_NATIVE
-	NativeRenderer_SyncVRAMToCPU(rSrc.x, rSrc.y, ELIM_BG_SCREEN_W, ELIM_BG_SCREEN_H);
+	NativeGpu_SyncVRAMToCPU(rSrc.x, rSrc.y, ELIM_BG_SCREEN_W, ELIM_BG_SCREEN_H);
 #endif
 
 	rDst.x = ELIM_BG_CAPTURE_VRAM_X;

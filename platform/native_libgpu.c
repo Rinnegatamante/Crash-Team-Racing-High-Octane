@@ -23,10 +23,64 @@
 int g_dbg_emulatorPaused = 0;
 void (*drawsync_callback)(void) = NULL;
 
+#ifdef __vita__
+typedef struct
+{
+	RECT16 rect;
+	u8 r;
+	u8 g;
+	u8 b;
+} NativeLibGpuClearTask;
+
+typedef struct
+{
+	RECT16 rect;
+	u16 *pixels;
+	int dstX;
+	int dstY;
+} NativeLibGpuVramTask;
+
+internal void NativeLibGpu_BackendClearTask(void *arg)
+{
+	NativeLibGpuClearTask *task = (NativeLibGpuClearTask *)arg;
+	NativeRenderer_ClearVRAM(task->rect.x, task->rect.y, task->rect.w, task->rect.h, task->r, task->g, task->b);
+	NativeRenderer_Clear(task->rect.x, task->rect.y, task->rect.w, task->rect.h, task->r, task->g, task->b);
+}
+
+internal void NativeLibGpu_BackendLoadTask(void *arg)
+{
+	NativeLibGpuVramTask *task = (NativeLibGpuVramTask *)arg;
+	NativeRenderer_CopyVRAM(task->pixels, 0, 0, task->rect.w, task->rect.h, task->rect.x, task->rect.y);
+}
+
+internal void NativeLibGpu_BackendMoveTask(void *arg)
+{
+	NativeLibGpuVramTask *task = (NativeLibGpuVramTask *)arg;
+	NativeRenderer_CopyVRAM(NULL, task->rect.x, task->rect.y, task->rect.w, task->rect.h, task->dstX, task->dstY);
+}
+
+internal void NativeLibGpu_BackendReadTask(void *arg)
+{
+	NativeLibGpuVramTask *task = (NativeLibGpuVramTask *)arg;
+	NativeRenderer_ReadVRAM(task->pixels, task->rect.x, task->rect.y, task->rect.w, task->rect.h);
+}
+
+internal void NativeLibGpu_BackendUpdateVRAMTask(void *arg)
+{
+	(void)arg;
+	NativeRenderer_UpdateVRAM();
+}
+#endif
+
 int ClearImage(RECT16 *rect, uint8_t r, uint8_t g, uint8_t b)
 {
+#ifdef __vita__
+	NativeLibGpuClearTask task = {*rect, r, g, b};
+	NativeGpu_RunBackendTaskSync(NativeLibGpu_BackendClearTask, &task);
+#else
 	NativeRenderer_ClearVRAM(rect->x, rect->y, rect->w, rect->h, r, g, b);
 	NativeRenderer_Clear(rect->x, rect->y, rect->w, rect->h, r, g, b);
+#endif
 	return 0;
 }
 
@@ -39,11 +93,22 @@ int DrawSync(int mode)
 {
 	(void)mode;
 
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+	if (NativeGpu_HasPendingSplits())
+	{
+		NativeGpu_ForceSynchronousFrame();
+		NativeGpu_FlushFrontendSplitsSync();
+	}
+#else
 	NativeRenderer_UpdateVRAM();
+#endif
+#ifndef __vita__
 	if (NativeGpu_HasPendingSplits())
 	{
 		DrawAllSplits();
 	}
+#endif
 	// NOTE(penta3): Real PS1 DrawSync only waits for the GPU; it never copies the
 	// framebuffer back into VRAM. We do the same: no per-frame readback here. The
 	// on-demand consumers that actually sample the framebuffer pull it when needed
@@ -59,26 +124,45 @@ int DrawSync(int mode)
 
 int LoadImage(RECT16 *rect, void *p)
 {
+#ifdef __vita__
+	NativeLibGpuVramTask task = {*rect, (u16 *)p, 0, 0};
+	NativeGpu_RunBackendTaskSync(NativeLibGpu_BackendLoadTask, &task);
+#else
 	NativeRenderer_CopyVRAM((unsigned short *)p, 0, 0, rect->w, rect->h, rect->x, rect->y);
+#endif
 	return 0;
 }
 
 int LoadImage2(RECT16 *rect, void *p)
 {
 	LoadImage(rect, p);
+#ifdef __vita__
+	NativeGpu_RunBackendTaskSync(NativeLibGpu_BackendUpdateVRAMTask, NULL);
+#else
 	NativeRenderer_UpdateVRAM();
+#endif
 	return 0;
 }
 
 int MoveImage(RECT16 *rect, int x, int y)
 {
+#ifdef __vita__
+	NativeLibGpuVramTask task = {*rect, NULL, x, y};
+	NativeGpu_RunBackendTaskSync(NativeLibGpu_BackendMoveTask, &task);
+#else
 	NativeRenderer_CopyVRAM(NULL, rect->x, rect->y, rect->w, rect->h, x, y);
+#endif
 	return 0;
 }
 
 int StoreImage(RECT16 *rect, uint32_t *p)
 {
+#ifdef __vita__
+	NativeLibGpuVramTask task = {*rect, (u16 *)p, 0, 0};
+	NativeGpu_RunBackendTaskSync(NativeLibGpu_BackendReadTask, &task);
+#else
 	NativeRenderer_ReadVRAM((unsigned short *)p, rect->x, rect->y, rect->w, rect->h);
+#endif
 	return 0;
 }
 
@@ -94,12 +178,20 @@ int ResetGraph(int mode)
 		g_GPUDisabledState = 0;
 		ClearImage(&activeDrawEnv.clip, 0, 0, 0);
 		ClearSplits();
+#ifdef __vita__
+		NativeGpu_FinishSynchronousFrame();
+#else
 		Platform_EndScene();
+#endif
 	}
 	else if (mode == 1)
 	{
 		ClearSplits();
+#ifdef __vita__
+		NativeGpu_FinishSynchronousFrame();
+#else
 		Platform_EndScene();
+#endif
 	}
 
 	return 0;
@@ -171,6 +263,7 @@ DISPENV *GetDispEnv(DISPENV *env)
 DISPENV *PutDispEnv(DISPENV *env)
 {
 	memcpy(&activeDispEnv, env, sizeof(DISPENV));
+	NativeGpu_SetFrontendDispEnv(env);
 	return 0;
 }
 
@@ -197,6 +290,7 @@ DISPENV *SetDefDispEnv(DISPENV *env, int x, int y, int w, int h)
 DRAWENV *PutDrawEnv(DRAWENV *env)
 {
 	memcpy(&activeDrawEnv, env, sizeof(DRAWENV));
+	NativeGpu_SetFrontendDrawEnv(env);
 	return 0;
 }
 
@@ -288,6 +382,29 @@ void DrawOTag(void *p)
 			return;
 		}
 
+#ifdef __vita__
+		if (NativeGpu_IsFrontendFrameActive())
+		{
+			ParsePrimitivesLinkedList((uint32_t *)p, 0);
+			if (NativeGpu_IsSynchronousFrame() && NativeGpu_HasPendingSplits())
+			{
+				NativeGpu_FlushFrontendSplitsSync();
+			}
+		}
+		else
+		{
+			NativeGpu_SyncBackend();
+			const int newScene = !NativeGpu_IsSynchronousFrame();
+			NativeGpu_ForceSynchronousFrame();
+			if (newScene)
+			{
+				NativeGpu_ResetOrderDepth();
+				ClearSplits();
+			}
+			ParsePrimitivesLinkedList((uint32_t *)p, 0);
+			NativeGpu_FlushFrontendSplitsSync();
+		}
+#else
 		if (Platform_BeginScene())
 		{
 			NativeGpu_ResetOrderDepth();
@@ -296,6 +413,7 @@ void DrawOTag(void *p)
 
 		ParsePrimitivesLinkedList((uint32_t *)p, 0);
 		DrawAllSplits();
+#endif
 	} while (g_dbg_emulatorPaused);
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_DRAW_OTAG);
 }
@@ -308,13 +426,21 @@ void DrawPrim(void *p)
 		return;
 	}
 
+#ifdef __vita__
+	NativeGpu_SyncBackend();
+	NativeGpu_ForceSynchronousFrame();
+#else
 	if (Platform_BeginScene())
 	{
 		NativeGpu_ResetOrderDepth();
 		ClearSplits();
 	}
+#endif
 
 	ParsePrimitivesLinkedList((uint32_t *)p, 1);
+#ifdef __vita__
+	NativeGpu_FlushFrontendSplitsSync();
+#endif
 }
 
 void AddPrim(void *ot, void *p)

@@ -173,7 +173,6 @@ static int NativeArg_IsVersion(const char *arg)
 
 #ifdef __vita__
 #include <pthread.h>
-uint8_t vglInitExtended(int legacy_pool_size, int width, int height, int ram_threshold, SceGxmMultisampleMode msaa);
 void *real_main(void *argv);
 
 int main(int argc, char *argv[]) {
@@ -230,10 +229,6 @@ void *real_main(void *_argv) {
 	
 	load_config();
 	sceIoMkdir("ux0:data/ctr/shader_cache", 0777);
-	vglSetShaderCachePath("ux0:data/ctr/shader_cache");
-	vglUseLowPrecision(GL_TRUE);
-	vglSetupRuntimeShaderCompiler(SHARK_OPT_UNSAFE, GL_TRUE, GL_TRUE, GL_TRUE);
-	vglInitExtended(0, 960, 544, 4 * 1024 * 1024, SCE_GXM_MULTISAMPLE_4X);
 	char **argv = _argv;
 	int argc = 0;
 #else

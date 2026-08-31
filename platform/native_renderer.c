@@ -579,9 +579,9 @@ void NativeRenderer_BeginScene(void)
 	NativeRenderer_SetDepthState(0, 1);
 
 	NativeRenderer_UpdateVRAM();
-	if (!activeDrawEnv.isbg)
+	if (!NativeGpu_GetRenderDrawEnv()->isbg)
 	{
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y,
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y,
 		                                        s_mainRenderTarget.logicalWidth, s_mainRenderTarget.logicalHeight);
 	}
 	else
@@ -810,12 +810,12 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 
 internal void NativeRenderer_BindMainRenderTarget(void)
 {
-	int logicalWidth = activeDispEnv.disp.w;
-	int logicalHeight = activeDispEnv.disp.h;
+	int logicalWidth = NativeGpu_GetRenderDispEnv()->disp.w;
+	int logicalHeight = NativeGpu_GetRenderDispEnv()->disp.h;
 	if ((logicalWidth <= 0) || (logicalHeight <= 0))
 	{
-		logicalWidth = activeDrawEnv.clip.w;
-		logicalHeight = activeDrawEnv.clip.h;
+		logicalWidth = NativeGpu_GetRenderDrawEnv()->clip.w;
+		logicalHeight = NativeGpu_GetRenderDrawEnv()->clip.h;
 	}
 
 	int physicalWidth = logicalWidth;
@@ -2760,17 +2760,17 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 		return;
 	}
 
-	int displayX = activeDispEnv.disp.x;
-	int displayY = activeDispEnv.disp.y;
-	int displayW = activeDispEnv.disp.w;
-	int displayH = activeDispEnv.disp.h;
+	int displayX = NativeGpu_GetRenderDispEnv()->disp.x;
+	int displayY = NativeGpu_GetRenderDispEnv()->disp.y;
+	int displayW = NativeGpu_GetRenderDispEnv()->disp.w;
+	int displayH = NativeGpu_GetRenderDispEnv()->disp.h;
 
 	if ((displayW <= 0) || (displayH <= 0))
 	{
-		displayX = activeDrawEnv.clip.x;
-		displayY = activeDrawEnv.clip.y;
-		displayW = activeDrawEnv.clip.w;
-		displayH = activeDrawEnv.clip.h;
+		displayX = NativeGpu_GetRenderDrawEnv()->clip.x;
+		displayY = NativeGpu_GetRenderDrawEnv()->clip.y;
+		displayW = NativeGpu_GetRenderDrawEnv()->clip.w;
+		displayH = NativeGpu_GetRenderDrawEnv()->clip.h;
 	}
 
 	if ((displayW <= 0) || (displayH <= 0))
@@ -3394,7 +3394,7 @@ void NativeRenderer_PresentVRAMDisplay(void)
 	// splash path by displaying VRAM directly after DR_MOVE packets; the native
 	// OpenGL backend otherwise swaps the current framebuffer and never shows
 	// those VRAM-only copies.
-	NativeRenderer_PresentVRAMRect(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+	NativeRenderer_PresentVRAMRect(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
 }
 
 void NativeRenderer_SwapWindow(void)
@@ -3596,8 +3596,14 @@ void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int num_vertice
 	glBindVertexArray(s_glVertexArray[bufferIndex]);
 	glBindBuffer(GL_ARRAY_BUFFER, s_glVertexBuffer[bufferIndex]);
 #ifdef __vita__
-	// vertices is already in vitaGL's GPU-mapped circular pool.
-	vglBufferData(GL_ARRAY_BUFFER, vertices);
+	GrVertex *gpuVertices = NativeRenderer_AllocateVertexBuffer(num_vertices);
+	if (gpuVertices == NULL)
+	{
+		NativePerf_EndScope(NATIVE_PERF_BUCKET_RENDERER_VERTEX_UPLOAD);
+		return;
+	}
+	memcpy(gpuVertices, vertices, (size_t)num_vertices * sizeof(GrVertex));
+	vglBufferData(GL_ARRAY_BUFFER, gpuVertices);
 #else
 	glBufferSubData(GL_ARRAY_BUFFER, 0, num_vertices * sizeof(GrVertex), vertices);
 #endif
