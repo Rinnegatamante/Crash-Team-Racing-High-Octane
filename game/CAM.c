@@ -515,7 +515,7 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 		cDC->trackPathProgress = 0;
 		cDC->transitionBlend = 0;
 
-		cDC->transitionFrameCount = 0x1E;
+		cDC->transitionFrameCount = FPS_DOUBLE(0x1E);
 		cDC->nearOrFar = 0;
 
 		// when camera reaches player, be zoomed in
@@ -523,7 +523,7 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 		cDC->trackPathNode = (struct CheckpointNode *)(flyInData + 0x18);
 
 		// if 1 or less screens
-		cDC->transitionFrame = 0xA5;
+		cDC->transitionFrame = FPS_DOUBLE(0xA5);
 #if defined(__vita__)
 		if (!NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame > 1))
 #else
@@ -1374,7 +1374,7 @@ void CAM_FollowDriver_Normal(struct CameraDC *cDC, struct Driver *d, SVec3 *push
 		cDC->BlastedLerp.desiredPos.y = cDC->cameraPos.y - (s16)cam->pos.y;
 		cDC->BlastedLerp.desiredPos.z = cDC->cameraPos.z - (s16)cam->pos.z;
 
-		cDC->BlastedLerp.framesRemaining = 8;
+		cDC->BlastedLerp.framesRemaining = FPS_DOUBLE(8);
 	}
 
 	// if not arcade end-of-race
@@ -1421,7 +1421,7 @@ void CAM_FollowDriver_Normal(struct CameraDC *cDC, struct Driver *d, SVec3 *push
 			cDC->BlastedLerp.desiredPos.y = cDC->cameraPos.y - (s16)cam->pos.y;
 			cDC->BlastedLerp.desiredPos.z = cDC->cameraPos.z - (s16)cam->pos.z;
 
-			cDC->BlastedLerp.framesRemaining = 8;
+			cDC->BlastedLerp.framesRemaining = FPS_DOUBLE(8);
 
 			goto LAB_8001a8b0;
 		}
@@ -1431,13 +1431,13 @@ void CAM_FollowDriver_Normal(struct CameraDC *cDC, struct Driver *d, SVec3 *push
 		// if frame countdown is not finished
 		if (cDC->BlastedLerp.framesRemaining != 0)
 		{
-			cam->pos.x += (cDC->BlastedLerp.desiredPos.x * cDC->BlastedLerp.framesRemaining) >> 3;
-			cam->pos.y += (cDC->BlastedLerp.desiredPos.y * cDC->BlastedLerp.framesRemaining) >> 3;
-			cam->pos.z += (cDC->BlastedLerp.desiredPos.z * cDC->BlastedLerp.framesRemaining) >> 3;
+			cam->pos.x += (cDC->BlastedLerp.desiredPos.x * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
+			cam->pos.y += (cDC->BlastedLerp.desiredPos.y * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
+			cam->pos.z += (cDC->BlastedLerp.desiredPos.z * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
 
-			cam->delta.x += (cDC->BlastedLerp.desiredRot.x * cDC->BlastedLerp.framesRemaining) >> 3;
-			cam->delta.y += (cDC->BlastedLerp.desiredRot.y * cDC->BlastedLerp.framesRemaining) >> 3;
-			cam->delta.z += (cDC->BlastedLerp.desiredRot.z * cDC->BlastedLerp.framesRemaining) >> 3;
+			cam->delta.x += (cDC->BlastedLerp.desiredRot.x * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
+			cam->delta.y += (cDC->BlastedLerp.desiredRot.y * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
+			cam->delta.z += (cDC->BlastedLerp.desiredRot.z * cDC->BlastedLerp.framesRemaining) >> FPS_RIGHTSHIFT(3);
 
 			// decrease frame countdown
 			cDC->BlastedLerp.framesRemaining--;
@@ -1517,7 +1517,7 @@ LAB_8001ab04:
 
 		if (pb->rot.x < 0x800)
 		{
-			pb->rot.x += 0x10;
+			pb->rot.x += FPS_HALF(0x10);
 			if (pb->rot.x > 0x800)
 			{
 				pb->rot.x = 0x800;
@@ -1663,14 +1663,14 @@ LAB_8001ab04:
 				flyInData.frameCount2 = 0x8e;
 
 				// which frame of fly-in you are in
-				x = 0xa5 - (u16)cDC->transitionFrame;
+				x = FPS_DOUBLE(0xa5) - (u16)cDC->transitionFrame;
 
-				if ((s16)x > 0x96)
+				if ((s16)x > FPS_DOUBLE(0x96))
 				{
-					x = 0x96;
+					x = FPS_DOUBLE(0x96);
 				}
 
-				CAM_StartLine_FlyIn(&flyInData, 0x96, x, &local_40, &local_38);
+				CAM_StartLine_FlyIn(&flyInData, FPS_DOUBLE(0x96), x, &local_40, &local_38);
 
 				x = (s32)cDC->transitionBlend;
 			}

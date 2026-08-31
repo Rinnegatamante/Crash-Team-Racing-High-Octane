@@ -276,7 +276,14 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	// STATIC_TURBO_EFFECT7
 	turbo->inst->model = gGT->modelPtr[(((int)turbo->fireAnimIndex + TURBO_SECONDARY_MODEL_FRAME_OFFSET) & TURBO_ANIM_FRAME_MASK) + STATIC_TURBO_EFFECT];
 
+#if CTR_NATIVE_60FPS
+	if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+	{
+		turbo->fireAnimIndex++;
+	}
+#else
 	turbo->fireAnimIndex++;
+#endif
 
 	// if eight or higher, back to zero
 	if (turbo->fireAnimIndex >= TURBO_ANIM_FRAME_COUNT)

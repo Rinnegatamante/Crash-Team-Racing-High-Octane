@@ -517,7 +517,7 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 	// Save Ghost
 	case UI_RACE_END_OPTION_SAVE_GHOST:
 	{
-		sdata->framesSinceRaceEnded = UI_RACE_END_SAVE_GHOST_FRAME;
+		sdata->framesSinceRaceEnded = FPS_DOUBLE(UI_RACE_END_SAVE_GHOST_FRAME);
 
 		// Set Load/Save to Ghost mode
 		SelectProfile_ToggleMode(SELECT_PROFILE_MODE_GHOST_SAVE);

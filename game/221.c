@@ -179,7 +179,7 @@ void CC_EndEvent_DrawMenu()
 	b32 didLose = driver->numCrystals < gGT->numCrystalsInLEV;
 	s32 elapsedFrames = sdata->framesSinceRaceEnded;
 
-	if (elapsedFrames < CTR_SECONDS_TO_FRAMES(30))
+	if (elapsedFrames < FPS_DOUBLE(CTR_SECONDS_TO_FRAMES(30)))
 	{
 		elapsedFrames++;
 	}
@@ -264,7 +264,7 @@ void CC_EndEvent_DrawMenu()
 		token->matrix.t[1] = UI_ConvertY_2(0xA2 - 0x18, CC_SCREEN_DEPTH);
 	}
 
-	if (elapsedFrames > CTR_SECONDS_TO_FRAMES(1))
+	if (elapsedFrames > FPS_DOUBLE(CTR_SECONDS_TO_FRAMES(1)))
 	{
 #if defined(CTR_NATIVE)
 		if (token != NULL)
@@ -278,7 +278,7 @@ void CC_EndEvent_DrawMenu()
 			}
 		}
 	}
-	else if (elapsedFrames == CTR_SECONDS_TO_FRAMES(1))
+	else if (elapsedFrames == FPS_DOUBLE(CTR_SECONDS_TO_FRAMES(1)))
 	{
 		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8009fa24-0x8009fa2c for crystal token unlock SFX.
 		OtherFX_Play(0x67, 1);

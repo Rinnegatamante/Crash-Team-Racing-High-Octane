@@ -90,7 +90,14 @@ internal int UI_Rank_GetDamageColor(int driverIndex)
 		color += strength * 0x10000;
 
 		// one frame closer to zero
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+		{
+			d->damageColorTimer += 1;
+		}
+#else
 		d->damageColorTimer += 1;
+#endif
 	}
 
 	// 30 to 1
@@ -103,7 +110,14 @@ internal int UI_Rank_GetDamageColor(int driverIndex)
 		color += strength * 0x10000;
 
 		// one frame closer to zero
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+		{
+			d->damageColorTimer -= 1;
+		}
+#else
 		d->damageColorTimer -= 1;
+#endif
 	}
 
 	return color;

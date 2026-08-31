@@ -177,7 +177,15 @@ void RB_Spider_ThTick(struct Thread *t)
 		if (4 < spider->animLoopCount)
 		{
 			// Play animation backwards
-			s16 animFrame = spiderInst->animFrame - 1;
+			s16 animFrame = spiderInst->animFrame;
+#if CTR_NATIVE_60FPS
+			if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+			{
+				animFrame--;
+			}
+#else
+			animFrame--;
+#endif
 
 			// if animation is at beginning
 			if (animFrame < 1)
@@ -228,7 +236,14 @@ void RB_Spider_ThTick(struct Thread *t)
 
 			if (animFrame + 1 < numAnimFrames)
 			{
+#if CTR_NATIVE_60FPS
+				if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+				{
+					spiderInst->animFrame++;
+				}
+#else
 				spiderInst->animFrame++;
+#endif
 			}
 			else
 			{
@@ -270,7 +285,14 @@ void RB_Spider_ThTick(struct Thread *t)
 		}
 	}
 
+#if CTR_NATIVE_60FPS
+	if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+	{
+		spiderInst->animFrame++;
+	}
+#else
 	spiderInst->animFrame++;
+#endif
 
 checkCollision:
 	gGT = sdata->gGT;

@@ -189,8 +189,9 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 
 static struct MenuRow s_nativeOptionsRows[] =
 {
-	{LNG_LANGUAGE, 1, 1, 0, 0},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 0, 1, 1},
+	{LNG_LANGUAGE, 2, 1, 0, 0},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_FRAME_RATE, 1, 0, 2, 2},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -263,6 +264,7 @@ static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
+extern int gNative60FpsEnabled;
 extern int gNativeGhostReplayMode;
 extern void save_config();
 
@@ -298,7 +300,7 @@ static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu)
 	{
 		if (sdata->gGamepads->anyoneHeldCurr != 0)
 		{
-			s_nativeLanguageTimer = MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES;
+			s_nativeLanguageTimer = FPS_DOUBLE(MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES);
 		}
 		else if (s_nativeLanguageTimer > 0)
 		{
@@ -658,7 +660,14 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
 	{
 		gNativeMirrorModeEnabled ^= 1;
-			save_config();
+		save_config();
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_FRAME_RATE)
+	{
+		gNative60FpsEnabled ^= 1;
+		save_config();
 	}
 }
 
@@ -829,7 +838,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 			// if button pressed, reset timer
 			else
 			{
-				gGT->demoCountdownTimer = TITLE_DEMO_IDLE_FRAMES;
+				gGT->demoCountdownTimer = FPS_DOUBLE(TITLE_DEMO_IDLE_FRAMES);
 			}
 		}
 	}
@@ -1388,7 +1397,7 @@ void MM_JumpTo_Title_Returning(void)
 	// return to main menu
 	sdata->ptrDesiredMenu = &D230.menuMainMenu;
 
-	D230.titleMenuTransitionFrame = D230.titleMenuTransitionDurationFrames;
+	D230.titleMenuTransitionFrame = FPS_DOUBLE(D230.titleMenuTransitionDurationFrames);
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800b4364-0x800b43f4.
@@ -1407,7 +1416,7 @@ void MM_JumpTo_Title_FirstTime(void)
 		s_nativeLanguageBootMenu.rowSelected = s_nativeLanguageRow;
 		s_nativeLanguageBootMenu.ptrNextBox_InHierarchy = 0;
 		s_nativeLanguageBootMenu.ptrPrevBox_InHierarchy = 0;
-		s_nativeLanguageTimer = MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES;
+		s_nativeLanguageTimer = FPS_DOUBLE(MM_NATIVE_LANGUAGE_TIMEOUT_FRAMES);
 		sdata->ptrActiveMenu = &s_nativeLanguageBootMenu;
 	}
 	else
@@ -1419,7 +1428,7 @@ void MM_JumpTo_Title_FirstTime(void)
 	if (sdata->boolLangChosen == 0)
 	{
 		sdata->ptrActiveMenu = &D230.menuLngBoot;
-		D230.langMenuTimer = MM_LANGUAGE_MENU_TIMEOUT_FRAMES;
+		D230.langMenuTimer = FPS_DOUBLE(MM_LANGUAGE_MENU_TIMEOUT_FRAMES);
 	}
 	else
 	{

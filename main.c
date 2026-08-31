@@ -187,6 +187,8 @@ int main(int argc, char *argv[]) {
 
 extern s32 s_nativeLanguageChosen; // Flag if language has been selected on first boot
 extern int gNativeMirrorModeEnabled;
+int gNative60FpsEnabled = 0;
+int gNativeForce30Fps = 0;
 int cfg_language = 2; // Default: PAL UK language
 
 void load_config() {
@@ -200,6 +202,8 @@ void load_config() {
 				s_nativeLanguageChosen = 1;
 			} else if (strcmp("mirror_mode", buffer) == 0) {
 				gNativeMirrorModeEnabled = (value != 0);
+			} else if (strcmp("60fps", buffer) == 0) {
+				gNative60FpsEnabled = (value != 0);
 			}
 		}
 		fclose(config);
@@ -211,6 +215,7 @@ void save_config() {
 	if (config != NULL) {
 		fprintf(config, "%s=%d\n", "language", cfg_language);
 		fprintf(config, "%s=%d\n", "mirror_mode", gNativeMirrorModeEnabled != 0);
+		fprintf(config, "%s=%d\n", "60fps", gNative60FpsEnabled != 0);
 		fclose(config);
 	}
 }

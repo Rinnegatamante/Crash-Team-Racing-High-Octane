@@ -28,3 +28,5 @@ memcards/
 *.sfo
 *.vpk
 *.bin
+*.self
+*.xdelta

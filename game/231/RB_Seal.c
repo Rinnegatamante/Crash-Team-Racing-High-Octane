@@ -164,6 +164,7 @@ void RB_Seal_ThTick_Move(struct Thread *t)
 
 	sealInst = t->inst;
 	sealObj = (struct Seal *)t->object;
+	int moveFrames = FPS_DOUBLE(0x2d);
 
 	// if animation is not over
 	if ((sealInst->animFrame + 2) < INSTANCE_GetNumAnimFrames(sealInst, 0))
@@ -184,7 +185,7 @@ void RB_Seal_ThTick_Move(struct Thread *t)
 	// move seal
 	for (i = 0; i < 3; i++)
 	{
-		sealInst->matrix.t[i] = (int)sealObj->spawnPos.v[i] - (sealObj->distFromSpawn * (int)sealObj->vel.v[i]) / 0x2d;
+		sealInst->matrix.t[i] = (int)sealObj->spawnPos.v[i] - (sealObj->distFromSpawn * (int)sealObj->vel.v[i]) / moveFrames;
 	}
 
 	// moving towards spawn (0)
@@ -209,14 +210,14 @@ void RB_Seal_ThTick_Move(struct Thread *t)
 	// moving away from spawn (1)
 	else
 	{
-		if (sealObj->distFromSpawn < 0x2d)
+		if (sealObj->distFromSpawn < moveFrames)
 		{
 			sealObj->distFromSpawn++;
 			Seal_CheckColl(sealInst, t, 1, 0x4000, 0x78);
 			return;
 		}
 
-		if (sealObj->distFromSpawn != 0x2d)
+		if (sealObj->distFromSpawn != moveFrames)
 		{
 			Seal_CheckColl(sealInst, t, 1, 0x4000, 0x78);
 			return;

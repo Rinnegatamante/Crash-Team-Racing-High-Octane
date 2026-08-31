@@ -59,17 +59,17 @@ void TT_EndEvent_DrawMenu(void)
 	elapsedFrames = sdata->framesSinceRaceEnded;
 
 	// Conditions to increment frame
-	if ((elapsedFrames < TT_RESULT_MAX_FRAMES) ||
+	if ((elapsedFrames < FPS_DOUBLE(TT_RESULT_MAX_FRAMES)) ||
 
 	    (((gameModeEnd & NEW_HIGH_SCORE) == 0) &&
 
 	     (
 	         // Transition the high scores on-screen
-	         (elapsedFrames <= TT_HIGH_SCORE_HOLD_END_FRAME) ||
+	         (elapsedFrames <= FPS_DOUBLE(TT_HIGH_SCORE_HOLD_END_FRAME)) ||
 
 	         (
 	             // Wait until press X, then transition off-screen
-	             ((sdata->menuReadyToPass & TT_MENU_READY_HIGH_SCORE_EXIT) != 0) && (elapsedFrames < TT_HIGH_SCORE_EXIT_DONE_FRAME)))))
+	             ((sdata->menuReadyToPass & TT_MENU_READY_HIGH_SCORE_EXIT) != 0) && (elapsedFrames < FPS_DOUBLE(TT_HIGH_SCORE_EXIT_DONE_FRAME))))))
 	{
 		elapsedFrames++;
 	}
@@ -79,19 +79,19 @@ void TT_EndEvent_DrawMenu(void)
 
 	// First 90 frames (0-3 seconds)
 	// Return at bottom of IF block
-	if (elapsedFrames <= TT_RACE_CLOCK_HOLD_FRAMES)
+	if (elapsedFrames <= FPS_DOUBLE(TT_RACE_CLOCK_HOLD_FRAMES))
 	{
 		// no lerp, just sit on-screen
 		endX = 0x14;
 
-		if (elapsedFrames > TT_RACE_CLOCK_FLYOUT_FRAME_OFFSET)
+		if (elapsedFrames > FPS_DOUBLE(TT_RACE_CLOCK_FLYOUT_FRAME_OFFSET))
 		{
 			endX = -0x96;
-			elapsedFrames -= TT_RACE_CLOCK_FLYOUT_FRAME_OFFSET;
+			elapsedFrames -= FPS_DOUBLE(TT_RACE_CLOCK_FLYOUT_FRAME_OFFSET);
 		}
 
 		// draw race clock in top-left corner
-		UI_Lerp2D_Linear(pos.v, 0x14, 8, endX, 8, elapsedFrames, TT_LERP_FRAMES);
+		UI_Lerp2D_Linear(pos.v, 0x14, 8, endX, 8, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 		UI_DrawRaceClock(pos.x, pos.y, UI_RACE_CLOCK_SHOW_CURRENT_TIME, gGT->drivers[0]);
 
@@ -100,13 +100,13 @@ void TT_EndEvent_DrawMenu(void)
 
 	// between 91 and 900 frames (3-30)
 	// Return at bottom of IF block
-	if (elapsedFrames <= TT_RESULT_MAX_FRAMES)
+	if (elapsedFrames <= FPS_DOUBLE(TT_RESULT_MAX_FRAMES))
 	{
 		// first transition is race clock
-		elapsedFrames -= TT_RACE_CLOCK_HOLD_FRAMES;
+		elapsedFrames -= FPS_DOUBLE(TT_RACE_CLOCK_HOLD_FRAMES);
 
 		// race time
-		UI_Lerp2D_Linear(pos.v, -0x64, 90, 0x100, 90, elapsedFrames, TT_LERP_FRAMES);
+		UI_Lerp2D_Linear(pos.v, -0x64, 90, 0x100, 90, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 		TT_EndEvent_DisplayTime(pos.x, pos.y, sdata->flags_timeTrialEndOfRace);
 
@@ -116,14 +116,14 @@ void TT_EndEvent_DrawMenu(void)
 
 
 		// "new high score" 1 second later
-		elapsedFrames -= TT_RESULT_MESSAGE_STEP_FRAMES;
+		elapsedFrames -= FPS_DOUBLE(TT_RESULT_MESSAGE_STEP_FRAMES);
 
 		if ((elapsedFrames > 0) &&
 
 		    // if there is a new high score
 		    gGT->newHighScoreIndex > -1)
 		{
-			UI_Lerp2D_Linear(pos.v, 0x264, 122, 0x100, 122, elapsedFrames, TT_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, 0x264, 122, 0x100, 122, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 			DecalFont_DrawLine(lngStrings[LNG_NEW_HIGH_SCORE], pos.x, pos.y, FONT_BIG, textColor);
 
@@ -133,14 +133,14 @@ void TT_EndEvent_DrawMenu(void)
 
 
 		// "new best lap" 1 second later
-		elapsedFrames -= TT_RESULT_MESSAGE_STEP_FRAMES;
+		elapsedFrames -= FPS_DOUBLE(TT_RESULT_MESSAGE_STEP_FRAMES);
 
 		if ((elapsedFrames > 0) &&
 
 		    // if got new best lap
 		    ((gameModeEnd & NEW_BEST_LAP) != 0))
 		{
-			UI_Lerp2D_Linear(pos.v, -0x64, 142, 0x100, 142, elapsedFrames, TT_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, -0x64, 142, 0x100, 142, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 			DecalFont_DrawLine(lngStrings[LNG_NEW_BEST_LAP], pos.x, pos.y, FONT_BIG, textColor);
 
@@ -153,7 +153,7 @@ void TT_EndEvent_DrawMenu(void)
 
 
 		// "n tropy" 1 second later
-		elapsedFrames -= TT_RESULT_MESSAGE_STEP_FRAMES;
+		elapsedFrames -= FPS_DOUBLE(TT_RESULT_MESSAGE_STEP_FRAMES);
 
 		s32 nTropyEventFlags = NTROPY_JUST_BEAT | NTROPY_JUST_OPENED;
 
@@ -162,7 +162,7 @@ void TT_EndEvent_DrawMenu(void)
 		    // if just open, or beat, n tropy
 		    ((gameModeEnd & nTropyEventFlags) != 0))
 		{
-			UI_Lerp2D_Linear(pos.v, 0x264, 162, 0x100, 162, elapsedFrames, TT_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, 0x264, 162, 0x100, 162, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 			char *nTropyString;
 			if ((gameModeEnd & NTROPY_JUST_OPENED) != 0)
@@ -183,14 +183,14 @@ void TT_EndEvent_DrawMenu(void)
 		if ((sdata->AnyPlayerTap & TT_CONFIRM_BUTTON_MASK) != 0)
 		{
 			// advance timer, quickly skip to see high scores
-			sdata->framesSinceRaceEnded = TT_HIGH_SCORE_MENU_START_FRAME;
+			sdata->framesSinceRaceEnded = FPS_DOUBLE(TT_HIGH_SCORE_MENU_START_FRAME);
 		}
 
 		return;
 	}
 
 	// Return at bottom of IF block
-	if (elapsedFrames < TT_FINAL_MENU_START_FRAME)
+	if (elapsedFrames < FPS_DOUBLE(TT_FINAL_MENU_START_FRAME))
 	{
 		// start drawing the high score menu that shows the top 5 best times
 		gGT->gameModeEnd |= DRAW_HIGH_SCORES;
@@ -199,9 +199,9 @@ void TT_EndEvent_DrawMenu(void)
 		{
 			// ====== Draw High Score ===========
 
-			if (elapsedFrames > TT_HIGH_SCORE_EXIT_START_FRAME)
+			if (elapsedFrames > FPS_DOUBLE(TT_HIGH_SCORE_EXIT_START_FRAME))
 			{
-				elapsedFrames -= TT_HIGH_SCORE_EXIT_START_FRAME;
+				elapsedFrames -= FPS_DOUBLE(TT_HIGH_SCORE_EXIT_START_FRAME);
 
 				startX = 0x80;
 				endX = -0x96;
@@ -209,14 +209,14 @@ void TT_EndEvent_DrawMenu(void)
 
 			else
 			{
-				elapsedFrames -= TT_HIGH_SCORE_MENU_START_FRAME;
+				elapsedFrames -= FPS_DOUBLE(TT_HIGH_SCORE_MENU_START_FRAME);
 
 				startX = -0x96;
 				endX = 0x80;
 			}
 
 
-			UI_Lerp2D_Linear(pos.v, startX, 10, endX, 10, elapsedFrames, TT_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, startX, 10, endX, 10, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 			TT_EndEvent_DrawHighScore(pos.x, pos.y, TT_SCORE_MODE_TIME_TRIAL);
 
@@ -236,7 +236,7 @@ void TT_EndEvent_DrawMenu(void)
 				endX = 0x296;
 			}
 
-			UI_Lerp2D_Linear(pos.v, startX, 0x82, endX, 0x82, elapsedFrames, TT_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, startX, 0x82, endX, 0x82, elapsedFrames, FPS_DOUBLE(TT_LERP_FRAMES));
 
 			TT_EndEvent_DisplayTime(pos.x, pos.y, sdata->flags_timeTrialEndOfRace);
 
@@ -244,9 +244,9 @@ void TT_EndEvent_DrawMenu(void)
 
 			// ==== Pause Timer until Press X =======
 			// Cross or Circle, or if timer drags on too long
-			if (((sdata->AnyPlayerTap & TT_CONFIRM_BUTTON_MASK) != 0) && (sdata->framesSinceRaceEnded <= TT_HIGH_SCORE_EXIT_START_FRAME))
+			if (((sdata->AnyPlayerTap & TT_CONFIRM_BUTTON_MASK) != 0) && (sdata->framesSinceRaceEnded <= FPS_DOUBLE(TT_HIGH_SCORE_EXIT_START_FRAME)))
 			{
-				sdata->framesSinceRaceEnded = TT_HIGH_SCORE_EXIT_START_FRAME;
+				sdata->framesSinceRaceEnded = FPS_DOUBLE(TT_HIGH_SCORE_EXIT_START_FRAME);
 
 				// unpause frame counter,
 				// which then counts up to the transition-out completion frame
@@ -292,7 +292,7 @@ void TT_EndEvent_DisplayTime(int paramX, s16 paramY, u32 raceClockFlags)
 	// === Naughty Dog Bug ===
 	// Start and End is the same
 	UI_Lerp2D_Linear(pos.v, (paramX - (0x88 - startTextWidth) / 2), paramY, (paramX - (0x88 - endTextWidth) / 2), paramY, sdata->framesSinceRaceEnded,
-	                 TT_LERP_FRAMES);
+	                 FPS_DOUBLE(TT_LERP_FRAMES));
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_YOUR_TIME], paramX, ((u32)pos.y - 0x4c), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
@@ -333,7 +333,7 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	// Start and End is the same
 
 	// interpolate fly-in
-	UI_Lerp2D_Linear(pos.v, startX, startY, startX, startY, sdata->framesSinceRaceEnded, TT_LERP_FRAMES);
+	UI_Lerp2D_Linear(pos.v, startX, startY, startX, startY, sdata->framesSinceRaceEnded, FPS_DOUBLE(TT_LERP_FRAMES));
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_BEST_TIMES], pos.x, pos.y, FONT_BIG, 0xffff8000);
 

@@ -171,7 +171,7 @@ void PlayLevel_UpdateLapStats(void)
 					if ((currDriver->actionsFlagSet & ACTION_BOT) == 0)
 					{
 						// frames, so the animation lasts 3 seconds
-						sdata->finalLapTextTimer[driverIndex] = PLAYLEVEL_FINAL_LAP_TEXT_FRAMES;
+						sdata->finalLapTextTimer[driverIndex] = FPS_DOUBLE(PLAYLEVEL_FINAL_LAP_TEXT_FRAMES);
 					}
 				}
 			}

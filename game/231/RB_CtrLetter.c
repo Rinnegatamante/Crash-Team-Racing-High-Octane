@@ -23,7 +23,7 @@ int RB_CtrLetter_ThCollide(struct Thread *letterTh, struct Thread *driverTh, voi
 
 	driver->PickupLetterHUD.startX = pb->rect.x + posScreen[0];
 	driver->PickupLetterHUD.startY = pb->rect.y + posScreen[1] - 0x14;
-	driver->PickupLetterHUD.cooldown = 10;
+	driver->PickupLetterHUD.cooldown = FPS_DOUBLE(10);
 	driver->PickupLetterHUD.numCollected++;
 	driver->PickupLetterHUD.modelID = letterInst->model->id;
 

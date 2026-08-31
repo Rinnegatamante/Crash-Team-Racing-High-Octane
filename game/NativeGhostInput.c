@@ -7,6 +7,9 @@ enum
     NATIVE_GHOST_INPUT_VERSION = 1,
     NATIVE_GHOST_INPUT_MAX_FRAMES = 32768,
     NATIVE_GHOST_INPUT_META_BUTTONS = BTN_START | BTN_SELECT,
+    NATIVE_GHOST_INPUT_FLAG_60FPS = 1 << 0,
+    NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA = 1 << 15,
+    NATIVE_GHOST_INPUT_TIMER_PHASE_MASK = 7,
 };
 
 struct NativeGhostInputHeader
@@ -35,6 +38,7 @@ CTR_STATIC_ASSERT(sizeof(struct NativeGhostInputHeader) == 0x20);
 CTR_STATIC_ASSERT(sizeof(struct NativeGhostInputFrame) == 0x8);
 
 int gNativeGhostReplayMode = 0;
+int gNativeGhostReplayFpsOverride = -1;
 
 static struct NativeGhostInputFrame s_nativeGhostInputFrames[NATIVE_GHOST_INPUT_MAX_FRAMES];
 static struct NativeGhostInputFrame s_nativeGhostInputPending;
@@ -43,11 +47,26 @@ static u32 s_nativeGhostInputPlaybackIndex;
 static u32 s_nativeGhostInputTotalTimeMS;
 static u16 s_nativeGhostInputTrackID;
 static u16 s_nativeGhostInputCharacterID;
+static u16 s_nativeGhostInputRecordingFlags;
+static u32 s_nativeGhostInputStartTimerPhase;
+static u32 s_nativeGhostInputPlaybackTimerPhase;
+static b32 s_nativeGhostInputPlaybackTimerPhasePending;
 static b32 s_nativeGhostInputRecording;
 static b32 s_nativeGhostInputRecordingInvalid;
 static b32 s_nativeGhostInputPendingValid;
 static b32 s_nativeGhostInputPlaybackActive;
 static char s_nativeGhostInputSelectedName[0x40];
+
+static b32 NativeGhostInput_HeaderUses60Fps(const struct NativeGhostInputHeader *header)
+{
+    if ((header->flags & NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA) == 0)
+    {
+        return false;
+    }
+
+    return (header->flags & NATIVE_GHOST_INPUT_FLAG_60FPS) != 0;
+}
+
 
 static b32 NativeGhostInput_ValidateHeader(const struct NativeGhostInputHeader *header)
 {
@@ -64,27 +83,37 @@ static b32 NativeGhostInput_ValidateHeader(const struct NativeGhostInputHeader *
     return true;
 }
 
-b32 NativeGhostInput_IsModernGhost(const char *ghostName)
+int NativeGhostInput_GetGhostFps(const char *ghostName)
 {
     struct NativeGhostInputHeader header;
 
     if ((ghostName == NULL) || (ghostName[0] == '\0'))
     {
-        return false;
+        return 0;
     }
 
     if (NativeMemcard_ReadReplayData(0, ghostName, &header, sizeof(header), 0) != NATIVE_MEMCARD_OK)
     {
-        return false;
+        return 0;
     }
 
     if (!NativeGhostInput_ValidateHeader(&header))
     {
-        return false;
+        return 0;
     }
 
     int expectedSize = header.headerSize + (header.frameCount * header.frameSize);
-    return NativeMemcard_ReplaySize(0, ghostName) >= expectedSize;
+    if (NativeMemcard_ReplaySize(0, ghostName) < expectedSize)
+    {
+        return 0;
+    }
+
+    return NativeGhostInput_HeaderUses60Fps(&header) ? 60 : 30;
+}
+
+b32 NativeGhostInput_IsModernGhost(const char *ghostName)
+{
+    return NativeGhostInput_GetGhostFps(ghostName) != 0;
 }
 
 void NativeGhostInput_ClearSelection(void)
@@ -92,6 +121,8 @@ void NativeGhostInput_ClearSelection(void)
     s_nativeGhostInputSelectedName[0] = '\0';
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
+    s_nativeGhostInputPlaybackTimerPhasePending = false;
+    gNativeGhostReplayFpsOverride = -1;
 }
 
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID)
@@ -113,6 +144,7 @@ b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 charact
     }
 
     snprintf(s_nativeGhostInputSelectedName, sizeof(s_nativeGhostInputSelectedName), "%s", ghostName);
+    gNativeGhostReplayFpsOverride = NativeGhostInput_HeaderUses60Fps(&header) ? 1 : 0;
     return true;
 }
 
@@ -121,6 +153,7 @@ void NativeGhostInput_StartRecording(void)
     struct GameTracker *gGT = sdata->gGT;
     struct Driver *driver = gGT->drivers[0];
 
+    gNativeGhostReplayFpsOverride = -1;
     s_nativeGhostInputRecording = true;
     s_nativeGhostInputRecordingInvalid = false;
     s_nativeGhostInputPendingValid = false;
@@ -130,6 +163,12 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputTotalTimeMS = 0;
     s_nativeGhostInputTrackID = gGT->levelID;
     s_nativeGhostInputCharacterID = data.characterIDs[driver->driverID];
+    s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA;
+    if (CTR_NATIVE_60FPS_ACTIVE)
+    {
+        s_nativeGhostInputRecordingFlags |= NATIVE_GHOST_INPUT_FLAG_60FPS;
+    }
+    s_nativeGhostInputStartTimerPhase = 0;
 }
 
 void NativeGhostInput_DiscardRecording(void)
@@ -225,6 +264,14 @@ void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS)
     {
         if (s_nativeGhostInputPlaybackActive && (s_nativeGhostInputPlaybackIndex < s_nativeGhostInputFrameCount))
         {
+            if (s_nativeGhostInputPlaybackTimerPhasePending)
+            {
+                u32 timer = (u32)sdata->gGT->timer;
+                timer = (timer & ~((u32)NATIVE_GHOST_INPUT_TIMER_PHASE_MASK)) | s_nativeGhostInputPlaybackTimerPhase;
+                sdata->gGT->timer = (s32)timer;
+                s_nativeGhostInputPlaybackTimerPhasePending = false;
+            }
+
             *elapsedTimeMS = s_nativeGhostInputFrames[s_nativeGhostInputPlaybackIndex].elapsedTimeMS;
             s_nativeGhostInputPlaybackIndex++;
         }
@@ -251,6 +298,11 @@ void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS)
         return;
     }
 
+    if (s_nativeGhostInputFrameCount == 0)
+    {
+        s_nativeGhostInputStartTimerPhase = (u32)sdata->gGT->timer & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+    }
+
     s_nativeGhostInputPending.elapsedTimeMS = (u16)*elapsedTimeMS;
     s_nativeGhostInputFrames[s_nativeGhostInputFrameCount++] = s_nativeGhostInputPending;
     s_nativeGhostInputTotalTimeMS += (u32)*elapsedTimeMS;
@@ -275,7 +327,9 @@ b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName)
     header.characterID = s_nativeGhostInputCharacterID;
     header.frameCount = s_nativeGhostInputFrameCount;
     header.frameSize = sizeof(struct NativeGhostInputFrame);
+    header.flags = s_nativeGhostInputRecordingFlags;
     header.totalTimeMS = s_nativeGhostInputTotalTimeMS;
+    header.reserved[0] = s_nativeGhostInputStartTimerPhase;
 
     return NativeMemcard_WriteReplayData(0, ghostName, &header, sizeof(header), s_nativeGhostInputFrames,
                                          s_nativeGhostInputFrameCount * sizeof(struct NativeGhostInputFrame)) == NATIVE_MEMCARD_OK;
@@ -327,6 +381,17 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     s_nativeGhostInputFrameCount = header.frameCount;
     s_nativeGhostInputTotalTimeMS = header.totalTimeMS;
+    b32 use60Fps = NativeGhostInput_HeaderUses60Fps(&header);
+    gNativeGhostReplayFpsOverride = use60Fps ? 1 : 0;
+    if (use60Fps && ((header.flags & NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA) != 0))
+    {
+        s_nativeGhostInputPlaybackTimerPhase = header.reserved[0] & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+        s_nativeGhostInputPlaybackTimerPhasePending = true;
+    }
+    else
+    {
+        s_nativeGhostInputPlaybackTimerPhasePending = false;
+    }
     s_nativeGhostInputPlaybackActive = true;
     return true;
 }

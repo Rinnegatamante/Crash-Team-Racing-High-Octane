@@ -878,6 +878,14 @@ int VSync(int mode)
 
 	emittedVBlanks += Native_CatchUpDueVBlanks();
 
+	if (mode == 0 && emittedVBlanks > 0)
+	{
+#if defined(CTR_INTERNAL)
+		NativeReplayScheduler_RecordVSyncPacket(emittedVBlanks);
+#endif
+		return s_nativeVBlankCount;
+	}
+
 	for (s32 i = 0; i < requestedVBlanks; i++)
 	{
 		Native_WaitAndEmitVBlank();

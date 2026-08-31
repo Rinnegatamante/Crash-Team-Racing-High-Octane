@@ -124,7 +124,7 @@ static int PickupBots_IsCloseToPlayer(struct Driver *player, struct Driver *bot)
 
 static void PickupBots_SetCooldown(struct Driver *bot)
 {
-	bot->botData.weaponCooldown = (MixRNG_Scramble() & PICKUPBOTS_COOLDOWN_RANDOM_MASK) + PICKUPBOTS_COOLDOWN_BASE_FRAMES;
+	bot->botData.weaponCooldown = FPS_DOUBLE((MixRNG_Scramble() & PICKUPBOTS_COOLDOWN_RANDOM_MASK) + PICKUPBOTS_COOLDOWN_BASE_FRAMES);
 }
 
 static void PickupBots_PlayVoice(u32 voiceID, struct Driver *attacker, struct Driver *victim)
@@ -262,9 +262,9 @@ static void PickupBots_SetBossCooldown(struct MetaDataBOSS *bossMeta)
 	{
 		timesLost = sdata->advProgress.timesLostBossRace[gGT->bossID];
 	}
-	sdata->bossWeaponCooldown = (RngDeadCoed(&sdata->advRng) & PICKUPBOTS_BOSS_COOLDOWN_RANDOM_MASK) + bossMeta->weaponCooldown +
-	                            PICKUPBOTS_BOSS_COOLDOWN_BASE_FRAMES +
-	                            ((s8)timesLost * PICKUPBOTS_BOSS_LOSS_COOLDOWN_STEP);
+	sdata->bossWeaponCooldown = FPS_DOUBLE((RngDeadCoed(&sdata->advRng) & PICKUPBOTS_BOSS_COOLDOWN_RANDOM_MASK) + bossMeta->weaponCooldown +
+	                                       PICKUPBOTS_BOSS_COOLDOWN_BASE_FRAMES +
+	                                       ((s8)timesLost * PICKUPBOTS_BOSS_LOSS_COOLDOWN_STEP));
 }
 
 static struct MetaDataBOSS *PickupBots_GetInitialBossMeta(void)

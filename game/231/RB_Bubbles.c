@@ -39,6 +39,16 @@ void RB_Bubbles_RoosTubes()
 	d = gGT->drivers[0];
 
 	int timer = gGT->timer;
+#if CTR_NATIVE_60FPS
+	if (CTR_NATIVE_60FPS_ACTIVE)
+	{
+		if ((timer & 1) != 0)
+		{
+			return;
+		}
+		timer >>= 1;
+	}
+#endif
 
 	for (
 	    // initializer, skip one cause level geometry
@@ -79,7 +89,19 @@ void RB_Bubbles_RoosTubes()
 
 		// == spawn particle ==
 
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+			sdata->UnusedPadding1 = 1;
+		}
+#endif
 		p = Particle_Init(0, gGT->iconGroup[7], &emSet_TubeBubbles[0]);
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+			sdata->UnusedPadding1 = 0;
+		}
+#endif
 
 		if (p == 0)
 		{

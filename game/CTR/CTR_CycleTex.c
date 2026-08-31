@@ -10,7 +10,7 @@ void CTR_CycleTex_LEV(struct AnimTex *animtex, int timer)
 	while (*(int *)curAnimTex != (int)animtex)
 	{
 		// which texture to draw this frame
-		frameCurr = timer + curAnimTex->frameOffset;
+		frameCurr = FPS_HALF(timer) + curAnimTex->frameOffset;
 
 		// allow frames to skip updating (like 60fps hacks)
 		frameCurr = frameCurr >> curAnimTex->frameSkip;
@@ -42,7 +42,7 @@ void CTR_CycleTex_Model(struct AnimTex *animtex, int timer)
 	while (*(int *)curAnimTex != (int)animtex)
 	{
 		// which texture to draw this frame
-		frameCurr = timer + curAnimTex->frameOffset;
+		frameCurr = FPS_HALF(timer) + curAnimTex->frameOffset;
 
 		// allow frames to skip updating (like 60fps hacks)
 		frameCurr = frameCurr >> curAnimTex->frameSkip;

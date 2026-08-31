@@ -60,7 +60,11 @@ void RB_Warpball_Death(struct Thread *t)
 	struct TrackerWeapon *tw;
 
 	tw = t->object;
-	tw->ptrParticle->framesLeftInLife = 0;
+	if (tw->ptrParticle != NULL)
+	{
+		tw->ptrParticle->framesLeftInLife = 0;
+		tw->ptrParticle = NULL;
+	}
 	tw->fadeFrame = 0;
 
 	// play sound of warpball death

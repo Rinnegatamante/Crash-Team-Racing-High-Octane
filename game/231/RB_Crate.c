@@ -183,9 +183,9 @@ void RB_CrateAny_ThTick_Grow(struct Thread *t)
 
 	if (crateInst->scale.x < 0x1000)
 	{
-		crateInst->scale.x += 0x100;
-		crateInst->scale.y += 0x100;
-		crateInst->scale.z += 0x100;
+		crateInst->scale.x += FPS_HALF(0x100);
+		crateInst->scale.y += FPS_HALF(0x100);
+		crateInst->scale.z += FPS_HALF(0x100);
 	}
 	else
 	{
@@ -292,7 +292,7 @@ int RB_CrateWeapon_ThCollide(struct Thread *crateThread, struct Thread *collidin
 
 			driver->heldItemID = HELD_ITEM_ROULETTE;
 			driver->numTimesHitWeaponBox++;
-			driver->itemRollTimer = 90;
+			driver->itemRollTimer = FPS_DOUBLE(90);
 
 			if ((sdata->gGT->gameMode1 & ROLLING_ITEM) == 0)
 			{
@@ -305,7 +305,7 @@ int RB_CrateWeapon_ThCollide(struct Thread *crateThread, struct Thread *collidin
 				sdata->gGT->gameMode1 |= ROLLING_ITEM;
 			}
 
-			driver->PickupTimeboxHUD.cooldown = 5;
+			driver->PickupTimeboxHUD.cooldown = FPS_DOUBLE(5);
 			driver->noItemTimer = 0;
 
 			if (driver->numWumpas == DRIVER_WUMPA_JUICED_COUNT)
@@ -397,7 +397,7 @@ int RB_CrateFruit_ThCollide(struct Thread *crateThread, struct Thread *colliding
 			}
 			newWumpa = random + (newWumpa >> 2) * -4 + 5;
 
-			driver->PickupWumpaHUD.cooldown = 5;
+			driver->PickupWumpaHUD.cooldown = FPS_DOUBLE(5);
 			driver->PickupWumpaHUD.numCollected = newWumpa;
 
 			pb = &sdata->gGT->pushBuffer[driver->driverID];
@@ -511,7 +511,7 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 				}
 			}
 
-			driver->PickupTimeboxHUD.cooldown = 10;
+			driver->PickupTimeboxHUD.cooldown = FPS_DOUBLE(10);
 
 			pb = &gGT->pushBuffer[driver->driverID];
 			RB_Fruit_GetScreenCoords(pb, crateInst, &posScreen[0]);

@@ -1307,6 +1307,25 @@ static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst,
 	headersRemaining = inst->model->numHeaders;
 	lodIndex = 0;
 
+	if (CTR_NATIVE_60FPS_ACTIVE && (inst->model->id == -1) && (inst->model->numHeaders == 4))
+	{
+		if (RenderBucket_MipsSub(projectedDistance, 0x1000) < 0)
+		{
+			*lodIndexOut = 0;
+			return &inst->model->headers[0];
+		}
+
+		mh = &inst->model->headers[3];
+		if (RenderBucket_MipsSub(projectedDistance, (u16)mh->maxDistanceLOD) < 0)
+		{
+			*lodIndexOut = 3;
+			return mh;
+		}
+
+		*lodExhaustedOut = 1;
+		return 0;
+	}
+
 	// NOTE(aalhendi): Retail 0x80070ae4-0x80070b34 uses transformed GTE depth,
 	// GTE H, and a post-decrement s4/s5 header walk. Native keeps the same
 	// comparison and walk as explicit C state.
@@ -2012,19 +2031,34 @@ static struct ModelFrame *RenderBucket_GetFrame(struct Instance *inst, struct Mo
 	*deltaArrayOut = (int)anim->ptrDeltaArray;
 	frameIndex = (u16)inst->animFrame;
 	lastFrame = (anim->numFrames & 0x7fff) - 1;
-	*lastFrameAdvanceOut = lastFrame;
 	hasNextFrame = 0;
 
 	if ((s16)anim->numFrames < 0)
 	{
+		*lastFrameAdvanceOut = lastFrame;
 		lastFrame >>= 1;
 		hasNextFrame = frameIndex & 1;
 		frameIndex >>= 1;
+	}
+	else if (INSTANCE_Use60FpsAnimation(inst))
+	{
+		*lastFrameAdvanceOut = lastFrame << 1;
+		hasNextFrame = frameIndex & 1;
+		frameIndex >>= 1;
+	}
+	else
+	{
+		*lastFrameAdvanceOut = lastFrame;
 	}
 
 	if (RenderBucket_MipsSub(lastFrame, frameIndex) < 0)
 	{
 		frameIndex = lastFrame;
+	}
+
+	if (frameIndex >= lastFrame)
+	{
+		hasNextFrame = 0;
 	}
 
 	firstFrame = RenderBucket_ModelAnimFirstFrameBytes(anim);

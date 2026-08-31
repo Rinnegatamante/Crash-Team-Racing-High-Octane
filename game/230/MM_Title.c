@@ -39,9 +39,9 @@ void MM_Title_MenuUpdate(void)
 		// if you are transitioning in
 
 		// if not done watching C-T-R letters
-		if (D230.titleIntroFrame < TITLE_INTRO_MENU_READY_FRAME)
+		if (D230.titleIntroFrame < FPS_DOUBLE(TITLE_INTRO_MENU_READY_FRAME))
 		{
-			D230.titleMenuTransitionFrame = D230.titleMenuTransitionDurationFrames;
+			D230.titleMenuTransitionFrame = FPS_DOUBLE(D230.titleMenuTransitionDurationFrames);
 
 			// end function
 			goto END_FUNCTION;
@@ -50,7 +50,7 @@ void MM_Title_MenuUpdate(void)
 		D230.menuMainMenu.state &= ~(DISABLE_INPUT_ALLOW_FUNCPTRS);
 		D230.menuMainMenu.state |= EXECUTE_FUNCPTR;
 
-		MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, D230.titleMenuTransitionStep);
+		MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, FPS_DOUBLE(D230.titleMenuTransitionStep));
 
 		// If the animation ends
 		if (D230.titleMenuTransitionFrame == 0)
@@ -83,7 +83,7 @@ void MM_Title_MenuUpdate(void)
 
 		// assume D230.titleMenuState = TITLE_MENU_STATE_RETURNING
 		// if you are returning from another menu
-		MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, D230.titleMenuTransitionStep);
+		MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, FPS_DOUBLE(D230.titleMenuTransitionStep));
 
 		// If "fade-in" animation from other menu is done
 		if (D230.titleMenuTransitionFrame == 0)
@@ -104,14 +104,14 @@ void MM_Title_MenuUpdate(void)
 	// assume D230.titleMenuState = TITLE_MENU_STATE_EXITING
 	// If you are transitioning out
 
-	MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, D230.titleMenuTransitionStep);
+	MM_TransitionInOut(D230.transitionMeta_Menu, D230.titleMenuTransitionFrame, FPS_DOUBLE(D230.titleMenuTransitionStep));
 
 	// Increment frame timer, increase time left in "fade-in"
 	// animation, which plays it in reverse, as "fade-out"
 	D230.titleMenuTransitionFrame += 1;
 
 	// If the "fade-out" animation is not over, skip "switch" statemenet
-	if (D230.titleMenuTransitionFrame <= D230.titleMenuTransitionDurationFrames)
+	if (D230.titleMenuTransitionFrame <= FPS_DOUBLE(D230.titleMenuTransitionDurationFrames))
 	{
 		goto END_FUNCTION;
 	}
@@ -199,7 +199,7 @@ void MM_Title_MenuUpdate(void)
 			// set number of players to 1
 			gGT->numPlyrNextGame = 1;
 
-			gGT->demoCountdownTimer = TITLE_DEMO_RACE_FRAMES;
+			gGT->demoCountdownTimer = FPS_DOUBLE(TITLE_DEMO_RACE_FRAMES);
 
 			// number of times you've seen Demo Mode,
 			seenDemo = sdata->demoModeIndex;
@@ -326,11 +326,11 @@ void MM_Title_CameraMove(struct Title *title, s32 frameIndex)
 {
 	// after frame 0xe6, make the intro models transition from the center
 	// of the screen, to the left of the screen, over the course of 15 frames
-	s32 result = RaceFlag_MoveModels(D230.titleIntroFrame - TITLE_INTRO_MENU_READY_FRAME, TITLE_CAMERA_MOVE_FRAMES);
+	s32 result = RaceFlag_MoveModels(D230.titleIntroFrame - FPS_DOUBLE(TITLE_INTRO_MENU_READY_FRAME), FPS_DOUBLE(TITLE_CAMERA_MOVE_FRAMES));
 
 	struct GameTracker *gGT = sdata->gGT;
 
-	const struct TitleCameraPathFrame *cameraFrame = &D230.titleIntroCameraPath[frameIndex];
+	const struct TitleCameraPathFrame *cameraFrame = &D230.titleIntroCameraPath[FPS_HALF(frameIndex)];
 
 	for (s32 axisIndex = 0; axisIndex < 3; axisIndex++)
 	{
@@ -400,19 +400,19 @@ void MM_Title_ThTick(struct Thread *title)
 		RECTMENU_ClearInput();
 
 		// set frame to 1000, skip the animation
-		D230.titleIntroFrame = TITLE_INTRO_SKIP_FRAME;
+		D230.titleIntroFrame = FPS_DOUBLE(TITLE_INTRO_SKIP_FRAME);
 	}
 
 	// cap at 230
-	if (timer > TITLE_INTRO_MENU_READY_FRAME)
+	if (timer > FPS_DOUBLE(TITLE_INTRO_MENU_READY_FRAME))
 	{
-		timer = TITLE_INTRO_MENU_READY_FRAME;
+		timer = FPS_DOUBLE(TITLE_INTRO_MENU_READY_FRAME);
 	}
 
 	// play queued title sounds
 	for (s32 soundIndex = 0; soundIndex < TITLE_SOUND_COUNT; soundIndex++)
 	{
-		if (D230.titleSounds[soundIndex].frameToPlay == timer)
+		if (FPS_DOUBLE(D230.titleSounds[soundIndex].frameToPlay) == timer)
 		{
 			// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ac3e8-0x800ac400 for title queued SFX.
 			OtherFX_Play(D230.titleSounds[soundIndex].soundID, 1);
@@ -431,7 +431,7 @@ void MM_Title_ThTick(struct Thread *title)
 		titleInst->flags &= ~HIDE_MODEL;
 
 		// the frame of title screen that each instance should start animation
-		s16 animFram = D230.titleInstances[instanceIndex].animStartFrame;
+		s16 animFram = (s16)FPS_DOUBLE(D230.titleInstances[instanceIndex].animStartFrame);
 
 		// set all instances to first animation
 		titleInst->animIndex = 0;
@@ -456,16 +456,16 @@ void MM_Title_ThTick(struct Thread *title)
 		{
 			// if frame is anywhere in the two seconds
 			// that the trophy is in the air
-			if ((u32)(timer - TITLE_TROPHY_HIDE_START_FRAME) < TITLE_TROPHY_HIDE_FRAMES)
+			if ((u32)(timer - FPS_DOUBLE(TITLE_TROPHY_HIDE_START_FRAME)) < (u32)FPS_DOUBLE(TITLE_TROPHY_HIDE_FRAMES))
 			{
 				titleInst->flags |= HIDE_MODEL;
 			}
 
 			// otherwise
-			else if (TITLE_TROPHY_ANIM_START_FRAME <= timer)
+			else if (FPS_DOUBLE(TITLE_TROPHY_ANIM_START_FRAME) <= timer)
 			{
 				// play frame index, based on total animation frame
-				titleInst->animFrame = timer - TITLE_TROPHY_ANIM_START_FRAME;
+				titleInst->animFrame = (s16)(timer - FPS_DOUBLE(TITLE_TROPHY_ANIM_START_FRAME));
 
 				// set animation to 1
 				titleInst->animIndex = 1;
@@ -480,7 +480,7 @@ void MM_Title_ThTick(struct Thread *title)
 	// increment frame counter
 	timer = D230.titleIntroFrame + 1;
 
-	if (TITLE_INTRO_END_FRAME < D230.titleIntroFrame)
+	if (FPS_DOUBLE(TITLE_INTRO_END_FRAME) < D230.titleIntroFrame)
 	{
 		// animation is over
 		D230.menuMainMenu.state &= ~(DISABLE_INPUT_ALLOW_FUNCPTRS);

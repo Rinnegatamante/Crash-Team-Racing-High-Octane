@@ -2,6 +2,7 @@
 
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
+extern int gNative60FpsEnabled;
 
 static char *RECTMENU_GetString(s16 stringIndex)
 {
@@ -22,6 +23,11 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"SPECCHIO: NO", "SPECCHIO: SI"},
 		{"ESPEJO: NO", "ESPEJO: SI"},
 		{"SPIEGEL: UIT", "SPIEGEL: AAN"},
+	};
+	static const char *frameRate[2] =
+	{
+		"FPS: 30",
+		"FPS: 60",
 	};
 	static const char *superHard[6] =
 	{
@@ -90,6 +96,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)ghostReplay[languageRow];
 	case NATIVE_MENU_STRING_MIRROR_MODE:
 		return (char *)mirrorMode[languageRow][gNativeMirrorModeEnabled != 0];
+	case NATIVE_MENU_STRING_FRAME_RATE:
+		return (char *)frameRate[gNative60FpsEnabled != 0];
 	case NATIVE_MENU_STRING_SUPER_HARD:
 		return (char *)superHard[languageRow];
 	case NATIVE_MENU_STRING_ULTRA_HARD:

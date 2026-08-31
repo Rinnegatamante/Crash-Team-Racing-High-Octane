@@ -461,7 +461,7 @@ void DrawFinalLap(struct GameTracker *gGT)
 
 		// turn "time remaining" into "time elapsed",
 		// 90 frames total in animation, 1.5 seconds
-		textTimer = 90 - textTimer;
+		textTimer = FPS_DOUBLE(90) - textTimer;
 
 		// camera
 		pb = &gGT->pushBuffer[i];
@@ -470,7 +470,7 @@ void DrawFinalLap(struct GameTracker *gGT)
 		posY = pb->rect.h / 4;
 
 		// fly from right to center
-		if (textTimer <= 10)
+		if (textTimer <= FPS_DOUBLE(10))
 		{
 			startX = pb->rect.w + 100;
 			endX = pb->rect.w / 2;
@@ -479,13 +479,13 @@ void DrawFinalLap(struct GameTracker *gGT)
 		}
 
 		// sit in center
-		if (textTimer <= 0x50)
+		if (textTimer <= FPS_DOUBLE(0x50))
 		{
 			startX = pb->rect.w / 2;
 			endX = startX;
 
 			// for duration
-			textTimer -= 10;
+			textTimer -= FPS_DOUBLE(10);
 
 			goto DrawFinalLapString;
 		}
@@ -493,11 +493,11 @@ void DrawFinalLap(struct GameTracker *gGT)
 		// fly from center to left
 		startX = pb->rect.w / 2;
 		endX = -100;
-		textTimer -= 0x50;
+		textTimer -= FPS_DOUBLE(0x50);
 
 	DrawFinalLapString:
 
-		UI_Lerp2D_Linear(resultPos.v, (s16)startX, (s16)posY, (s16)endX, (s16)posY, textTimer, 10);
+		UI_Lerp2D_Linear(resultPos.v, (s16)startX, (s16)posY, (s16)endX, (s16)posY, textTimer, FPS_DOUBLE(10));
 
 		// need to specify OT, or else "FINAL LAP" will draw on top of character icons,
 		// and by doing this, "FINAL LAP" draws under the character icons instead
@@ -541,7 +541,7 @@ void MenuHighlight()
 	int fc;
 	int trig;
 
-	fc = sdata->frameCounter << 7;
+	fc = FPS_HALF(sdata->frameCounter) << 7;
 	trig = MATH_Sin(fc);
 
 	trig = (trig << 6) >> 0xc;
@@ -1085,12 +1085,12 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 
 		if ((level1->configFlags & 4) == 0)
 		{
-			AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap,
+			AnimateWater1P(FPS_HALF(gGT->timer), level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap,
 			               gGT->visMem1->visOVertList[renderSlot]);
 		}
 		else
 		{
-			AnimateQuad(gGT->timer << 7, level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[renderSlot]);
+			AnimateQuad(gGT->timer << FPS_LEFTSHIFT(7), level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[renderSlot]);
 		}
 
 		scratch = CTR_SCRATCHPAD_PTR(struct MainRenderLevelGeometryScratch, 0);
@@ -1156,14 +1156,14 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		if ((level1->configFlags & 4) == 0)
 		{
 			// assume OVert (no primitives generated here)
-			AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
+			AnimateWater1P(FPS_HALF(gGT->timer), level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
 		}
 
 		// if SCVert
 		else
 		{
 			// draw SCVert (no primitives generated here
-			AnimateQuad(gGT->timer << 7, level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[0]);
+			AnimateQuad(gGT->timer << FPS_LEFTSHIFT(7), level1->numSCVert, level1->ptrSCVert, gGT->visMem1->visSCVertList[0]);
 		}
 
 		// camera of player 1
@@ -1563,7 +1563,7 @@ void RenderSubmit(struct GameTracker *gGT)
 
 #if defined(CTR_NATIVE)
 
-	sdata->vsyncTillFlip = 2;
+	sdata->vsyncTillFlip = FPS_HALF(2);
 
 	// Native still renders immediately through PsyCross, so keep the host GPU's
 	// active draw/display envs in step with the retail DB selected this frame.
@@ -1576,7 +1576,7 @@ void RenderSubmit(struct GameTracker *gGT)
 	// do I need the "if"? will it ever be nullptr?
 	if (gGT->frontBuffer != 0)
 	{
-		sdata->vsyncTillFlip = 2;
+		sdata->vsyncTillFlip = FPS_HALF(2);
 		gGT->unk1cc4[5] = gGT->unk1cc4[0];
 
 		if ((sdata->boolDebugDispEnv & 1) != 0)

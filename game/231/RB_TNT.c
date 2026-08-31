@@ -198,7 +198,14 @@ LAB_800ad5f8:
 		}
 
 		// add to the frame counter
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+		{
+			mw->numFramesOnHead += 1;
+		}
+#else
 		mw->numFramesOnHead += 1;
+#endif
 		numFrames = mw->numFramesOnHead;
 	}
 
@@ -310,7 +317,7 @@ void RB_TNT_ThTick_ThrowOnHead(struct Thread *t)
 	}
 
 	// rotation
-	mw->tntSpinY += 0x100;
+	mw->tntSpinY += FPS_HALF(0x100);
 
 	// if scale is small
 	if (inst->scale.x < 0x801)
@@ -325,9 +332,9 @@ void RB_TNT_ThTick_ThrowOnHead(struct Thread *t)
 	else
 	{
 		// reduce scale
-		inst->scale.x -= 0x100;
-		inst->scale.y -= 0x100;
-		inst->scale.z -= 0x100;
+		inst->scale.x -= FPS_HALF(0x100);
+		inst->scale.y -= FPS_HALF(0x100);
+		inst->scale.z -= FPS_HALF(0x100);
 	}
 	return;
 }

@@ -39,6 +39,7 @@ CTR_STATIC_ASSERT((NATIVE_ADHOC_INPUT_RING_SIZE & NATIVE_ADHOC_INPUT_RING_MASK) 
 
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
+extern int gNativeForce30Fps;
 
 enum NativeAdhocPacketType
 {
@@ -2115,6 +2116,7 @@ int NativeAdhoc_Begin(int role)
 	}
 
 	NativeAdhoc_Shutdown();
+	gNativeForce30Fps = 1;
 	memset(&s_nativeAdhoc, 0, sizeof(s_nativeAdhoc));
 	s_nativeAdhoc.role = role;
 	s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
@@ -2234,6 +2236,7 @@ int NativeAdhoc_Begin(int role)
 
 void NativeAdhoc_Shutdown(void)
 {
+	gNativeForce30Fps = 0;
 	NativeAdhoc_RestoreLocalSessionSettings();
 	NativeAdhoc_FreeSnapshotBuffers();
 	if (s_nativeAdhoc.dialogRunning)

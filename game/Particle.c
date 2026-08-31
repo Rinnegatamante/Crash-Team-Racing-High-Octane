@@ -1496,6 +1496,13 @@ struct Particle *Particle_Init(u32 param_1, struct IconGroup *ig, struct Particl
 
 	(void)param_1;
 
+#if CTR_NATIVE_60FPS
+	if (CTR_NATIVE_60FPS_ACTIVE && (sdata->UnusedPadding1 == 0) && ((gGT->timer & 2) != 0))
+	{
+		return NULL;
+	}
+#endif
+
 	p = (struct Particle *)LIST_RemoveFront(&gGT->JitPools.particle.free);
 	if (p == NULL)
 	{

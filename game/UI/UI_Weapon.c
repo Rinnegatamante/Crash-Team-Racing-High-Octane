@@ -166,13 +166,26 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 
 			// only change icon once per 2 frames,
 			// take advantage of unused padding
+#if CTR_NATIVE_60FPS
+			if (CTR_NATIVE_60FPS_ACTIVE)
+			{
+				if ((gGT->timer & 1) != 0)
+				{
+					d->funcPtrs_compilerpadding = (s16)itemID;
+				}
+				else
+				{
+					itemID = d->funcPtrs_compilerpadding;
+				}
+			}
+#endif
 		}
 
 		// if timer is not finished
 		if (d->PickupTimeboxHUD.cooldown != 0)
 		{
 			UI_Lerp2D_HUD(pos.v, d->PickupTimeboxHUD.startX, d->PickupTimeboxHUD.startY, (int)posX, (int)posY, d->PickupTimeboxHUD.cooldown,
-			              UI_WEAPON_ROULETTE_LERP_FRAMES);
+			              FPS_DOUBLE(UI_WEAPON_ROULETTE_LERP_FRAMES));
 
 			// subtract one from timer
 			d->PickupTimeboxHUD.cooldown--;
@@ -215,7 +228,7 @@ void UI_Weapon_DrawBG(s16 posX, s16 posY, s16 scale, struct Driver *d)
 	int scaleInt = (int)scale;
 
 	// wumpaShineTheta (given to sine)
-	sdata->wumpaShineTheta += UI_WEAPON_BG_SHINE_THETA_STEP;
+	sdata->wumpaShineTheta += FPS_HALF(UI_WEAPON_BG_SHINE_THETA_STEP);
 
 	int shineScale = scaleInt * UI_WEAPON_BG_SHINE_SCALE_MUL >> UI_WEAPON_BG_SHINE_SCALE_SHIFT;
 

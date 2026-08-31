@@ -32,7 +32,7 @@ static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
 			if (count < SELECT_PROFILE_GHOST_SLOT_COUNT)
 			{
 				s_nativeGhostProfiles[profile.trackID][count] = profile;
-				s_nativeGhostProfileModern[profile.trackID][count] = NativeGhostInput_IsModernGhost(profile.profile_name);
+				s_nativeGhostProfileModern[profile.trackID][count] = (u8)NativeGhostInput_GetGhostFps(profile.profile_name);
 				s_nativeGhostProfileCounts[profile.trackID] = count + 1;
 			}
 		}
@@ -82,6 +82,16 @@ s16 RefreshCard_CountModernGhostProfilesForLEV(u16 trackID)
 b32 RefreshCard_IsGhostProfileModern(int row)
 {
 	return (row >= 0) && (row < SELECT_PROFILE_GHOST_SLOT_COUNT) && (s_nativeActiveGhostProfileModern[row] != 0);
+}
+
+int RefreshCard_GetGhostProfileFps(int row)
+{
+	if ((row < 0) || (row >= SELECT_PROFILE_GHOST_SLOT_COUNT))
+	{
+		return 0;
+	}
+
+	return s_nativeActiveGhostProfileModern[row];
 }
 
 void RefreshCard_InvalidateGhostProfileIndex(void)

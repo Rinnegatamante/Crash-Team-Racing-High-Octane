@@ -427,7 +427,11 @@ void VehStuckProc_MaskGrab_Animate(struct Thread *t, struct Driver *d)
 
 
 		// logic specific to maskgrab
-		frame = maskGrabAnimFrame + 1;
+		frame = maskGrabAnimFrame;
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+		{
+			frame++;
+		}
 
 		if (frame > VEH_STUCK_MASK_GRAB_CRASH_FRAME_CLAMP)
 		{
@@ -599,6 +603,11 @@ void VehStuckProc_MaskGrab_Init(struct Thread *t, struct Driver *d)
 		{
 			d->KartStates.MaskGrab.AngleAxis_NormalVec = d->AxisAngle2_normalVec;
 
+			if (CTR_NATIVE_60FPS_ACTIVE)
+			{
+				sdata->UnusedPadding1 = 1;
+			}
+
 			for (int i = 10; i > 0; i--)
 			{
 				struct Particle *p = Particle_Init(0, gGT->iconGroup[9], &data.emSet_Falling[0]);
@@ -610,6 +619,11 @@ void VehStuckProc_MaskGrab_Init(struct Thread *t, struct Driver *d)
 				p->otIndexOffset = d->instSelf->depthBiasNormal;
 				p->driverInst = d->instSelf;
 				p->driverID = d->driverID;
+			}
+
+			if (CTR_NATIVE_60FPS_ACTIVE)
+			{
+				sdata->UnusedPadding1 = 0;
 			}
 		}
 		else
@@ -956,7 +970,7 @@ void VehStuckProc_RevEngine_PhysLinear(struct Thread *t, struct Driver *d)
 		return;
 	}
 
-	d->posCurr.y = CTR_MipsSubLo(d->posCurr.y, VEH_STUCK_REV_MASK_DESCENT_STEP);
+	d->posCurr.y = CTR_MipsSubLo(d->posCurr.y, FPS_HALF(VEH_STUCK_REV_MASK_DESCENT_STEP));
 
 	// if maskObj exists
 	if (d->KartStates.RevEngine.maskObj != 0)
@@ -1000,7 +1014,7 @@ void VehStuckProc_RevEngine_Animate(struct Thread *t, struct Driver *d)
 			fillStep = VEH_STUCK_REV_STEP_MIN;
 		}
 
-		int revLevel = VehCalc_InterpBySpeed(d->KartStates.RevEngine.fireLevel, fillStep, d->KartStates.RevEngine.boostMeter);
+		int revLevel = VehCalc_InterpBySpeed(d->KartStates.RevEngine.fireLevel, FPS_HALF(fillStep), d->KartStates.RevEngine.boostMeter);
 
 		d->KartStates.RevEngine.fireLevel = revLevel;
 		d->KartStates.RevEngine.chargeState = REV_ENGINE_CHARGE_ACTIVE;
@@ -1046,7 +1060,7 @@ void VehStuckProc_RevEngine_Animate(struct Thread *t, struct Driver *d)
 	{
 		d->KartStates.RevEngine.chargeState = REV_ENGINE_CHARGE_IDLE;
 
-		int boostMeter = VehCalc_InterpBySpeed(d->KartStates.RevEngine.boostMeter, CTR_MipsAddLo(d->const_SacredFireSpeed / 3, 3),
+		int boostMeter = VehCalc_InterpBySpeed(d->KartStates.RevEngine.boostMeter, FPS_HALF(CTR_MipsAddLo(d->const_SacredFireSpeed / 3, 3)),
 		                                       CTR_MipsAddLo(d->const_SacredFireSpeed, d->const_AccelSpeed_ClassStat));
 		d->KartStates.RevEngine.boostMeter = boostMeter;
 	}
@@ -1087,7 +1101,7 @@ void VehStuckProc_RevEngine_Animate(struct Thread *t, struct Driver *d)
 			decayStep = VEH_STUCK_REV_STEP_MIN;
 		}
 
-		int revLevel = CTR_MipsSubLo(d->KartStates.RevEngine.fireLevel, decayStep);
+		int revLevel = CTR_MipsSubLo(d->KartStates.RevEngine.fireLevel, FPS_HALF(decayStep));
 		d->KartStates.RevEngine.fireLevel = revLevel;
 
 		if (revLevel < 1)

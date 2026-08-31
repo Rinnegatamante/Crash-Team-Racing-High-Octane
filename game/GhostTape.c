@@ -273,7 +273,7 @@ void GhostTape_WriteMoves(s16 raceFinished)
 
 			// set ghostOverflowTextTimer
 			// to 180 frames (6 seconds 30fps)
-			sdata->ghostOverflowTextTimer = GHOST_RECORD_OVERFLOW_TEXT_FRAMES;
+			sdata->ghostOverflowTextTimer = FPS_DOUBLE(GHOST_RECORD_OVERFLOW_TEXT_FRAMES);
 		}
 
 		// Increment frame counter

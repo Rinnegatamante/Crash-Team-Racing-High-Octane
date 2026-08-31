@@ -378,6 +378,34 @@ void INSTANCE_LevDelayedLInBs(struct InstDef *instDef, int numInstances)
 }
 
 
+b32 INSTANCE_Use60FpsAnimation(struct Instance *inst)
+{
+	if (!CTR_NATIVE_60FPS_ACTIVE || (inst == NULL) || (inst->model == NULL) || (inst->model->numHeaders <= 0) || (inst->model->headers == NULL))
+	{
+		return false;
+	}
+
+	if (memcmp(inst->model->headers[0].name, "big1", 4) == 0)
+	{
+		return false;
+	}
+
+	if (inst->model->id == DYNAMIC_FIREBALL)
+	{
+		return false;
+	}
+
+	struct GameTracker *gGT = sdata->gGT;
+	if ((gGT != NULL) && (gGT->overlayIndex_Threads == OVERLAY_INDEX_PODIUMS))
+	{
+		struct Driver *driver = gGT->drivers[0];
+		return (driver != NULL) && (driver->instSelf == inst);
+	}
+
+	return true;
+}
+
+
 /// @brief Obtain number of actual animation data frames in the first lod entry of the passed model.
 /// @param pInstance - pointer to Instance
 /// @param animIndex - animation index to check
@@ -408,7 +436,12 @@ u16 INSTANCE_GetNumAnimFrames(struct Instance *pInstance, int animIndex)
 						{
 							// we're finally there, get number of frames
 							// remember it's masked due to interp flag
-							return pAnim->numFrames & 0x7fff;
+							u16 frameCount = pAnim->numFrames & 0x7fff;
+							if (INSTANCE_Use60FpsAnimation(pInstance) && ((pAnim->numFrames & 0x8000) == 0) && (frameCount != 0))
+							{
+								frameCount = (u16)((frameCount << 1) - 1);
+							}
+							return frameCount;
 						}
 					}
 				}

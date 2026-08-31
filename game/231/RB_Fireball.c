@@ -182,8 +182,27 @@ void RB_Fireball_ThTick(struct Thread *t)
 		// set new velY
 		fireObj->velY = velY;
 
-		// fire particles
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+			sdata->UnusedPadding1 = 1;
+			if ((gGT->timer & 1) != 0)
+			{
+				particle = NULL;
+			}
+			else
+			{
+				particle = Particle_Init(0, gGT->iconGroup[0xA], &emSet_Fireball[0]);
+			}
+			sdata->UnusedPadding1 = 0;
+		}
+		else
+		{
+			particle = Particle_Init(0, gGT->iconGroup[0xA], &emSet_Fireball[0]);
+		}
+#else
 		particle = Particle_Init(0, gGT->iconGroup[0xA], &emSet_Fireball[0]);
+#endif
 
 		if (particle != 0)
 		{
@@ -219,18 +238,16 @@ void RB_Fireball_ThTick(struct Thread *t)
 
 	fireObj->cycleTimer -= elapsedTimeMS;
 
-	// if animation is not over
-	if ((fireInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(fireInst, 0))
+	if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
 	{
-		// increment frame
-		fireInst->animFrame = fireInst->animFrame + 1;
-	}
-
-	// if animation ended
-	else
-	{
-		// reset
-		fireInst->animFrame = 0;
+		if ((fireInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(fireInst, 0))
+		{
+			fireInst->animFrame = fireInst->animFrame + 1;
+		}
+		else
+		{
+			fireInst->animFrame = 0;
+		}
 	}
 
 	if ((oldVelY >= 0) && (fireObj->velY < 0))

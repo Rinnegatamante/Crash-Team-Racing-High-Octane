@@ -28,7 +28,7 @@ void RB_MaskWeapon_FadeAway(struct Thread *t)
 	mhs->posOffset.z = ((durationAdjusted * MATH_Cos(mask->rot.y)) >> 0xc);
 	mhs->posOffset.y = 0x40;
 
-	mask->rot.y += -0x100;
+	mask->rot.y += FPS_HALF(-0x100);
 
 	struct Instance *instCurr;
 	instCurr = inst;
@@ -39,9 +39,9 @@ void RB_MaskWeapon_FadeAway(struct Thread *t)
 	{
 		LHMatrix_Parent(instCurr, driverInst, &mhs->posOffset);
 
-		instCurr->scale.x += -0x100;
-		instCurr->scale.y += -0x100;
-		instCurr->scale.z += -0x100;
+		instCurr->scale.x += FPS_HALF(-0x100);
+		instCurr->scale.y += FPS_HALF(-0x100);
+		instCurr->scale.z += FPS_HALF(-0x100);
 
 		// position offset
 		mhs->posOffset.x = 0;
@@ -60,7 +60,7 @@ void RB_MaskWeapon_FadeAway(struct Thread *t)
 
 	if (maskBeamInst->alphaScale < 0x1000)
 	{
-		maskBeamInst->alphaScale += 0x200;
+		maskBeamInst->alphaScale += FPS_HALF(0x200);
 	}
 
 	totalTime = mask->duration;
@@ -163,7 +163,7 @@ void RB_MaskWeapon_ThTick(struct Thread *maskTh)
 	mhs->posOffset.x = (((MATH_Sin(rot) << 6) >> 0xc) * mask->scale) >> 0xc;
 	mhs->posOffset.z = (((MATH_Cos(rot) << 6) >> 0xc) * mask->scale) >> 0xc;
 
-	mhs->posOffset.y = R231.maskPosArr[(int)maskBeamInst->animFrame >> 0] + 0x40;
+	mhs->posOffset.y = R231.maskPosArr[(int)maskBeamInst->animFrame >> FPS_RIGHTSHIFT(0)] + 0x40;
 
 	mhs->rot.x = 0;
 	mhs->rot.y = rot;
@@ -217,7 +217,7 @@ void RB_MaskWeapon_ThTick(struct Thread *maskTh)
 	}
 
 	// adjust rotation
-	mask->rot.y += -0x100;
+	mask->rot.y += FPS_HALF(-0x100);
 
 	// If duration is over
 	if (mask->duration == 0)
@@ -298,7 +298,14 @@ void RB_ShieldDark_ThTick_Pop(struct Thread *t)
 		instColor->scale.z = s_shieldPopScale[animFrame][0];
 
 		// next frame
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+		{
+			sh->animFrame += 1;
+		}
+#else
 		sh->animFrame += 1;
+#endif
 
 		return;
 	}
@@ -461,7 +468,14 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		colorInst->scale.z = scaleXZ;
 
 		// next frame
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+		{
+			shield->animFrame++;
+		}
+#else
 		shield->animFrame++;
+#endif
 	}
 
 	// if animation is done

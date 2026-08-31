@@ -179,7 +179,14 @@ LAB_800af72c:
 		if ((int)animFrame < numAnimFrames - 1)
 		{
 			// increment animation frame
+#if CTR_NATIVE_60FPS
+			if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+			{
+				saveInst->animFrame += 1;
+			}
+#else
 			saveInst->animFrame += 1;
+#endif
 		}
 
 		// if animation is finished,

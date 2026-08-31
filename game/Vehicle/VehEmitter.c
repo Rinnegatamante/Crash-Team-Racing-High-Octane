@@ -171,6 +171,24 @@ struct Particle *VehEmitter_Exhaust(struct Driver *d, VECTOR *exhaustPos, VECTOR
 	struct GameTracker *gGT = sdata->gGT;
 	struct Instance *dInst = d->instSelf;
 
+#if CTR_NATIVE_60FPS
+	int numPlyr60 = gGT->numPlyrCurrGame;
+	int timer60 = gGT->timer;
+	if (CTR_NATIVE_60FPS_ACTIVE && d->driverID < numPlyr60)
+	{
+		if ((numPlyr60 == 1 && (timer60 & 1) != 0) ||
+		    (numPlyr60 == 2 && (timer60 & 2) != 0) ||
+		    (numPlyr60 > 2 && (timer60 & 4) != 0))
+		{
+			return NULL;
+		}
+	}
+	else if (CTR_NATIVE_60FPS_ACTIVE && ((timer60 & 4) != 0))
+	{
+		return NULL;
+	}
+#endif
+
 	if (d->invisibleTimer != 0)
 	{
 		return 0;
@@ -212,7 +230,19 @@ struct Particle *VehEmitter_Exhaust(struct Driver *d, VECTOR *exhaustPos, VECTOR
 		emSet = &data.emSet_Exhaust_Water[0];
 	}
 
+#if CTR_NATIVE_60FPS
+	if (CTR_NATIVE_60FPS_ACTIVE)
+	{
+		sdata->UnusedPadding1 = 1;
+	}
+#endif
 	struct Particle *p = Particle_Init(0, gGT->iconGroup[exhaustType], emSet);
+#if CTR_NATIVE_60FPS
+	if (CTR_NATIVE_60FPS_ACTIVE)
+	{
+		sdata->UnusedPadding1 = 0;
+	}
+#endif
 
 	if (p == NULL)
 	{

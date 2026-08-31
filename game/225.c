@@ -83,7 +83,7 @@ void VB_EndEvent_DrawMenu(void)
 	s32 playerCountIndex = numPlayers - VB_MIN_PLAYERS;
 	b32 isBattleMode = (gGT->gameMode1 & BATTLE_MODE) != 0;
 
-	if (sdata->framesSinceRaceEnded < VB_RESULT_MAX_FRAMES)
+	if (sdata->framesSinceRaceEnded < FPS_DOUBLE(VB_RESULT_MAX_FRAMES))
 	{
 		sdata->framesSinceRaceEnded++;
 	}

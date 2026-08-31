@@ -167,12 +167,12 @@ void RR_EndEvent_DrawMenu(void)
 
 	sdata->ptrTimebox1->scale = (SVec3){{RR_TIMEBOX_SCALE, RR_TIMEBOX_SCALE, RR_TIMEBOX_SCALE}};
 
-	if (sdata->framesSinceRaceEnded < RR_RESULT_MAX_FRAMES)
+	if (sdata->framesSinceRaceEnded < FPS_DOUBLE(RR_RESULT_MAX_FRAMES))
 	{
 		sdata->framesSinceRaceEnded++;
 	}
 
-	if (sdata->framesSinceRaceEnded >= RR_HIGH_SCORE_REVEAL_FRAME)
+	if (sdata->framesSinceRaceEnded >= FPS_DOUBLE(RR_HIGH_SCORE_REVEAL_FRAME))
 	{
 		gGT->gameModeEnd |= DRAW_HIGH_SCORES;
 	}
@@ -435,9 +435,9 @@ skipRelicAwarded:
 		elapsedFrames -= RR_HIGH_SCORE_BANNER_START_FRAME;
 
 		// 4 seconds after the 370 initial frames
-		if (elapsedFrames >= RR_HIGH_SCORE_BANNER_HOLD_FRAMES)
+		if (elapsedFrames >= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_HOLD_FRAMES))
 		{
-			elapsedFrames -= RR_HIGH_SCORE_BANNER_HOLD_FRAMES;
+			elapsedFrames -= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_HOLD_FRAMES);
 
 			startX = 0x100;
 			endX = 0x296;
@@ -484,7 +484,7 @@ skipRelicAwarded:
 	if ( // If you have not pressed X to continue
 	    ((sdata->menuReadyToPass & RR_MENU_READY_FLAG) == 0) &&
 
-	    (sdata->framesSinceRaceEnded >= RR_HIGH_SCORE_REVEAL_FRAME) &&
+	    (sdata->framesSinceRaceEnded >= FPS_DOUBLE(RR_HIGH_SCORE_REVEAL_FRAME)) &&
 
 	    ((gGT->gameModeEnd & NEW_HIGH_SCORE) == 0))
 	{

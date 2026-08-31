@@ -85,7 +85,7 @@ void AA_EndEvent_DrawMenu(void)
 
 	s32 elapsedFrames = sdata->framesSinceRaceEnded;
 
-	if (elapsedFrames < AA_RESULT_MAX_FRAMES)
+	if (elapsedFrames < FPS_DOUBLE(AA_RESULT_MAX_FRAMES))
 	{
 		elapsedFrames++;
 	}
@@ -195,9 +195,9 @@ void AA_EndEvent_DrawMenu(void)
 			// If you already have this CTR Token unlocked
 			else
 			{
-				if (elapsedFrames > AA_CTR_ALREADY_UNLOCKED_FLYOUT_FRAME)
+				if (elapsedFrames > FPS_DOUBLE(AA_CTR_ALREADY_UNLOCKED_FLYOUT_FRAME))
 				{
-					elapsedFrames -= AA_CTR_ALREADY_UNLOCKED_FLYOUT_FRAME;
+					elapsedFrames -= FPS_DOUBLE(AA_CTR_ALREADY_UNLOCKED_FLYOUT_FRAME);
 
 					lerpStartX = hudCTR->x + 0x10;
 					lerpStartY = hudCTR->y + 0x10;
@@ -252,7 +252,7 @@ void AA_EndEvent_DrawMenu(void)
 			driver->PickupLetterHUD.numCollected = 0;
 
 			// Do this for the first 30 seconds.
-			if (elapsedFrames < AA_RESULT_MAX_FRAMES)
+			if (elapsedFrames < FPS_DOUBLE(AA_RESULT_MAX_FRAMES))
 			{
 				for (s32 i = 0; i < 3; i++)
 				{
@@ -299,7 +299,7 @@ void AA_EndEvent_DrawMenu(void)
 	elapsedFrames = sdata->framesSinceRaceEnded;
 
 	// If it hasn't been 1 second from race ended
-	if (elapsedFrames < AA_RESULT_WAIT_FRAMES)
+	if (elapsedFrames < FPS_DOUBLE(AA_RESULT_WAIT_FRAMES))
 	{
 		return;
 	}
@@ -308,7 +308,7 @@ void AA_EndEvent_DrawMenu(void)
 	if (numPlayers == 1)
 	{
 		// start counting time 1 second after race ends
-		s32 driverIconFrame = (elapsedFrames & 0xffff) - AA_RESULT_WAIT_FRAMES;
+		s32 driverIconFrame = (elapsedFrames & 0xffff) - FPS_DOUBLE(AA_RESULT_WAIT_FRAMES);
 
 		if (
 		    // Every 10 frames
@@ -331,11 +331,11 @@ void AA_EndEvent_DrawMenu(void)
 			    gGT->pushBuffer[0].rect.x + (gGT->pushBuffer[0].rect.w - totalRacers * AA_DRIVER_ICON_SPACING + 12) / 2 + (i * AA_DRIVER_ICON_SPACING);
 			s32 currFrame;
 
-			if (elapsedFrames + lerpEndY > AA_DRIVER_ICON_EXIT_FRAME)
+			if (elapsedFrames + lerpEndY > FPS_DOUBLE(AA_DRIVER_ICON_EXIT_FRAME))
 			{
 				lerpStartX = driverIconTargetX;
 				lerpEndX = -100;
-				currFrame = elapsedFrames + lerpEndY - AA_DRIVER_ICON_EXIT_FRAME;
+				currFrame = elapsedFrames + lerpEndY - FPS_DOUBLE(AA_DRIVER_ICON_EXIT_FRAME);
 			}
 			else
 			{
@@ -631,7 +631,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 		RECTMENU_ClearInput();
 	}
 
-	b32 isLateDisplay = (framesElapsed + timeOffsetFrames > AA_TIME_DISPLAY_LATE_FRAME);
+	b32 isLateDisplay = (framesElapsed + timeOffsetFrames > FPS_DOUBLE(AA_TIME_DISPLAY_LATE_FRAME));
 
 	// === Draw BigNum ===
 
@@ -646,7 +646,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	// If race ended more than 10 seconds ago.
 	if (isLateDisplay)
 	{
-		currFrame = framesElapsed + timeOffsetFrames - AA_TIME_DISPLAY_LATE_FRAME;
+		currFrame = framesElapsed + timeOffsetFrames - FPS_DOUBLE(AA_TIME_DISPLAY_LATE_FRAME);
 		endFrame = AA_TIME_DISPLAY_FLYOUT_FRAMES;
 
 		lerpStartX = -0xae;
@@ -658,7 +658,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	else
 	{
 		currFrame = framesElapsed;
-		endFrame = AA_TIME_DISPLAY_FLYIN_FRAMES;
+		endFrame = FPS_DOUBLE(AA_TIME_DISPLAY_FLYIN_FRAMES);
 
 		lerpStartX = UI_ConvertX_2(hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].x, hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].z);
 		lerpStartY = UI_ConvertY_2(hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].y, hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].z);
@@ -672,7 +672,7 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	bigNum->matrix.t[1] = pos.y;
 
 	// interpolate scale to the target big-number size
-	UI_Lerp2D_Linear(pos.v, hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].scale, 0, AA_BIG_NUM_TARGET_SCALE, 0, framesElapsed, AA_TIME_DISPLAY_FLYIN_FRAMES);
+	UI_Lerp2D_Linear(pos.v, hud[AA_TIME_DISPLAY_BIG_NUM_SLOT].scale, 0, AA_BIG_NUM_TARGET_SCALE, 0, framesElapsed, FPS_DOUBLE(AA_TIME_DISPLAY_FLYIN_FRAMES));
 	s16 bigNumScale = pos.x;
 
 	bigNum->scale = (SVec3){{bigNumScale, bigNumScale, bigNumScale}};

@@ -398,7 +398,7 @@ void RaceFlag_DrawLoadingString(void)
 	{
 		if (RACE_FLAG_LOADING_IDLE_SLIDE_LIMIT < (int)sdata->RaceFlag_Transition)
 		{
-			sdata->RaceFlag_Transition -= RACE_FLAG_LOADING_IDLE_SLIDE_STEP;
+			sdata->RaceFlag_Transition -= FPS_HALF(RACE_FLAG_LOADING_IDLE_SLIDE_STEP);
 		}
 	}
 	else
@@ -408,7 +408,7 @@ void RaceFlag_DrawLoadingString(void)
 
 	drawX = (sdata->RaceFlag_Transition & 0xffff) - (textWidth >> 1);
 
-	letterAnimFrame = sdata->RaceFlag_LoadingTextAnimFrame;
+	letterAnimFrame = FPS_HALF(sdata->RaceFlag_LoadingTextAnimFrame);
 
 	if (0 < loadingTextBytes)
 	{

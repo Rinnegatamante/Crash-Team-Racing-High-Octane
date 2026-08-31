@@ -1,25 +1,18 @@
 #include <common.h>
 
 extern int gNativeGhostReplayMode;
-extern int cfg_language;
-static const char *s_nativeGhostFormatText[6][2] =
-{
-	{"MODERN", "LEGACY"},
-	{"MODERNE", "LEGACY"},
-	{"MODERN", "LEGACY"},
-	{"MODERNO", "LEGACY"},
-	{"MODERNO", "LEGACY"},
-	{"MODERN", "LEGACY"},
-};
 
-static char *SelectProfile_NativeGhostFormatText(b32 modern)
+static char *SelectProfile_NativeGhostFormatText(int ghostFps)
 {
-	int languageRow = 0;
-	if ((cfg_language >= 2) && (cfg_language <= 7))
+	if (ghostFps == 60)
 	{
-		languageRow = cfg_language - 2;
+		return "MODERN - 60 FPS";
 	}
-	return (char *)s_nativeGhostFormatText[languageRow][modern ? 0 : 1];
+	if (ghostFps == 30)
+	{
+		return "MODERN - 30 FPS";
+	}
+	return "LEGACY";
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80047da8-0x80047dfc.
@@ -446,8 +439,9 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 		{
 			modernRow = (int)(profile - &sdata->ghostProfile_memcard[0]);
 		}
-		b32 modern = RefreshCard_IsGhostProfileModern(modernRow);
-		DecalFont_DrawLine(SelectProfile_NativeGhostFormatText(modern), posX + 0x64, posY + 0x1e, FONT_SMALL,
+		int ghostFps = RefreshCard_GetGhostProfileFps(modernRow);
+		b32 modern = ghostFps != 0;
+		DecalFont_DrawLine(SelectProfile_NativeGhostFormatText(ghostFps), posX + 0x64, posY + 0x1e, FONT_SMALL,
 		                   modern ? 0xffff801d : 0xffff8016);
 #else
 		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];

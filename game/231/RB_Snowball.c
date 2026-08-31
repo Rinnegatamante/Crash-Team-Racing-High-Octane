@@ -46,16 +46,42 @@ void RB_Snowball_ThTick(struct Thread *t)
 
 		frame = &ptrSpawnType2->posRot[pointIndex];
 
-		ConvertRotToMatrix(&snowInst->matrix, &frame->rot);
+		SVec3 pos = frame->pos;
+		SVec3 rot = frame->rot;
 
-		snowInst->matrix.t[0] = frame->pos.x;
-		snowInst->matrix.t[1] = frame->pos.y;
-		snowInst->matrix.t[2] = frame->pos.z;
+		if (CTR_NATIVE_60FPS_ACTIVE && ((sdata->gGT->timer & 1) != 0))
+		{
+			snowObj->pointIndex = (snowObj->pointIndex + 1) % (snowObj->numPoints * 2);
+			pointIndex = snowObj->pointIndex;
+			if (pointIndex > snowObj->numPoints)
+			{
+				pointIndex = (snowObj->numPoints * 2) - pointIndex;
+			}
+
+			const struct SpawnPosRot *nextFrame = &ptrSpawnType2->posRot[pointIndex];
+			for (int axis = 0; axis < 3; axis++)
+			{
+				pos.v[axis] = (s16)(((int)pos.v[axis] + (int)nextFrame->pos.v[axis]) / 2);
+				if (rot.z == nextFrame->rot.z)
+				{
+					rot.v[axis] = (s16)(((int)rot.v[axis] + (int)nextFrame->rot.v[axis]) / 2);
+				}
+			}
+		}
+
+		ConvertRotToMatrix(&snowInst->matrix, &rot);
+
+		snowInst->matrix.t[0] = pos.x;
+		snowInst->matrix.t[1] = pos.y;
+		snowInst->matrix.t[2] = pos.z;
 
 		RB_Minecart_CheckColl(snowInst, t);
 	}
 
-	snowObj->pointIndex = (snowObj->pointIndex + 1) % (snowObj->numPoints * 2);
+	if (!CTR_NATIVE_60FPS_ACTIVE)
+	{
+		snowObj->pointIndex = (snowObj->pointIndex + 1) % (snowObj->numPoints * 2);
+	}
 }
 
 void RB_Snowball_LInB(struct Instance *inst)

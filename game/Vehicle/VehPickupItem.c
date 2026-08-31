@@ -783,7 +783,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 			}
 		}
 
-		tw->parentSafetyFrames = TRACKER_PARENT_SAFETY_FRAMES;
+		tw->parentSafetyFrames = (s16)FPS_DOUBLE(TRACKER_PARENT_SAFETY_FRAMES);
 		tw->blindFrames = 0;
 		break;
 
@@ -1092,11 +1092,11 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 				continue;
 			}
 
-			victim->clockFlash = CLOCK_FLASH_FRAMES;
+			victim->clockFlash = FPS_DOUBLE(CLOCK_FLASH_FRAMES);
 
 			if (victim == d)
 			{
-				d->clockSend = CLOCK_SELF_SEND_FRAMES;
+				d->clockSend = FPS_DOUBLE(CLOCK_SELF_SEND_FRAMES);
 				continue;
 			}
 
@@ -1213,7 +1213,19 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		tw->vel.x = (dInst->matrix.m[0][2] * WARPBALL_VELOCITY_NUMERATOR) >> WARPBALL_VELOCITY_SHIFT;
 		tw->vel.z = (dInst->matrix.m[2][2] * WARPBALL_VELOCITY_NUMERATOR) >> WARPBALL_VELOCITY_SHIFT;
 
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+			sdata->UnusedPadding1 = 1;
+		}
+#endif
 		struct Particle *p = Particle_Init(0, gGT->iconGroup[WARPBALL_PARTICLE_ICON_GROUP], &data.emSet_Warpball[0]);
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+			sdata->UnusedPadding1 = 0;
+		}
+#endif
 
 		tw->ptrParticle = p;
 

@@ -182,7 +182,7 @@ void RB_Minecart_LInB(struct Instance *inst)
 
 	minecartObj = ((struct Minecart *)t->object);
 	memset(minecartObj, 0, sizeof(struct Minecart));
-	minecartObj->betweenPoints_numFrames = 8;
+	minecartObj->betweenPoints_numFrames = (s16)FPS_DOUBLE(8);
 	minecartObj->rotSpeed = 0x20;
 
 	inst->scale.x = 0x1000;
@@ -194,7 +194,7 @@ void RB_Minecart_LInB(struct Instance *inst)
 		inst->scale.x = 0x2000;
 		inst->scale.y = 0x2000;
 		inst->scale.z = 0x2000;
-		minecartObj->betweenPoints_numFrames = 4;
+		minecartObj->betweenPoints_numFrames = (s16)FPS_DOUBLE(4);
 		minecartObj->rotSpeed = 0x18;
 	}
 
@@ -203,7 +203,7 @@ void RB_Minecart_LInB(struct Instance *inst)
 		inst->scale.x = 0x800;
 		inst->scale.y = 0x800;
 		inst->scale.z = 0x800;
-		minecartObj->betweenPoints_numFrames = 4;
+		minecartObj->betweenPoints_numFrames = (s16)FPS_DOUBLE(4);
 		minecartObj->rotSpeed = 0x18;
 	}
 

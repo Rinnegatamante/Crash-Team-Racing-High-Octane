@@ -266,9 +266,9 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 					{
 						uVar3 = gGT->timer;
 						// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034f84-0x80034fec for frozen-time tick SFX.
-						if (uVar3 == (uVar3 / 6) * 6)
+						if (uVar3 == (uVar3 / FPS_DOUBLE(6)) * FPS_DOUBLE(6))
 						{
-							if (uVar3 == (uVar3 / 0xc) * 0xc)
+							if (uVar3 == (uVar3 / FPS_DOUBLE(0xc)) * FPS_DOUBLE(0xc))
 							{
 								OtherFX_Play_LowLevel(0x40, '\0', 0x8c9080);
 							}
@@ -379,6 +379,27 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 
 #if defined(CTR_NATIVE)
 
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE)
+		{
+		for (struct Particle *p = gGT->particleList_ordinary; p != NULL; p = p->next)
+		{
+			int markerAxis = (p->flagsAxis & (1u << 10)) != 0 ? 9 : 10;
+			if (p->axis[markerAxis].startVal != 0)
+			{
+				continue;
+			}
+
+			p->axis[markerAxis].startVal = 4;
+			p->framesLeftInLife = (s16)FPS_DOUBLE(p->framesLeftInLife);
+			for (int axis = 0; axis < 11; axis++)
+			{
+				p->axis[axis].velocity = (s16)FPS_HALF(p->axis[axis].velocity);
+				p->axis[axis].accel = (s16)FPS_HALF(p->axis[axis].accel);
+			}
+		}
+		}
+#endif
 
 		Particle_UpdateAllParticles();
 
@@ -440,7 +461,7 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 					ElimBG_Deactivate(gGT);
 
 					RECTMENU_Hide(sdata->ptrActiveMenu);
-					gGT->cooldownFromUnpauseUntilPause = 5;
+					gGT->cooldownFromUnpauseUntilPause = FPS_DOUBLE(5);
 				}
 			}
 			else
@@ -473,7 +494,7 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 
 									MainFreeze_IfPressStart();
 
-									gGT->cooldownfromPauseUntilUnpause = 5;
+									gGT->cooldownfromPauseUntilUnpause = FPS_DOUBLE(5);
 								}
 							}
 						}

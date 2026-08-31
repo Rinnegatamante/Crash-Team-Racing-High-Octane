@@ -67,7 +67,7 @@ void RB_Plant_ThTick_Eat(struct Thread *t)
 			plantInst->animFrame = plantInst->animFrame + 1;
 
 			// last frame
-			if (plantInst->animFrame == 0xf)
+			if (plantInst->animFrame == FPS_DOUBLE(0xf))
 			{
 				goto PlayChewSound;
 			}
@@ -100,7 +100,7 @@ void RB_Plant_ThTick_Eat(struct Thread *t)
 			plantInst->animFrame = plantInst->animFrame + 1;
 
 			// last frame
-			if (plantInst->animFrame == 0x19)
+			if (plantInst->animFrame == FPS_DOUBLE(0x19))
 			{
 				if (plantObj->boolEatingPlayer != 0)
 				{
@@ -108,6 +108,12 @@ void RB_Plant_ThTick_Eat(struct Thread *t)
 					OtherFX_Play(0x6f, 0);
 				}
 
+#if CTR_NATIVE_60FPS
+				if (CTR_NATIVE_60FPS_ACTIVE)
+				{
+					sdata->UnusedPadding1 = 1;
+				}
+#endif
 				for (i = 0; i < 4; i++)
 				{
 					// spit tires
@@ -139,6 +145,12 @@ void RB_Plant_ThTick_Eat(struct Thread *t)
 					                                  (((MixRNG_Scramble() % 10) + 0x10) * plantInst->matrix.m[2][2]) >> 0xC) *
 					                              0x100;
 				}
+#if CTR_NATIVE_60FPS
+				if (CTR_NATIVE_60FPS_ACTIVE)
+				{
+					sdata->UnusedPadding1 = 0;
+				}
+#endif
 			}
 		}
 
@@ -459,8 +471,8 @@ void RB_Plant_LInB(struct Instance *inst)
 		metaArray = (s16 *)pointers[ST1_SPAWN];
 
 		plantID = inst->name[strlen(inst->name) - 1] - '0';
-		plantObj->cooldown = metaArray[plantID * 2 + 0];
-		plantObj->side = metaArray[plantID * 2 + 1];
+		plantObj->cooldown = FPS_DOUBLE(metaArray[plantID * 2 + 0]);
+		plantObj->side = FPS_DOUBLE(metaArray[plantID * 2 + 1]);
 	}
 }
 

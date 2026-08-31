@@ -228,7 +228,11 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 		if (((D230.trackSelect.videoStatePrev == MM_TRACK_VIDEO_PLAYING) || (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_PLAYING)) ||
 		    (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_START_STREAM))
 		{
-			int uploaded = NativeSTR_UploadNextFrameToTexture();
+			int uploaded = 0;
+			if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+			{
+				uploaded = NativeSTR_UploadNextFrameToTexture();
+			}
 
 			if ((uploaded == 1) && (D230.trackSelect.videoStateCurr == MM_TRACK_VIDEO_START_STREAM))
 			{

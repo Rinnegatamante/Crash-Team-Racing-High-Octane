@@ -265,7 +265,7 @@ void AH_Door_ThTick(struct Thread *t)
 
 	if ((door->camFlags & WdCam_FlyingOut) != 0)
 	{
-		door->camTimer_unused = AH_DOOR_CAMERA_HOLD_FRAMES;
+		door->camTimer_unused = FPS_DOUBLE(AH_DOOR_CAMERA_HOLD_FRAMES);
 
 		if (((cDC->flags & CAMERA_FLAG_TRANSITION_AWAY) == 0) && ((door->camFlags & WdCam_FlyingIn) == 0))
 		{
@@ -298,7 +298,7 @@ void AH_Door_ThTick(struct Thread *t)
 		door->camFlags |= WdCam_CutscenePlaying;
 
 		// if timer is less than four full seconds
-		if (door->frameCount_doorOpenAnim < AH_DOOR_KEY_SPIN_FRAMES)
+		if (door->frameCount_doorOpenAnim < FPS_DOUBLE(AH_DOOR_KEY_SPIN_FRAMES))
 		{
 			if (driver->speedApprox < 0x80)
 			{
@@ -360,16 +360,16 @@ void AH_Door_ThTick(struct Thread *t)
 							if (keyInst->scale.x < AH_DOOR_KEY_TARGET_SCALE)
 							{
 								// increase scale on X, Y, Z
-								keyInst->scale.x += AH_DOOR_KEY_SCALE_STEP;
-								keyInst->scale.y += AH_DOOR_KEY_SCALE_STEP;
-								keyInst->scale.z += AH_DOOR_KEY_SCALE_STEP;
+								keyInst->scale.x += FPS_HALF(AH_DOOR_KEY_SCALE_STEP);
+								keyInst->scale.y += FPS_HALF(AH_DOOR_KEY_SCALE_STEP);
+								keyInst->scale.z += FPS_HALF(AH_DOOR_KEY_SCALE_STEP);
 							}
 
 							// if key posY is below its hover height over the player
 							if (keyInst->matrix.t[1] < (driver->instSelf->matrix.t[1] + AH_DOOR_KEY_RAISE_HEIGHT))
 							{
 								// increase key posY
-								keyInst->matrix.t[1] += AH_DOOR_KEY_RAISE_STEP;
+								keyInst->matrix.t[1] += FPS_HALF(AH_DOOR_KEY_RAISE_STEP);
 							}
 
 							if (1 < numKeys)
@@ -403,7 +403,7 @@ void AH_Door_ThTick(struct Thread *t)
 				}
 
 				door->keyRot.x = 0;
-				door->keyRot.y += AH_DOOR_KEY_ROT_STEP;
+				door->keyRot.y += FPS_HALF(AH_DOOR_KEY_ROT_STEP);
 				door->keyRot.z = 0;
 
 				door->keyOrbit += AH_DOOR_KEY_ORBIT_STEP;
@@ -412,37 +412,29 @@ void AH_Door_ThTick(struct Thread *t)
 
 				// Sound effects when keys float in air
 
-				switch (door->frameCount_doorOpenAnim)
+				if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_KEY_FLOAT_SFX_FRAME_0))
 				{
-				case AH_DOOR_KEY_FLOAT_SFX_FRAME_0:
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0208-0x800b0218 for first floating-key SFX.
 					OtherFX_Play_LowLevel(AH_DOOR_KEY_FLOAT_SFX_ID, 1, 0xff7680);
-					break;
-				case AH_DOOR_KEY_FLOAT_SFX_FRAME_1:
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b022c-0x800b023c for second floating-key SFX.
+				}
+				else if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_KEY_FLOAT_SFX_FRAME_1))
+				{
 					OtherFX_Play_LowLevel(AH_DOOR_KEY_FLOAT_SFX_ID, 1, 0xeb8080);
-					break;
-				case AH_DOOR_KEY_FLOAT_SFX_FRAME_2:
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0250-0x800b0260 for third floating-key SFX.
+				}
+				else if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_KEY_FLOAT_SFX_FRAME_2))
+				{
 					OtherFX_Play_LowLevel(AH_DOOR_KEY_FLOAT_SFX_ID, 1, 0xd78a80);
-					break;
-				case AH_DOOR_KEY_FLOAT_SFX_FRAME_3:
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0274-0x800b0284 for fourth floating-key SFX.
+				}
+				else if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_KEY_FLOAT_SFX_FRAME_3))
+				{
 					OtherFX_Play_LowLevel(AH_DOOR_KEY_FLOAT_SFX_ID, 1, 0xc39480);
-					break;
-				case AH_DOOR_UNLOCK_SFX_FRAME:
-					// unlock door sound
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b0298-0x800b02ac for door unlock SFX.
+				}
+				else if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_UNLOCK_SFX_FRAME))
+				{
 					OtherFX_Play(AH_DOOR_UNLOCK_SFX_ID, 1);
-					break;
-				case AH_DOOR_KEY_SPIN_FRAMES:
-					// on last frame, doors creak open
-					// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b02a0-0x800b02ac for door creak SFX.
+				}
+				else if (door->frameCount_doorOpenAnim == FPS_DOUBLE(AH_DOOR_KEY_SPIN_FRAMES))
+				{
 					OtherFX_Play(AH_DOOR_CREAK_SFX_ID, 1);
-					break;
-
-				default:
-					break;
 				}
 			}
 			return;
@@ -486,7 +478,7 @@ void AH_Door_ThTick(struct Thread *t)
 
 	if (door->doorRot.y < AH_DOOR_OPEN_ROTATION)
 	{
-		door->doorRot.y += AH_DOOR_OPEN_ROTATION_STEP;
+		door->doorRot.y += FPS_HALF(AH_DOOR_OPEN_ROTATION_STEP);
 
 		// right-hand door rot[x,y,z]
 		desiredRot.x = door->doorRot.x;

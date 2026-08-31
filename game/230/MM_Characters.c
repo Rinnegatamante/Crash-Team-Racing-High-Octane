@@ -1597,7 +1597,7 @@ dontDrawSelectCharacter:
 		}
 
 		// spin the character
-		D230.characterSelectPlayerState.angle[playerIndex] += MM_CHARACTER_SELECT_SPIN_STEP;
+		D230.characterSelectPlayerState.angle[playerIndex] += FPS_HALF(MM_CHARACTER_SELECT_SPIN_STEP);
 	}
 
 	// reset

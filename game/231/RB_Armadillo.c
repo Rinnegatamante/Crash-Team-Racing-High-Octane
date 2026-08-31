@@ -81,7 +81,7 @@ void RB_Armadillo_ThTick_Rolling(struct Thread *t)
 	if (armObj->timeRolling < 0x500)
 	{
 		// 32ms, 30fps
-		armObj->timeRolling += 0x20;
+		armObj->timeRolling += FPS_HALF(0x20);
 
 		if (armObj->direction == 0)
 		{
@@ -183,8 +183,8 @@ void RB_Armadillo_LInB(struct Instance *inst)
 	armObj->spawnPosZ = inst->matrix.t[2];
 	armObj->direction = 0;
 
-	armObj->velX = inst->matrix.m[0][2] >> 7;
-	armObj->velZ = inst->matrix.m[2][2] >> 7;
+	armObj->velX = inst->matrix.m[0][2] >> FPS_RIGHTSHIFT(7);
+	armObj->velZ = inst->matrix.m[2][2] >> FPS_RIGHTSHIFT(7);
 
 	if (sdata->gGT->level1->ptrSpawnType1->count <= 0)
 	{
@@ -194,5 +194,5 @@ void RB_Armadillo_LInB(struct Instance *inst)
 	// puts armadillos on separate cycles
 	pointers = ST1_GETPOINTERS(sdata->gGT->level1->ptrSpawnType1);
 	metaArray = (s16 *)pointers[ST1_SPAWN];
-	armObj->timeAtEdge = metaArray[inst->name[strlen(inst->name) - 1] - '0'];
+	armObj->timeAtEdge = FPS_DOUBLE(metaArray[inst->name[strlen(inst->name) - 1] - '0']);
 }

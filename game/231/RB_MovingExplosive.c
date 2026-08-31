@@ -70,7 +70,7 @@ LAB_800adc08:;
 
 		    (modelID == DYNAMIC_ROCKET))
 		{
-			tw->framesSeekTargetTnt = 10;
+			tw->framesSeekTargetTnt = (s16)FPS_DOUBLE(10);
 		}
 	}
 
@@ -201,13 +201,13 @@ LAB_800adc08:;
 		// if bomb is forwards
 		if ((tw->flags & TRACKER_FLAG_BOMB_BACKWARD) == 0)
 		{
-			tw->dir.x += 0x200;
+			tw->dir.x += FPS_HALF(0x200);
 		}
 
 		// if bomb is backwards
 		else
 		{
-			tw->dir.x -= 0x200;
+			tw->dir.x -= FPS_HALF(0x200);
 		}
 
 		// convert 3 rotation shorts into rotation matrix
