@@ -387,21 +387,22 @@ static void VehPickupItem_MissileLoadPlayerView(struct GameTracker *gGT, struct 
 	PushBuffer_SetPsyqGeom(pb);
 }
 
-static void VehPickupItem_MissileLoadAiView(struct Driver *driver)
+static void VehPickupItem_MissileLoadAiView(struct Driver *driver, struct PushBuffer *pb)
 {
 	SVec3 rot = {.x = driver->rotCurr.x, .y = driver->rotCurr.y, .z = driver->rotCurr.z};
 	MATRIX matrix = {0};
-	MATRIX unusedInverse;
+	MATRIX inverse;
 
 	ConvertRotToMatrix(&matrix, &rot);
 	matrix.t[0] = CTR_MipsSra(driver->posCurr.x, 8);
 	matrix.t[1] = CTR_MipsSra(driver->posCurr.y, 8);
 	matrix.t[2] = CTR_MipsSra(driver->posCurr.z, 8);
 
-	MATH_HitboxMatrix(&unusedInverse, &matrix);
+	MATH_HitboxMatrix(&inverse, &matrix);
 
-	SetRotMatrix(&matrix);
-	SetTransMatrix(&matrix);
+	SetRotMatrix(&inverse);
+	SetTransMatrix(&inverse);
+	PushBuffer_SetPsyqGeom(pb);
 }
 
 static b32 VehPickupItem_MissileCandidateVisible(struct PushBuffer *pb, struct Driver *candidate)
@@ -452,15 +453,16 @@ struct Driver *VehPickupItem_MissileGetTargetDriver(struct Driver *driver)
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *target = NULL;
 	s32 closestDistance = MISSILE_TARGET_DISTANCE_SENTINEL;
-	struct PushBuffer *pb = VehPickupItem_GetDriverPushBuffer(gGT, driver->driverID);
+	b32 isPlayer = driver->instSelf->thread->modelIndex == DYNAMIC_PLAYER;
+	struct PushBuffer *pb = VehPickupItem_GetDriverPushBuffer(gGT, isPlayer ? driver->driverID : 0);
 
-	if (driver->instSelf->thread->modelIndex == DYNAMIC_PLAYER)
+	if (isPlayer)
 	{
 		VehPickupItem_MissileLoadPlayerView(gGT, driver);
 	}
 	else
 	{
-		VehPickupItem_MissileLoadAiView(driver);
+		VehPickupItem_MissileLoadAiView(driver, pb);
 	}
 
 	for (s32 i = 0; i < MISSILE_TARGET_DRIVER_COUNT; i++)
