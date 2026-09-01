@@ -79,14 +79,13 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 
 	MatrixRotate(mat, &obj->m, mat);
 
-#if defined(__vita__)
-	if (!isTimeCrate && (inst->model->id == STATIC_FRUITDISP) && NativeAdhoc_IsConnected() &&
-	    (gGT->numPlyrCurrGame == 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
+#if defined(CTR_NATIVE) && defined(__vita__)
+	if (!isTimeCrate && (inst->model->id == STATIC_FRUITDISP) &&
+	    (gGT->numPlyrCurrGame >= 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
 	{
 		int owner = -1;
-		int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
 
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 		{
 			if ((gGT->drivers[i] != NULL) && (gGT->drivers[i]->instFruitDisp == inst))
 			{
@@ -95,18 +94,23 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 			}
 		}
 
-		if (owner == localPlayer)
+		if (owner >= 0)
 		{
-			struct UiElement2D *hud = &data.hudStructPtr[0][UI_HUD_SLOT_FRUIT_MODEL];
-			inst->matrix.t[0] = UI_ConvertX_2(hud->x, hud->z);
-			inst->matrix.t[1] = UI_ConvertY_2(hud->y, hud->z);
-			inst->matrix.t[2] = hud->z;
-			inst->scale.x = hud->scale;
-			inst->scale.y = hud->scale;
-			inst->scale.z = hud->scale;
-			inst->alphaScale = (gGT->drivers[localPlayer]->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
+			inst->alphaScale = (gGT->drivers[owner]->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
 			                       ? 0
 			                       : ((s16)sdata->wumpaShineResult - UI_REWARD_WUMPA_SHINE_CENTER) << UI_REWARD_WUMPA_SHINE_SHIFT;
+
+			if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) &&
+			    (owner == NativeAdhoc_GetLocalPlayerIndex()))
+			{
+				struct UiElement2D *hud = &data.hudStructPtr[0][UI_HUD_SLOT_FRUIT_MODEL];
+				inst->matrix.t[0] = UI_ConvertX_2(hud->x, hud->z);
+				inst->matrix.t[1] = UI_ConvertY_2(hud->y, hud->z);
+				inst->matrix.t[2] = hud->z;
+				inst->scale.x = hud->scale;
+				inst->scale.y = hud->scale;
+				inst->scale.z = hud->scale;
+			}
 		}
 	}
 #endif

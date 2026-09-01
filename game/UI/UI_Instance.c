@@ -385,8 +385,8 @@ void UI_INSTANCE_InitAll(void)
 	sdata->ptrPushBufferUI = (int)NULL;
 	if (gGT->numPlyrCurrGame >= 2)
 	{
-#if defined(__vita__)
-		if (!(NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) && ((gameMode1 & MAIN_MENU) == 0)))
+#if defined(CTR_NATIVE) && defined(__vita__)
+		if ((gameMode1 & MAIN_MENU) != 0)
 #endif
 		{
 			sdata->ptrPushBufferUI = (int)&sdata->pushBuffer_DecalMP;

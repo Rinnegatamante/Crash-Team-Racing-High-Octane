@@ -2026,40 +2026,37 @@ void NativeRenderer_SetupClipMode(const RECT16 *rect, const DISPENV *displayEnv,
 		return;
 	}
 
-	const float emuScreenAspect = 1.0f;
+	const int displayX = displayEnv->disp.x;
+	const int displayY = displayEnv->disp.y;
+	const int displayW = displayEnv->disp.w;
+	const int displayH = displayEnv->disp.h;
+	const int clipRight = rect->x + rect->w;
+	const int clipBottom = rect->y + rect->h;
+	const int displayRight = displayX + displayW;
+	const int displayBottom = displayY + displayH;
+	const int overlapX = rect->x > displayX ? rect->x : displayX;
+	const int overlapY = rect->y > displayY ? rect->y : displayY;
+	const int overlapRight = clipRight < displayRight ? clipRight : displayRight;
+	const int overlapBottom = clipBottom < displayBottom ? clipBottom : displayBottom;
 
-	const float psxScreenWInv = 1.0f / (float)displayEnv->disp.w;
-	const float psxScreenHInv = 1.0f / (float)displayEnv->disp.h;
-
-	// first map to 0..1
-	float clipRectX = (float)(rect->x - displayEnv->disp.x) * psxScreenWInv;
-	float clipRectY = (float)(rect->y - displayEnv->disp.y) * psxScreenHInv;
-	float clipRectW = (float)(rect->w) * psxScreenWInv;
-	float clipRectH = (float)(rect->h) * psxScreenHInv;
-
-	// then map to screen
+	if ((overlapRight <= overlapX) || (overlapBottom <= overlapY))
 	{
-		clipRectX -= 0.5f;
-
-		clipRectX *= emuScreenAspect;
-		clipRectW *= emuScreenAspect;
-
-		clipRectX += 0.5f;
+		NativeRenderer_SetScissorRectCached(0, 0, 0, 0);
+		return;
 	}
 
-	// The draw environment remains in PS1 coordinates. Scale its normalized clip
-	// rectangle to the physical main render target used by this frame.
-	const float viewportX = 0.0f;
-	const float viewportY = 0.0f;
-	const float viewportW = (float)(s_mainRenderTarget.width > 0 ? s_mainRenderTarget.width : displayEnv->disp.w);
-	const float viewportH = (float)(s_mainRenderTarget.height > 0 ? s_mainRenderTarget.height : displayEnv->disp.h);
-	const float flipOffset = viewportY + viewportH - clipRectH * viewportH;
-	const float crx = viewportX + clipRectX * viewportW;
-	const float cry = clipRectY * viewportH;
-	const float crw = clipRectW * viewportW;
-	const float crh = clipRectH * viewportH;
+	const int physicalW = s_mainRenderTarget.width > 0 ? s_mainRenderTarget.width : displayW;
+	const int physicalH = s_mainRenderTarget.height > 0 ? s_mainRenderTarget.height : displayH;
+	const int relLeft = overlapX - displayX;
+	const int relRight = overlapRight - displayX;
+	const int relTop = overlapY - displayY;
+	const int relBottom = overlapBottom - displayY;
+	const int scissorX = relLeft * physicalW / displayW;
+	const int scissorRight = (relRight * physicalW + displayW - 1) / displayW;
+	const int scissorY = (displayH - relBottom) * physicalH / displayH;
+	const int scissorTop = ((displayH - relTop) * physicalH + displayH - 1) / displayH;
 
-	NativeRenderer_SetScissorRectCached((int)crx, (int)(flipOffset - cry), (int)crw, (int)crh);
+	NativeRenderer_SetScissorRectCached(scissorX, scissorY, scissorRight - scissorX, scissorTop - scissorY);
 }
 
 internal void NativeRenderer_SetShader(const ShaderID shader)

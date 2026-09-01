@@ -1257,6 +1257,13 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 	// with ptrPushBufferUI, not the adjacent ptrFruitDisp instance slot.
 	wumpaPushBuffer = (struct PushBuffer *)(uintptr_t)sdata->ptrPushBufferUI;
 
+#if defined(CTR_NATIVE) && defined(__vita__)
+	if ((gGT->numPlyrCurrGame >= 2) && (wumpaPushBuffer == NULL))
+	{
+		return;
+	}
+#endif
+
 	if (wumpaPushBuffer != NULL)
 	{
 		uint32_t *textureStart = wumpaPushBuffer->ptrOT;
