@@ -111,6 +111,7 @@ void RB_Snowball_LInB(struct Instance *inst)
 	t->inst = inst;
 
 	snowObj = ((struct Snowball *)t->object);
+	snowObj->pointIndex = 0;
 	snowObj->rot_unused.x = 0;
 
 	snowObj->snowID = inst->name[strlen(inst->name) - 1] - '0';
