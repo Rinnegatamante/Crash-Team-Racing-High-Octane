@@ -17,7 +17,6 @@
 volatile int gCtrDebugSkipLevelGeometry = 0;
 #endif
 
-#if defined(CTR_NATIVE)
 extern int gNativeMirrorModeEnabled;
 extern int gNativeMirrorModeRenderActive;
 
@@ -33,7 +32,6 @@ static int MainFrame_NativeMirrorWorldActive(struct GameTracker *gGT)
 		LOAD_IsOpen_RacingOrBattle() &&
 		(sdata->Loading.stage == LOAD_IDLE);
 }
-#endif
 
 void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamepads)
 {
@@ -115,15 +113,6 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 		RenderStars(starsPb, &gGT->backBuffer->primMem, &gGT->stars, starsPlayers);
 	}
 
-	if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
-	{
-#if defined(__vita__)
-		if (!NativeAdhoc_IsSingleViewRenderActive())
-#endif
-		{
-		DecalMP_01(gGT);
-		}
-	}
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
 
 #if defined(CTR_NATIVE)
@@ -152,16 +141,6 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	RenderAllNormalParticles(gGT);
 
 	RenderDispEnv_World(gGT); // == RenderDispEnv_World ==
-
-		if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
-		{
-#if defined(__vita__)
-			if (!NativeAdhoc_IsSingleViewRenderActive())
-#endif
-			{
-			DecalMP_02(gGT);
-			}
-		}
 
 	RenderAllFlag0x40(gGT); // I need a better name
 	RenderAllTitleDPP(gGT);
@@ -195,31 +174,21 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 		MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_POST_LEVEL);
 		RenderDispEnv_World(gGT); // == RenderDispEnv_World ==
 
-			if (((gGT->hudFlags & HUD_FLAG_RACE_HUD) != 0) && (gGT->numPlyrCurrGame > 1))
-			{
+		if (((gGT->hudFlags & HUD_FLAG_RACE_HUD) != 0) && (gGT->numPlyrCurrGame > 1))
+		{
 #if defined(CTR_NATIVE)
-				gNativeMirrorModeRenderActive = 0;
+			gNativeMirrorModeRenderActive = 0;
 #endif
 #if defined(__vita__)
-				if (!NativeAdhoc_IsSingleViewRenderActive())
+			if (!NativeAdhoc_IsSingleViewRenderActive())
 #endif
-				{
-					UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
-				}
-#if defined(CTR_NATIVE)
-				gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
-#endif
-			}
-
-			if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
 			{
-#if defined(__vita__)
-				if (!NativeAdhoc_IsSingleViewRenderActive())
-#endif
-				{
-				DecalMP_03(gGT);
-				}
+				UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
 			}
+#if defined(CTR_NATIVE)
+			gNativeMirrorModeRenderActive = nativeMirrorWorldActive;
+#endif
+		}
 
 		int dotLightsLoadReady = sdata->Loading.stage != LOAD_REQUESTED;
 
@@ -232,17 +201,17 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 			DotLights_AudioAndVideo(gGT);
 		}
 
-			if ((gGT->renderFlags & RENDER_FLAG_SPLIT_SCREEN_LINES) != 0)
-			{
+		if ((gGT->renderFlags & RENDER_FLAG_SPLIT_SCREEN_LINES) != 0)
+		{
 #if defined(__vita__)
-				if (!NativeAdhoc_IsSingleViewRenderActive())
+			if (!NativeAdhoc_IsSingleViewRenderActive())
 #endif
-				{
-				WindowBoxLines(gGT);
+			{
+			WindowBoxLines(gGT);
 
-				WindowDivsionLines(gGT);
-				}
+			WindowDivsionLines(gGT);
 			}
+		}
 
 		// if game is not loading
 		if (sdata->Loading.stage == LOAD_IDLE)
@@ -254,13 +223,13 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 			}
 
 #if defined(CTR_NATIVE)
-			// NOTE(aalhendi): Native menu/adventure-hub LEVs may publish no
-			// restart table. Retail lap stats assume the table exists whenever
-			// this caller reaches them; keep the ASM-verified lap function intact.
-			if ((gGT->level1 != NULL) && (gGT->level1->ptr_restart_points != NULL) && (gGT->level1->cnt_restart_points != 0))
-			{
-				PlayLevel_UpdateLapStats();
-			}
+		// NOTE(aalhendi): Native menu/adventure-hub LEVs may publish no
+		// restart table. Retail lap stats assume the table exists whenever
+		// this caller reaches them; keep the ASM-verified lap function intact.
+		if ((gGT->level1 != NULL) && (gGT->level1->ptr_restart_points != NULL) && (gGT->level1->cnt_restart_points != 0))
+		{
+			PlayLevel_UpdateLapStats();
+		}
 #else
 			PlayLevel_UpdateLapStats();
 #endif
