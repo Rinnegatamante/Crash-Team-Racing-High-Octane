@@ -1207,19 +1207,43 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			               gGT->visMem1->visOVertList[1]);
 		}
 
-		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
 
+#ifdef CTR_NATIVE
+		// Native 2P: render each split-screen viewport through the
+		// proven 1P geometry path used by AdHoc single-view rendering.
+		for (i = 0; i < numPlyrCurrGame; i++)
+		{
+			pushBuffer = &gGT->pushBuffer[i];
+			scratch = CTR_SCRATCHPAD_PTR(struct MainRenderLevelGeometryScratch, 0);
+			distToScreen = pushBuffer->distanceToScreen_PREV;
+			scratch->depthScale = RenderAllLevelGeometry_ScaleDistanceShift8(distToScreen, 0x2080);
+			scratch->bspLodDistanceThreshold = CTR_MipsMulLo(distToScreen, 0x1a);
+			scratch->textureLodDepthThreshold0 = CTR_MipsMulLo(distToScreen, 0x18);
+			scratch->textureLodDepthThreshold1 = CTR_MipsMulLo(distToScreen, 0xc);
+			scratch->topLevelNearDepthThreshold = CTR_MipsMulLo(distToScreen, 7);
+			scratch->recursiveNearDepthThreshold = RenderAllLevelGeometry_ScaleDistanceShift8(distToScreen, 0x380);
+			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
+
+			RenderLists_PreInit();
+			gGT->bspLeafsDrawn += RenderLists_Init1P2P(ptr_mesh_info->bspRoot, gGT->visMem1->visLeafList[i], pushBuffer, (u32)&gGT->LevRenderLists[i],
+			                                           gGT->visMem1->bspList[i], 1);
+
+			DrawLevelOvr1P_WithContext(&gGT->LevRenderLists[i], pushBuffer, (struct BSP *)ptr_mesh_info, &gGT->backBuffer->primMem,
+			                            gGT->visMem1->visFaceList[i], level1->ptr_tex_waterEnvMap, data.PtrClipBuffer[i],
+			                            (struct QuadBlock **)data.ptrRenderedQuadblockDestination_forEachPlayer[i]);
+		}
+#else
+		RenderLists_PreInit();
 		for (i = 0; i < numPlyrCurrGame; i++)
 		{
 			gGT->bspLeafsDrawn += RenderLists_Init1P2P(ptr_mesh_info->bspRoot, gGT->visMem1->visLeafList[i], &gGT->pushBuffer[i], (u32)&gGT->LevRenderLists[i],
 			                                           gGT->visMem1->bspList[i], numPlyrCurrGame);
 		}
 
-		// 226-229
 		DrawLevelOvr2P(&gGT->LevRenderLists[0], &gGT->pushBuffer[0], (struct BSP *)ptr_mesh_info, &gGT->backBuffer->primMem, gGT->visMem1->visFaceList[0],
-		               gGT->visMem1->visFaceList[1],
-		               level1->ptr_tex_waterEnvMap); // waterEnvMap?
+		               gGT->visMem1->visFaceList[1], level1->ptr_tex_waterEnvMap);
+#endif
 
 		goto SkyboxGlow;
 	}

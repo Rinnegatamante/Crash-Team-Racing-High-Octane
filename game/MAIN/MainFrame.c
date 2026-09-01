@@ -822,11 +822,54 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		}
 
 #ifdef CTR_NATIVE
+		int nativeWide2PSplitPvs =
+		    CTR_VITA_WIDESCREEN && (gGT->numPlyrCurrGame == 2) && !NativeAdhoc_IsSingleViewRenderActive();
+
+		if (nativeWide2PSplitPvs)
+		{
+			void *leafSrc = camDC->visLeafSrc;
+			void *faceSrc = camDC->visFaceSrc;
+
+			if ((leafSrc == NULL) && (driverPVS != NULL))
+			{
+				leafSrc = driverPVS->visLeafSrc;
+			}
+			if ((faceSrc == NULL) && (driverPVS != NULL))
+			{
+				faceSrc = driverPVS->visFaceSrc;
+			}
+
+			// Rebase the packed lists every frame before merging the driver's PVS.
+			// Otherwise moving through multiple driver PVS records would leave stale
+			// visibility bits accumulated from earlier frames.
+			if (leafSrc != NULL)
+			{
+				visMem->visLeafSrc[visIndex] = leafSrc;
+				MainFrame_ReplacePackedVisList(visMem->visLeafList[visIndex], leafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+			}
+			if (faceSrc != NULL)
+			{
+				visMem->visFaceSrc[visIndex] = faceSrc;
+				MainFrame_ReplacePackedVisList(visMem->visFaceList[visIndex], faceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+			}
+
+			if (driverPVS != NULL)
+			{
+				if ((driverPVS->visLeafSrc != NULL) && (driverPVS->visLeafSrc != leafSrc))
+				{
+					MainFrame_OrPackedVisList(visMem->visLeafList[visIndex], driverPVS->visLeafSrc, ((mesh->numBspNodes + 0x1f) >> 5) << 2);
+				}
+				if ((driverPVS->visFaceSrc != NULL) && (driverPVS->visFaceSrc != faceSrc))
+				{
+					MainFrame_OrPackedVisList(visMem->visFaceList[visIndex], driverPVS->visFaceSrc, ((mesh->numQuadBlock + 0x1f) >> 5) << 2);
+				}
+			}
+		}
 		// HACK: Crash Cove's ship can place the camera and driver in different PVS
 		// records even though the camera record contains the driver's quad. That
 		// record still omits parts of the ship, so merge these two local PVS sets
 		// instead of disabling visibility for the whole level.
-		if (gGT->levelID == CRASH_COVE)
+		if ((gGT->levelID == CRASH_COVE) && !nativeWide2PSplitPvs)
 		{
 			int hadDriverPVS = (camDC->flags & 0x2000) != 0;
 			int needsDriverPVS =

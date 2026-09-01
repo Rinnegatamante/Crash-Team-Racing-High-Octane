@@ -8050,6 +8050,7 @@ static int Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit(void)
 
 	shifted = word << bitIndex;
 	DrawLevelOvr1P_Scratch()->visibilityBitIndex = bitIndex - 1;
+
 	return (s32)shifted < 0;
 }
 
@@ -9780,9 +9781,8 @@ static int Ovr226_800a0e10_DispatchBucketTable(struct DrawLevelOvr1PRenderList *
 	return 1;
 }
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800a0cbc-0x800ab970
-void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList,
-                    const struct TextureLayout *waterEnvMap)
+static void DrawLevelOvr1P_WithContext(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList,
+                                         const struct TextureLayout *waterEnvMap, u8 *clipStart, struct QuadBlock **renderedOverflowBase)
 {
 	struct DrawLevelOvr1PRenderList *renderList = LevRenderList;
 	struct mesh_info *mesh = (struct mesh_info *)bspList;
@@ -9808,11 +9808,12 @@ void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspL
 		return;
 	}
 
-	DrawLevelOvr1P_SetClipRecordStart(data.PtrClipBuffer[0]);
-	DrawLevelOvr1P_SetRenderedOverflowBase(sdata_static.quadBlocksRendered);
+	DrawLevelOvr1P_SetClipRecordStart(clipStart);
+	DrawLevelOvr1P_SetRenderedOverflowBase(renderedOverflowBase);
 	DrawLevelOvr1P_SetPrimReserveBias(0);
 	DrawLevelOvr1P_SetListHandlersSeedRenderedCursor(1);
 	Ovr226_800a0d20_SeedEntryScratchPointers(renderList, pb);
+	DrawLevelOvr1P_SetClipRecordCursor(clipStart);
 	Ovr226_800a0d34_SetEntryGteAndCameraScratch(pb);
 	Ovr226_800a0dc4_ClearProjectedScratch();
 	Ovr226_800a0ddc_CopyScratchInitTable();
@@ -9829,4 +9830,11 @@ void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspL
 	{
 		return;
 	}
+}
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800a0cbc-0x800ab970
+void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList,
+                    const struct TextureLayout *waterEnvMap)
+{
+	DrawLevelOvr1P_WithContext(LevRenderList, pb, bspList, primMem, visFaceList, waterEnvMap, data.PtrClipBuffer[0], sdata_static.quadBlocksRendered);
 }
