@@ -3478,8 +3478,20 @@ int ParsePrimitive(P_TAG *polyTag)
 			rect.w = fill->w;
 			rect.h = fill->h;
 
-			if (activeDrawEnv.dfe && rect.x >= activeDrawEnv.clip.x && rect.y >= activeDrawEnv.clip.y &&
-			    rect.x + rect.w <= activeDrawEnv.clip.x + activeDrawEnv.clip.w && rect.y + rect.h <= activeDrawEnv.clip.y + activeDrawEnv.clip.h)
+#ifdef __vita__
+			const DRAWENV *frameDrawEnv = s_gpuFrontendFramePrepared ? &s_gpuFramePackets[s_gpuFrontendPacketIndex].drawEnv : &activeDrawEnv;
+			const bool fillTargetsFrameBuffer =
+			    activeDrawEnv.dfe && frameDrawEnv->dfe &&
+			    rect.x >= frameDrawEnv->clip.x && rect.y >= frameDrawEnv->clip.y &&
+			    rect.x + rect.w <= frameDrawEnv->clip.x + frameDrawEnv->clip.w &&
+			    rect.y + rect.h <= frameDrawEnv->clip.y + frameDrawEnv->clip.h;
+#else
+			const bool fillTargetsFrameBuffer =
+			    activeDrawEnv.dfe && rect.x >= activeDrawEnv.clip.x && rect.y >= activeDrawEnv.clip.y &&
+			    rect.x + rect.w <= activeDrawEnv.clip.x + activeDrawEnv.clip.w && rect.y + rect.h <= activeDrawEnv.clip.y + activeDrawEnv.clip.h;
+#endif
+
+			if (fillTargetsFrameBuffer)
 			{
 #ifdef __vita__
 				if (!NativeGpu_AppendClearSplit(&rect, fill->r0, fill->g0, fill->b0))
