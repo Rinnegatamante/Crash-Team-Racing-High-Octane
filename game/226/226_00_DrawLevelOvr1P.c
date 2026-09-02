@@ -2352,7 +2352,12 @@ static int DrawLevelOvr1P_SourceInsideClipRecordWindow(const struct DrawLevelOvr
 
 	// NOTE(aalhendi): Retail 0x800a4f38/0x800a3640 use the sign bit of these
 	// extent checks ANDed together; negative means the source point is inside.
-	u32 insideBits = (u32)(x - 0x100) & (u32)(y - 0x180) & (u32)(z - 0x100);
+#if CTR_VITA_WIDESCREEN
+	const s32 horizontalExtent = 0x200;
+#else
+	const s32 horizontalExtent = 0x100;
+#endif
+	u32 insideBits = (u32)(x - horizontalExtent) & (u32)(y - 0x180) & (u32)(z - horizontalExtent);
 	return (s32)insideBits < 0;
 }
 
