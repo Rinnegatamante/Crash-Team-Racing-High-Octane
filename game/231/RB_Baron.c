@@ -40,6 +40,12 @@ void RB_Baron_ThTick(struct Thread *t)
 	baronObj = (struct Baron *)t->object;
 	gGT = sdata->gGT;
 	level = gGT->level1;
+	modelID = baronInst->model->id;
+
+	if ((modelID == DYNAMIC_DRUM) && CTR_NATIVE_60FPS_ACTIVE && ((gGT->timer & 1) == 0))
+	{
+		return;
+	}
 
 	if ((baronInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(baronInst, 0))
 	{
@@ -58,8 +64,6 @@ void RB_Baron_ThTick(struct Thread *t)
 	spawn = &level->ptrSpawnType2_PosRot[0];
 	pointIndex = (baronObj->pointIndex + 1) % spawn->numCoords;
 	baronObj->pointIndex = pointIndex;
-	modelID = baronInst->model->id;
-
 	if (modelID == DYNAMIC_DRUM)
 	{
 		if (pointIndex == 0x10)
