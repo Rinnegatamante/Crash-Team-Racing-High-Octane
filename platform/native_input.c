@@ -411,11 +411,13 @@ internal void NativeInput_ApplyController(s32 slot)
 	SceCtrlData pad;
 	u16 buttons;
 
-	memset(&pad, 0, sizeof(pad));
-	if (sceCtrlPeekBufferPositive2(slot, &pad, 1) < 0)
+	if (sceCtrlPeekBufferPositive2(slot ? slot + 1 : 0, &pad, 1) < 0)
 	{
 		return;
 	}
+	
+	snapshot->connected = 1;
+	snapshot->status = 0;
 
 	buttons = (u16)(~pad.buttons & 0xffff);
 	NativeInput_VitaApplyStickButtons(&buttons, &pad);
