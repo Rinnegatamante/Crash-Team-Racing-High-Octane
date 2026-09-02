@@ -374,7 +374,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 		if (cupIndex == menu->rowSelected)
 		{
 			// Make text flash
-			if ((sdata->frameCounter & MM_CUP_SELECT_FLASH_FRAME_BIT) == 0)
+			if ((sdata->frameCounter & FPS_DOUBLE(MM_CUP_SELECT_FLASH_FRAME_BIT)) == 0)
 			{
 				txtColor |= MM_CUP_SELECT_FLASH_COLOR_BIT;
 			}
