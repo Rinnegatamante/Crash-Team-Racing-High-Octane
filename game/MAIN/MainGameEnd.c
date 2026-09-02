@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_leaderboard.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80039fa8-0x8003a2b4
 void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 {
@@ -134,6 +138,16 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	}
 
 	int highScoreIndex = (s8)gGT->newHighScoreIndex;
+
+#if defined(CTR_NATIVE)
+	if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+	{
+		b32 raceBest = highScoreIndex == 0;
+		b32 lapBest = (gameModeEnd & NEW_BEST_LAP) != 0;
+		NativeLeaderboard_StageTimeTrialRecord(gGT->levelID, data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
+		                                       player->timeElapsedInRace, gGT->bestLapTime, raceBest, lapBest);
+	}
+#endif
 
 	if (highScoreIndex < 0)
 	{

@@ -34,6 +34,7 @@
 #define NATIVE_ADHOC_SNAPSHOT_BURST 12u
 #define NATIVE_ADHOC_INVALID_FRAME 0xffffffffu
 #define NATIVE_ADHOC_RENDER_OT_ENTRIES 0x400u
+#define NATIVE_ADHOC_NETCTL_EVENT_DISCONNECT_REQ_FINISHED 2
 
 CTR_STATIC_ASSERT((NATIVE_ADHOC_INPUT_RING_SIZE & NATIVE_ADHOC_INPUT_RING_MASK) == 0);
 
@@ -270,13 +271,10 @@ struct NativeAdhocContext
 	int role;
 	int status;
 	int socket;
-	int netInitialized;
-	int netCtlInitialized;
-	int netModuleLoadedByUs;
 	int appUtilInitializedByUs;
-	void *netMemory;
 	int adhocInitialized;
 	int adhocctlInitialized;
+	int netCtlAdhocCallbackId;
 	int dialogRunning;
 	int adhocModuleLoadedByUs;
 	int peerKnown;
@@ -363,6 +361,7 @@ static struct NativeAdhocContext s_nativeAdhoc =
 	.role = NATIVE_ADHOC_ROLE_NONE,
 	.status = NATIVE_ADHOC_STATUS_OFF,
 	.socket = -1,
+	.netCtlAdhocCallbackId = -1,
 	.installedFrame = NATIVE_ADHOC_INVALID_FRAME,
 };
 
@@ -374,8 +373,36 @@ static int s_nativeAdhocReturnVisualPending;
 static u32 s_nativeAdhocConnectionLostNoticeUntil;
 static int s_nativeAdhocConnectionLostNoticePending;
 
+struct NativeAdhocShutdownContext
+{
+	int active;
+	int restoreOnlineMode;
+	int adhocInitialized;
+	int adhocctlInitialized;
+	int netCtlAdhocCallbackId;
+	int adhocModuleLoadedByUs;
+	int appUtilInitializedByUs;
+	int disconnectRequested;
+	int disconnectReqFinished;
+};
+
+static struct NativeAdhocShutdownContext s_nativeAdhocShutdown;
+
+static void *NativeAdhoc_NetCtlCallback(int eventType, void *arg)
+{
+	(void)arg;
+	if ((eventType == NATIVE_ADHOC_NETCTL_EVENT_DISCONNECT_REQ_FINISHED) && s_nativeAdhocShutdown.active)
+	{
+		s_nativeAdhocShutdown.disconnectReqFinished = 1;
+	}
+	return NULL;
+}
+
 static void NativeAdhoc_InitHeader(struct NativeAdhocPacketHeader *header, int type);
 static int NativeAdhoc_SendRaw(const SceNetEtherAddr *dst, const void *packet, int len);
+static void NativeAdhoc_ShutdownInternal(int restoreOnlineMode);
+static void NativeAdhoc_FinalizeShutdown(void);
+static void NativeAdhoc_UpdateShutdown(void);
 
 static void NativeAdhoc_ApplyHostSessionSettings(const struct NativeAdhocWelcomePacket *packet)
 {
@@ -2115,12 +2142,17 @@ int NativeAdhoc_Begin(int role)
 		return 0;
 	}
 
-	NativeAdhoc_Shutdown();
+	NativeAdhoc_ShutdownInternal(0);
+	if (s_nativeAdhocShutdown.active)
+	{
+		return 0;
+	}
 	gNativeForce30Fps = 1;
 	memset(&s_nativeAdhoc, 0, sizeof(s_nativeAdhoc));
 	s_nativeAdhoc.role = role;
 	s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 	s_nativeAdhoc.socket = -1;
+	s_nativeAdhoc.netCtlAdhocCallbackId = -1;
 	s_nativeAdhoc.installedFrame = NATIVE_ADHOC_INVALID_FRAME;
 
 	memset(&appUtilInitParam, 0, sizeof(appUtilInitParam));
@@ -2137,47 +2169,12 @@ int NativeAdhoc_Begin(int role)
 		s_nativeAdhoc.appUtilInitializedByUs = 1;
 	}
 
-	if (sceSysmoduleIsLoaded(SCE_SYSMODULE_NET) != SCE_SYSMODULE_LOADED)
+	if (!NativeNetwork_Init())
 	{
-		result = sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
-		if (result < 0)
-		{
-			Platform_Log("[CTR Adhoc] failed to load SceNet: 0x%08x\n", result);
-			NativeAdhoc_Shutdown();
-			return 0;
-		}
-		s_nativeAdhoc.netModuleLoadedByUs = 1;
-	}
-
-	SceNetInitParam netInitParam;
-	memset(&netInitParam, 0, sizeof(netInitParam));
-	s_nativeAdhoc.netMemory = malloc(NATIVE_ADHOC_NET_MEMORY_SIZE);
-	if (s_nativeAdhoc.netMemory == NULL)
-	{
-		Platform_Log("[CTR Adhoc] failed to allocate SceNet memory\n");
+		Platform_Log("[CTR Adhoc] SceNet/SceNetCtl unavailable\n");
 		NativeAdhoc_Shutdown();
 		return 0;
 	}
-	netInitParam.memory = s_nativeAdhoc.netMemory;
-	netInitParam.size = NATIVE_ADHOC_NET_MEMORY_SIZE;
-	netInitParam.flags = 0;
-	result = sceNetInit(&netInitParam);
-	if (result < 0)
-	{
-		Platform_Log("[CTR Adhoc] sceNetInit failed: 0x%08x\n", result);
-		NativeAdhoc_Shutdown();
-		return 0;
-	}
-	s_nativeAdhoc.netInitialized = 1;
-
-	result = sceNetCtlInit();
-	if (result < 0)
-	{
-		Platform_Log("[CTR Adhoc] sceNetCtlInit failed: 0x%08x\n", result);
-		NativeAdhoc_Shutdown();
-		return 0;
-	}
-	s_nativeAdhoc.netCtlInitialized = 1;
 
 	if (sceSysmoduleIsLoaded(SCE_SYSMODULE_PSPNET_ADHOC) != SCE_SYSMODULE_LOADED)
 	{
@@ -2212,6 +2209,14 @@ int NativeAdhoc_Begin(int role)
 	}
 	s_nativeAdhoc.adhocctlInitialized = 1;
 
+	result = sceNetCtlAdhocRegisterCallback(NativeAdhoc_NetCtlCallback, NULL, &s_nativeAdhoc.netCtlAdhocCallbackId);
+	if (result < 0)
+	{
+		Platform_Log("[CTR Adhoc] sceNetCtlAdhocRegisterCallback failed: 0x%08x\n", result);
+		NativeAdhoc_Shutdown();
+		return 0;
+	}
+
 	sceNetCheckDialogParamInit(&param);
 	memset(&groupName, 0, sizeof(groupName));
 	param.groupName = &groupName;
@@ -2234,11 +2239,98 @@ int NativeAdhoc_Begin(int role)
 	return 1;
 }
 
-void NativeAdhoc_Shutdown(void)
+static void NativeAdhoc_FinalizeShutdown(void)
 {
+	if (!s_nativeAdhocShutdown.active)
+	{
+		return;
+	}
+
+	if (s_nativeAdhocShutdown.netCtlAdhocCallbackId >= 0)
+	{
+		int result = sceNetCtlAdhocUnregisterCallback(s_nativeAdhocShutdown.netCtlAdhocCallbackId);
+		if (result < 0)
+		{
+			Platform_Log("[CTR Adhoc] sceNetCtlAdhocUnregisterCallback failed: 0x%08x\n", result);
+		}
+	}
+	if (s_nativeAdhocShutdown.adhocctlInitialized)
+	{
+		sceNetAdhocctlTerm();
+	}
+	if (s_nativeAdhocShutdown.adhocInitialized)
+	{
+		sceNetAdhocTerm();
+	}
+	if (s_nativeAdhocShutdown.adhocModuleLoadedByUs)
+	{
+		sceSysmoduleUnloadModule(SCE_SYSMODULE_PSPNET_ADHOC);
+	}
+	if (s_nativeAdhocShutdown.appUtilInitializedByUs)
+	{
+		sceAppUtilShutdown();
+	}
+
+	int restoreOnlineMode = s_nativeAdhocShutdown.restoreOnlineMode;
+	memset(&s_nativeAdhocShutdown, 0, sizeof(s_nativeAdhocShutdown));
+
+	if (restoreOnlineMode)
+	{
+		NativeNetwork_RequestInternetModeRestore();
+	}
+}
+
+static void NativeAdhoc_UpdateShutdown(void)
+{
+	if (!s_nativeAdhocShutdown.active)
+	{
+		return;
+	}
+
+	int callbackResult = sceNetCtlCheckCallback();
+	if (callbackResult < 0)
+	{
+		Platform_Log("[CTR Adhoc] sceNetCtlCheckCallback during disconnect failed: 0x%08x\n", callbackResult);
+	}
+
+	if (s_nativeAdhocShutdown.disconnectRequested && s_nativeAdhocShutdown.disconnectReqFinished)
+	{
+		NativeAdhoc_FinalizeShutdown();
+		return;
+	}
+
+	int state = SCE_NETCTL_STATE_DISCONNECTED;
+	int stateResult = sceNetCtlAdhocGetState(&state);
+	if (stateResult < 0)
+	{
+		Platform_Log("[CTR Adhoc] sceNetCtlAdhocGetState during disconnect failed: 0x%08x\n", stateResult);
+		return;
+	}
+
+	if (!s_nativeAdhocShutdown.disconnectRequested && (state == SCE_NETCTL_STATE_DISCONNECTED))
+	{
+		NativeAdhoc_FinalizeShutdown();
+	}
+}
+
+static void NativeAdhoc_ShutdownInternal(int restoreOnlineMode)
+{
+	if (s_nativeAdhocShutdown.active)
+	{
+		if (restoreOnlineMode)
+		{
+			s_nativeAdhocShutdown.restoreOnlineMode = 1;
+		}
+		return;
+	}
+
+	int hadNetworkState =
+		s_nativeAdhoc.dialogRunning || s_nativeAdhoc.adhocInitialized || s_nativeAdhoc.adhocctlInitialized || (s_nativeAdhoc.socket >= 0);
+
 	gNativeForce30Fps = 0;
 	NativeAdhoc_RestoreLocalSessionSettings();
 	NativeAdhoc_FreeSnapshotBuffers();
+
 	if (s_nativeAdhoc.dialogRunning)
 	{
 		sceNetCheckDialogTerm();
@@ -2247,50 +2339,84 @@ void NativeAdhoc_Shutdown(void)
 	{
 		sceNetAdhocPdpDelete(s_nativeAdhoc.socket, 0);
 	}
-	if (s_nativeAdhoc.netCtlInitialized)
-	{
-		sceNetCtlAdhocDisconnect();
-	}
-	if (s_nativeAdhoc.adhocctlInitialized)
-	{
-		sceNetAdhocctlTerm();
-	}
-	if (s_nativeAdhoc.adhocInitialized)
-	{
-		sceNetAdhocTerm();
-	}
-	if (s_nativeAdhoc.adhocModuleLoadedByUs)
-	{
-		sceSysmoduleUnloadModule(SCE_SYSMODULE_PSPNET_ADHOC);
-	}
-	if (s_nativeAdhoc.netCtlInitialized)
-	{
-		sceNetCtlTerm();
-	}
-	if (s_nativeAdhoc.netInitialized)
-	{
-		sceNetTerm();
-	}
-	free(s_nativeAdhoc.netMemory);
-	if (s_nativeAdhoc.netModuleLoadedByUs)
-	{
-		sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
-	}
-	if (s_nativeAdhoc.appUtilInitializedByUs)
-	{
-		sceAppUtilShutdown();
-	}
+
+	s_nativeAdhocShutdown.active =
+		s_nativeAdhoc.adhocctlInitialized || s_nativeAdhoc.adhocInitialized ||
+		s_nativeAdhoc.adhocModuleLoadedByUs || s_nativeAdhoc.appUtilInitializedByUs;
+	s_nativeAdhocShutdown.restoreOnlineMode = restoreOnlineMode && hadNetworkState;
+	s_nativeAdhocShutdown.adhocInitialized = s_nativeAdhoc.adhocInitialized;
+	s_nativeAdhocShutdown.adhocctlInitialized = s_nativeAdhoc.adhocctlInitialized;
+	s_nativeAdhocShutdown.netCtlAdhocCallbackId = s_nativeAdhoc.netCtlAdhocCallbackId;
+	s_nativeAdhocShutdown.adhocModuleLoadedByUs = s_nativeAdhoc.adhocModuleLoadedByUs;
+	s_nativeAdhocShutdown.appUtilInitializedByUs = s_nativeAdhoc.appUtilInitializedByUs;
+	s_nativeAdhocShutdown.disconnectRequested = 0;
+	s_nativeAdhocShutdown.disconnectReqFinished = 0;
 
 	memset(&s_nativeAdhoc, 0, sizeof(s_nativeAdhoc));
 	s_nativeAdhoc.role = NATIVE_ADHOC_ROLE_NONE;
 	s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_OFF;
 	s_nativeAdhoc.socket = -1;
+	s_nativeAdhoc.netCtlAdhocCallbackId = -1;
 	s_nativeAdhoc.installedFrame = NATIVE_ADHOC_INVALID_FRAME;
+
+	if (!s_nativeAdhocShutdown.active)
+	{
+		if (restoreOnlineMode && hadNetworkState)
+		{
+			NativeNetwork_RequestInternetModeRestore();
+		}
+		return;
+	}
+
+	if (!s_nativeAdhocShutdown.adhocctlInitialized)
+	{
+		NativeAdhoc_FinalizeShutdown();
+		return;
+	}
+
+	int state = SCE_NETCTL_STATE_DISCONNECTED;
+	int stateResult = sceNetCtlAdhocGetState(&state);
+	if ((stateResult >= 0) && (state == SCE_NETCTL_STATE_DISCONNECTED))
+	{
+		NativeAdhoc_FinalizeShutdown();
+		return;
+	}
+
+	int disconnectResult = sceNetCtlAdhocDisconnect();
+	if (disconnectResult >= 0)
+	{
+		s_nativeAdhocShutdown.disconnectRequested = 1;
+	}
+	else
+	{
+		int retryState = SCE_NETCTL_STATE_DISCONNECTED;
+		if ((sceNetCtlAdhocGetState(&retryState) >= 0) && (retryState == SCE_NETCTL_STATE_DISCONNECTED))
+		{
+			NativeAdhoc_FinalizeShutdown();
+		}
+	}
+}
+
+void NativeAdhoc_Shutdown(void)
+{
+	NativeAdhoc_ShutdownInternal(1);
+}
+
+void NativeAdhoc_ShutdownImmediate(void)
+{
+	NativeAdhoc_ShutdownInternal(0);
+	if (s_nativeAdhocShutdown.active)
+	{
+		s_nativeAdhocShutdown.restoreOnlineMode = 0;
+		NativeAdhoc_FinalizeShutdown();
+	}
 }
 
 void NativeAdhoc_Update(void)
 {
 	u32 now;
+
+	NativeAdhoc_UpdateShutdown();
 
 	if (s_nativeAdhoc.status == NATIVE_ADHOC_STATUS_OFF)
 	{
@@ -2789,6 +2915,10 @@ int NativeAdhoc_Begin(int role)
 }
 
 void NativeAdhoc_Shutdown(void)
+{
+}
+
+void NativeAdhoc_ShutdownImmediate(void)
 {
 }
 

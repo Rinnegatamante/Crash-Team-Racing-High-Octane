@@ -1556,6 +1556,9 @@ void SelectProfile_AllProfiles_MenuProc(struct RectMenu *menu)
 					if (sdata->boolSaveCupProgress == 0)
 					{
 						MainGameEnd_SoloRaceSaveHighScore();
+#if defined(CTR_NATIVE)
+						NativeLeaderboard_ClearPendingUpload();
+#endif
 					}
 					RECTMENU_ClearInput();
 					*SelectProfile_AllProfiles_ActionActive() = 1;

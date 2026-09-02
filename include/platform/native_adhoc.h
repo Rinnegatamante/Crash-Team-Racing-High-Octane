@@ -24,6 +24,7 @@ enum NativeAdhocStatus
 int NativeAdhoc_IsSupported(void);
 int NativeAdhoc_Begin(int role);
 void NativeAdhoc_Shutdown(void);
+void NativeAdhoc_ShutdownImmediate(void);
 void NativeAdhoc_Update(void);
 void NativeAdhoc_WaitForFrame(void);
 void NativeAdhoc_ProcessPadSnapshots(struct PlatformInputPadSnapshot *pads, int count);

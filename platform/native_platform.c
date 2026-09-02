@@ -9,6 +9,8 @@
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
 #include "platform/native_log.h"
+#include "platform/native_leaderboard.h"
+#include "platform/native_network.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
 #include "platform/native_replay_scheduler.h"
@@ -324,6 +326,15 @@ void Platform_Init(const char *title, int width, int height)
 	s_platformInitialized = 1;
 
 #ifdef __vita__
+	if (!NativeNetwork_Init())
+	{
+		Platform_LogWarn("[CTR Native] Internet networking unavailable\n");
+	}
+	if (!NativeLeaderboard_Init())
+	{
+		Platform_LogWarn("[CTR Native] Online leaderboard unavailable\n");
+	}
+
 	NativePlatformRendererInitTask rendererInit;
 	memset(&rendererInit, 0, sizeof(rendererInit));
 	strncpy(rendererInit.windowName, windowName, sizeof(rendererInit.windowName) - 1);
@@ -367,7 +378,9 @@ void Platform_Shutdown(void)
 	NativePerf_Shutdown();
 	NativeReplayScheduler_Shutdown();
 #endif
-	NativeAdhoc_Shutdown();
+	NativeAdhoc_ShutdownImmediate();
+	NativeLeaderboard_Shutdown();
+	NativeNetwork_Shutdown();
 	Platform_InputShutdown();
 	NativeCD_Shutdown();
 	NativeAudio_Shutdown();
@@ -395,6 +408,7 @@ void Platform_Shutdown(void)
 void Platform_BeginFrame(void)
 {
 #ifdef __vita__
+	NativeNetwork_Update();
 	NativeGpu_BeginFrontendFrame();
 #endif
 }

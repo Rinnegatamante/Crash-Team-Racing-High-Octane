@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_leaderboard.h"
+#endif
+
 #define REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT 32
 
 static struct GhostProfile s_nativeGhostProfiles[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
@@ -589,6 +593,13 @@ void RefreshCard_Unknown3(void)
 	}
 
 	sdata->boolError = 1;
+
+#if defined(CTR_NATIVE)
+	if ((sdata->mcScreenText == MC_SCREEN_SAVING) && (sdata->mcStart == 2))
+	{
+		NativeLeaderboard_CommitPendingUpload();
+	}
+#endif
 
 	if (sdata->mcScreenText == MC_SCREEN_SAVING)
 	{

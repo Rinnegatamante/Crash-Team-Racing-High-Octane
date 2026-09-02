@@ -163,6 +163,9 @@ void NativeGhostInput_StopRecording(void);
 void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads);
 void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS);
 b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName);
+int NativeGhostInput_GetSerializedRecordingSize(void);
+b32 NativeGhostInput_SerializeRecording(void *dst, int dstSize);
+b32 NativeGhostInput_LoadSerializedGhost(const void *src, int size, u16 expectedTrackID, u16 expectedCharacterID);
 void NativeGhostInput_RemoveForGhost(const char *ghostName);
 b32 NativeGhostInput_BeginPlayback(void);
 

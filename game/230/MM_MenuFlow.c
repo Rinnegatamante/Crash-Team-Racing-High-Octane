@@ -1,7 +1,14 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_leaderboard.h"
+#endif
+
+#include "platform/native_user_id.h"
 
 #ifdef CTR_NATIVE
+int gNativeOnlineLeaderboardMode;
+
 enum MMNativeLanguageConstants
 {
 	MM_NATIVE_LANGUAGE_COUNT = 6,
@@ -181,9 +188,10 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 
 static struct MenuRow s_nativeTimeTrialRows[] =
 {
-	{LNG_TIME_TRIAL, 2, 1, 0, 0},
+	{LNG_TIME_TRIAL, 3, 1, 0, 0},
 	{NATIVE_MENU_STRING_GHOST_REPLAY, 0, 2, 1, 1},
-	{LNG_HIGH_SCORE, 1, 0, 2, 2},
+	{LNG_HIGH_SCORE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_ONLINE_LEADERBOARD, 2, 0, 3, 3},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -233,6 +241,15 @@ static struct RectMenu s_nativeLanguageMainMenu =
 	.funcPtr = MM_NativeLanguageMainMenuProc,
 };
 
+static void MM_NativeTimeTrialRefreshOnlineRow(void)
+{
+	s16 onlineString = NATIVE_MENU_STRING_ONLINE_LEADERBOARD;
+	if (!NativeLeaderboard_IsInternetConnected())
+	{
+		onlineString |= MENU_ROW_LOCKED;
+	}
+	s_nativeTimeTrialRows[3].stringIndex = onlineString;
+}
 static struct RectMenu s_nativeTimeTrialMenu =
 {
 	.stringIndexTitle = LNG_TIME_TRIAL,
@@ -570,6 +587,7 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 {
 	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
 	{
+		MM_NativeTimeTrialRefreshOnlineRow();
 		return;
 	}
 
@@ -592,6 +610,7 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 	s16 choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
 
 	gNativeGhostReplayMode = 0;
+	gNativeOnlineLeaderboardMode = 0;
 	NativeGhostInput_ClearSelection();
 
 	if (choose == LNG_TIME_TRIAL)
@@ -617,6 +636,15 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 
 	if (choose == LNG_HIGH_SCORE)
 	{
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_HIGH_SCORE;
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_ONLINE_LEADERBOARD)
+	{
+		gNativeOnlineLeaderboardMode = 1;
+		NativeLeaderboard_RequestRefresh();
 		D230.desiredMenuIndex = MM_EXIT_ROUTE_HIGH_SCORE;
 		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
 	}
@@ -804,6 +832,9 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// If you are at the highest hierarchy level of main menu
 	if (mainMenu->funcState == RECTMENU_FUNC_STATE_UPDATE)
 	{
+#if defined(CTR_NATIVE)
+		MM_NativeTimeTrialRefreshOnlineRow();
+#endif
 		MM_Title_MenuUpdate();
 
 		if (
@@ -812,6 +843,19 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		{
 			DecalFont_DrawLineOT(sdata->lngStrings[LNG_TM], MM_TITLE_TM_X, MM_TITLE_TM_Y, FONT_SMALL, ORANGE,
 			                     &gGT->backBuffer->otMem.uiOT[MM_TITLE_TM_OT_INDEX]);
+
+#if defined(CTR_NATIVE)
+			if ((D230.menuMainMenu.state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
+			{
+				const char *userId = NativeUserId_GetDisplayString();
+				if (userId != NULL)
+				{
+					char userIdText[32];
+					snprintf(userIdText, sizeof(userIdText), "USER ID: %s", userId);
+					DecalFont_DrawLineOT(userIdText, 8, 0xc8, FONT_SMALL, WHITE, &gGT->backBuffer->otMem.uiOT[MM_TITLE_TM_OT_INDEX]);
+				}
+			}
+#endif
 		}
 
 		if ((D230.menuMainMenu.state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)

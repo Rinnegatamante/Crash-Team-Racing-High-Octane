@@ -25,6 +25,9 @@
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
 #include "platform/native_adhoc.h"
+#include "platform/native_leaderboard.h"
+#include "platform/native_network.h"
+#include "platform/native_user_id.h"
 
 #ifdef __vita__
 #include <vitasdk.h>
@@ -83,6 +86,9 @@ DIR *__wrap_opendir(const char *fname) {
 #include "platform/native_gte_core.c"
 #include "platform/native_glad.c"
 #include "platform/native_input.c"
+#include "platform/native_network.c"
+#include "platform/native_user_id.c"
+#include "platform/native_leaderboard.c"
 #include "platform/native_adhoc.c"
 #include "platform/native_inline_c.c"
 #include "platform/native_libapi.c"

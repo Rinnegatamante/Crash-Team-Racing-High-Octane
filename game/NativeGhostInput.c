@@ -55,6 +55,7 @@ static b32 s_nativeGhostInputRecording;
 static b32 s_nativeGhostInputRecordingInvalid;
 static b32 s_nativeGhostInputPendingValid;
 static b32 s_nativeGhostInputPlaybackActive;
+static b32 s_nativeGhostInputExternalLoaded;
 static char s_nativeGhostInputSelectedName[0x40];
 
 static b32 NativeGhostInput_HeaderUses60Fps(const struct NativeGhostInputHeader *header)
@@ -122,6 +123,7 @@ void NativeGhostInput_ClearSelection(void)
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputPlaybackTimerPhasePending = false;
+    s_nativeGhostInputExternalLoaded = false;
     gNativeGhostReplayFpsOverride = -1;
 }
 
@@ -309,6 +311,78 @@ void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS)
     s_nativeGhostInputPendingValid = false;
 }
 
+int NativeGhostInput_GetSerializedRecordingSize(void)
+{
+    if (s_nativeGhostInputRecordingInvalid || (s_nativeGhostInputFrameCount == 0))
+    {
+        return 0;
+    }
+
+    return sizeof(struct NativeGhostInputHeader) + (int)(s_nativeGhostInputFrameCount * sizeof(struct NativeGhostInputFrame));
+}
+
+b32 NativeGhostInput_SerializeRecording(void *dst, int dstSize)
+{
+    int required = NativeGhostInput_GetSerializedRecordingSize();
+    if ((dst == NULL) || (required <= 0) || (dstSize < required))
+    {
+        return false;
+    }
+
+    struct NativeGhostInputHeader header;
+    memset(&header, 0, sizeof(header));
+    header.magic = NATIVE_GHOST_INPUT_MAGIC;
+    header.version = NATIVE_GHOST_INPUT_VERSION;
+    header.headerSize = sizeof(header);
+    header.trackID = s_nativeGhostInputTrackID;
+    header.characterID = s_nativeGhostInputCharacterID;
+    header.frameCount = s_nativeGhostInputFrameCount;
+    header.frameSize = sizeof(struct NativeGhostInputFrame);
+    header.flags = s_nativeGhostInputRecordingFlags;
+    header.totalTimeMS = s_nativeGhostInputTotalTimeMS;
+    header.reserved[0] = s_nativeGhostInputStartTimerPhase;
+
+    memcpy(dst, &header, sizeof(header));
+    memcpy((u8 *)dst + sizeof(header), s_nativeGhostInputFrames, s_nativeGhostInputFrameCount * sizeof(struct NativeGhostInputFrame));
+    return true;
+}
+
+b32 NativeGhostInput_LoadSerializedGhost(const void *src, int size, u16 expectedTrackID, u16 expectedCharacterID)
+{
+    if ((src == NULL) || (size < (int)sizeof(struct NativeGhostInputHeader)))
+    {
+        return false;
+    }
+
+    struct NativeGhostInputHeader header;
+    memcpy(&header, src, sizeof(header));
+    if (!NativeGhostInput_ValidateHeader(&header) ||
+        (header.trackID != expectedTrackID) ||
+        (header.characterID != expectedCharacterID))
+    {
+        return false;
+    }
+
+    int expectedSize = header.headerSize + (int)(header.frameCount * header.frameSize);
+    if (size != expectedSize)
+    {
+        return false;
+    }
+
+    NativeGhostInput_ClearSelection();
+    memcpy(s_nativeGhostInputFrames, (const u8 *)src + header.headerSize, header.frameCount * sizeof(struct NativeGhostInputFrame));
+    s_nativeGhostInputFrameCount = header.frameCount;
+    s_nativeGhostInputPlaybackIndex = 0;
+    s_nativeGhostInputTotalTimeMS = header.totalTimeMS;
+    s_nativeGhostInputTrackID = header.trackID;
+    s_nativeGhostInputCharacterID = header.characterID;
+    s_nativeGhostInputRecordingFlags = header.flags;
+    s_nativeGhostInputStartTimerPhase = header.reserved[0] & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+    s_nativeGhostInputExternalLoaded = true;
+    gNativeGhostReplayFpsOverride = NativeGhostInput_HeaderUses60Fps(&header) ? 1 : 0;
+    return true;
+}
+
 b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName)
 {
     struct NativeGhostInputHeader header;
@@ -348,6 +422,22 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
+
+    if (s_nativeGhostInputExternalLoaded)
+    {
+        if ((s_nativeGhostInputTrackID != sdata->gGT->levelID) || (s_nativeGhostInputCharacterID != data.characterIDs[0]))
+        {
+            return false;
+        }
+
+        b32 use60Fps = (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA) &&
+                       (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_60FPS);
+        gNativeGhostReplayFpsOverride = use60Fps ? 1 : 0;
+        s_nativeGhostInputPlaybackTimerPhase = s_nativeGhostInputStartTimerPhase & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+        s_nativeGhostInputPlaybackTimerPhasePending = use60Fps;
+        s_nativeGhostInputPlaybackActive = true;
+        return true;
+    }
 
     if (s_nativeGhostInputSelectedName[0] == '\0')
     {

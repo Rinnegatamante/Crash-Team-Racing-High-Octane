@@ -83,6 +83,24 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"ADHOC",
 		"ADHOC",
 	};
+	static const char *onlineLeaderboard[6] =
+	{
+		"ONLINE LEADERBOARD",
+		"CLASSEMENT ONLINE",
+		"ONLINE-RANGLISTE",
+		"CLASSIFICA ONLINE",
+		"RANKING ONLINE",
+		"ONLINE RANGLIJST",
+	};
+	static const char *watchGhost[6] =
+	{
+		"WATCH GHOST",
+		"VOIR FANTOME",
+		"GEIST ANSEHEN",
+		"GUARDA FANTASMA",
+		"VER FANTASMA",
+		"SPOOK BEKIJKEN",
+	};
 
 	int languageRow = 0;
 	if ((cfg_language >= 2) && (cfg_language <= 7))
@@ -110,6 +128,10 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)changeBoss[languageRow];
 	case NATIVE_MENU_STRING_ADHOC:
 		return (char *)adhoc[languageRow];
+	case NATIVE_MENU_STRING_ONLINE_LEADERBOARD:
+		return (char *)onlineLeaderboard[languageRow];
+	case NATIVE_MENU_STRING_WATCH_GHOST:
+		return (char *)watchGhost[languageRow];
 	default:
 		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
 	}

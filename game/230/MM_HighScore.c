@@ -77,6 +77,9 @@ void MM_HighScore_Text3D(char *string, int posX, int posY, s16 font, u32 flags)
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800b2fbc-0x800b3914.
+#if defined(CTR_NATIVE)
+#include "MM_HighScore_Online.c"
+#endif
 void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 {
 	struct GameTracker *gGT = sdata->gGT;
@@ -212,6 +215,13 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b3914-0x800b3954.
 void MM_HighScore_Init(void)
 {
+#if defined(CTR_NATIVE)
+	if (gNativeOnlineLeaderboardMode != 0)
+	{
+		MM_HighScore_OnlineInit();
+		return;
+	}
+#endif
 	D230.highScoreTransition.state = ENTERING_MENU;
 	D230.highScoreTransition.mainFrame = MM_HIGHSCORE_MAIN_TRANSITION_MAX_FRAME;
 	D230.highScoreSelection.targetRow = 0;
@@ -224,6 +234,13 @@ void MM_HighScore_Init(void)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800b3954-0x800b3fe4.
 void MM_HighScore_MenuProc(struct RectMenu *menu_unused)
 {
+#if defined(CTR_NATIVE)
+	if (gNativeOnlineLeaderboardMode != 0)
+	{
+		MM_HighScore_OnlineMenuProc();
+		return;
+	}
+#endif
 	(void)menu_unused;
 	s16 nextFrameCount;
 	RECT wipeRect;
