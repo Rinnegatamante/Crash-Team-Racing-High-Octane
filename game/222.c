@@ -311,8 +311,8 @@ void AA_EndEvent_DrawMenu(void)
 		s32 driverIconFrame = (elapsedFrames & 0xffff) - FPS_DOUBLE(AA_RESULT_WAIT_FRAMES);
 
 		if (
-		    // Every 10 frames
-		    ((driverIconFrame % AA_DRIVER_ICON_STAGGER_FRAMES & 0xffff) == 0) &&
+		    // Every 10 retail frames
+		    ((driverIconFrame % FPS_DOUBLE(AA_DRIVER_ICON_STAGGER_FRAMES) & 0xffff) == 0) &&
 
 		    // sdata->numIconsEOR is the number of icons being
 		    // drawn on the end-of-race menu in 1P mode
@@ -344,10 +344,10 @@ void AA_EndEvent_DrawMenu(void)
 				currFrame = driverIconFrame;
 			}
 
-			driverIconFrame -= AA_DRIVER_ICON_STAGGER_FRAMES;
+			driverIconFrame -= FPS_DOUBLE(AA_DRIVER_ICON_STAGGER_FRAMES);
 
 			// interpolate fly-in
-			UI_Lerp2D_Linear(letterPos.v, lerpStartX, 0x60, lerpEndX, 0x60, currFrame, AA_DRIVER_ICON_STAGGER_FRAMES);
+			UI_Lerp2D_Linear(letterPos.v, lerpStartX, 0x60, lerpEndX, 0x60, currFrame, FPS_DOUBLE(AA_DRIVER_ICON_STAGGER_FRAMES));
 
 			s_driverRankString222 = (char)i + '1';
 
