@@ -64,7 +64,7 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
     MM_HighScore_OnlineGetTrack(trackIndex, &track);
 
     s16 lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], FONT_BIG) >> 1;
-    s16 numColor = ((sdata->frameCounter & MM_HIGHSCORE_FLASH_TIMER_BIT) == 0) ? RED : ORANGE;
+    s16 numColor = ((FPS_HALF(sdata->frameCounter) & MM_HIGHSCORE_FLASH_TIMER_BIT) == 0) ? RED : ORANGE;
     u32 *colorPtr = data.ptrColor[numColor];
     struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[MM_HIGHSCORE_ARROW_ICON_GROUP]);
     const struct TransitionMeta *titleMeta = &D230.transitionMeta_HighScores[MM_HIGHSCORE_TITLE_META_INDEX];

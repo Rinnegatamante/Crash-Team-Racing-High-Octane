@@ -275,6 +275,17 @@ void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS)
             }
 
             *elapsedTimeMS = s_nativeGhostInputFrames[s_nativeGhostInputPlaybackIndex].elapsedTimeMS;
+#if defined(__vita__)
+            if (CTR_NATIVE_60FPS_ACTIVE)
+            {
+                s32 replayVBlanks = (*elapsedTimeMS + 15) / 16;
+                if (replayVBlanks < 1)
+                {
+                    replayVBlanks = 1;
+                }
+                sdata->vsyncTillFlip = replayVBlanks;
+            }
+#endif
             s_nativeGhostInputPlaybackIndex++;
         }
         return;

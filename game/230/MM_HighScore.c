@@ -93,7 +93,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	lineWidth = lineWidth >> 1;
 
 	// get color data
-	s16 numColor = ((sdata->frameCounter & MM_HIGHSCORE_FLASH_TIMER_BIT) == 0) ? RED : ORANGE;
+	s16 numColor = ((FPS_HALF(sdata->frameCounter) & MM_HIGHSCORE_FLASH_TIMER_BIT) == 0) ? RED : ORANGE;
 	u32 *colorPtr = data.ptrColor[numColor];
 
 	struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[MM_HIGHSCORE_ARROW_ICON_GROUP]);
