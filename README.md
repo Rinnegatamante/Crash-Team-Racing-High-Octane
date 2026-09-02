@@ -8,6 +8,7 @@ It focuses on new features, enhancements and optimization.
 - True widescreen with no stretching.
 - Internal resolution of the renderer bumped to 960x544.
 - MSAA 4x for anti-aliasing.
+- 60 FPS support.
 - Penta Penguin has its stats set to its PAL/NTSC-J counterpart (6/6/6).
 - Playable Nitrous Oxide (Unlockable via the original Spyro 2 Demo cheatcode). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/OxideFix))
 - Reserves Meter (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/ReservesMeter))
@@ -22,11 +23,11 @@ It focuses on new features, enhancements and optimization.
 - Ghost Replay feature: Replay all your ghost datas as if you're seeing the run being played live.
 - Increased ghost data limits: No more 7 ghosts globally, now there are 7 ghosts data slot per track.
 - Stats viewer for characters in the character selection screen.
+- Online leaderboard for Time Trials results.
+- Splitscreen support for up to 4 players local multiplayer for PSTV users or PSVita users with MiniVitaTV.
 
 ## Known Issues
 
-- The primitives clipper sometimes erases primitives that should instead be present (Was an issue also in Vanilla game but it's more evident with widescreen on).
-- Splitscreen is disabled (this is due to the fact it runs at 10 FPS in 2P mode right now due to GPU pipeline being still pretty heavy).
 - The demo cutscene gets slightly de-synced during Oxide speech.
 
 ## Special controls bindings
@@ -39,6 +40,21 @@ It focuses on new features, enhancements and optimization.
 - Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in `ux0:data/ctr/assets/ctr-u.bin`.
 
 ## Changelog
+
+### v.1.2
+
+- Fixed N. Oxide portrait slideing in/out from the left instead of from the bottom in the Character Select screen.
+- Fixed a bug causing big black glitched textures to show on screen under certain circumstances during singleplayer races.
+- Optimized audio mixing and input handling code.
+- Rewrote the whole renderer: now it's extremely closer to PSVita GPU architecture. (Average GPU workload per frame went from 31ms to 16ms)
+- Rewrote renderer pipeline so that now works in a multi-threaded fashion (backend/frontend approach). This reduces overall CPU workload per frame from 22 ms to 13ms.
+- Added 60 FPS support. (Available in the Options menu)
+- Added support for multiple controllers on PSTV and PSVita with MiniVitaTV, allowing for local splitscreen games (up to 4 players).
+- Made so that Sewer Speedway and Blizzard Bluffs environmental hazards are now deterministic. This also fixes broken ghosts on these specific tracks.
+- Added an Online Leaderboard for Time Trial results. Your best scores will automatically be uploaded to it and you can watch ghosts of the top 5 scores worldwide.
+- Fixed two different bugs both causing some tiles to be incorrectly clipped under certain circumstacnes.
+- Made so that when an AdHoc connection is interrupted, the console will automatically return in Internet mode.
+- Fixed a bug causing missiles used by enemy AIs to not be homing and instead always proceeding in a straight line.
 
 ### v.1.1
 
@@ -57,4 +73,5 @@ It focuses on new features, enhancements and optimization.
 ## Credits
 
 - Standard-Republic for the Livearea assets.
+- robin994 for helping testing splitscreen implementation.
 - All the folks involved in ctr-native and the decompilation efforts of CTR.
