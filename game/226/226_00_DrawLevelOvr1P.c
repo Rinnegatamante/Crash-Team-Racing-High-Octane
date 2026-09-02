@@ -7726,11 +7726,13 @@ static int Ovr226_800a15c0_EmitFullDynamicExtraFace3(struct PushBuffer *pb, stru
 static int Ovr226_800a15d4_FullDynamicHelperSlot0(struct PushBuffer *pb, struct PrimMem *primMem, struct QuadBlock *block,
                                                   struct DrawLevelOvr1PScratchVertex *projected, struct TextureLayout *texture, int depth)
 {
-	if (!Ovr226_800a1548_EmitFullDynamicFace1(pb, primMem, block, projected, texture, depth, DRAW_LEVEL_OVR1P_DIRECT_QUAD))
+	if (!DrawLevelOvr1P_EmitFullDynamicTerminalFacePreserveSlot(pb, primMem, block, projected, sDrawLevelOvr1PGridMixedFaceIndices[0], 0, texture, depth,
+	                                                            DRAW_LEVEL_OVR1P_DIRECT_QUAD))
 	{
 		return 0;
 	}
-	if (!Ovr226_800a155c_EmitFullDynamicFace2(pb, primMem, block, projected, texture, depth, DRAW_LEVEL_OVR1P_DIRECT_QUAD))
+	if (!DrawLevelOvr1P_EmitFullDynamicTerminalFacePreserveSlot(pb, primMem, block, projected, sDrawLevelOvr1PGridMixedFaceIndices[1], 0, texture, depth,
+	                                                            DRAW_LEVEL_OVR1P_DIRECT_QUAD))
 	{
 		return 0;
 	}
