@@ -1056,7 +1056,8 @@ static u32 NativeAdhoc_GameplayHash(const struct GameTracker *gGT)
 	local_persist const int gameplayBuckets[] = {PLAYER, ROBOT, MINE, TRACKING, OTHER};
 
 	crc = NativeAdhoc_Crc32Update(crc, &gGT->levelID, sizeof(gGT->levelID));
-	crc = NativeAdhoc_Crc32Update(crc, &gGT->gameMode1, sizeof(gGT->gameMode1));
+	u32 gameplayMode1 = gGT->gameMode1 & ~(AKU_SONG | UKA_SONG);
+	crc = NativeAdhoc_Crc32Update(crc, &gameplayMode1, sizeof(gameplayMode1));
 	crc = NativeAdhoc_Crc32Update(crc, &gGT->gameMode2, sizeof(gGT->gameMode2));
 	crc = NativeAdhoc_Crc32Update(crc, &gGT->timer, sizeof(gGT->timer));
 	crc = NativeAdhoc_Crc32Update(crc, &gGT->trafficLightsTimer, sizeof(gGT->trafficLightsTimer));
