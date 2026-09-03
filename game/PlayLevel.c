@@ -156,8 +156,17 @@ void PlayLevel_UpdateLapStats(void)
 				// lap counter = lap counter + 1
 				currDriver->lapIndex++;
 
-				// if farthest-ahead human
-				if (currDriver == farthestHuman)
+				int shouldPlayLapSound = currDriver == farthestHuman;
+#if defined(__vita__)
+				if (NativeAdhoc_IsConnected())
+				{
+					int localPlayer = NativeAdhoc_GetLocalPlayerIndex();
+					shouldPlayLapSound =
+					    ((currDriver->actionsFlagSet & ACTION_BOT) == 0) &&
+					    (currDriver->driverID == localPlayer);
+				}
+#endif
+				if (shouldPlayLapSound)
 				{
 					OtherFX_Play(PLAYLEVEL_FINAL_LAP_SOUND, 1);
 					Voiceline_ClearTimeStamp();
