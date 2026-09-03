@@ -432,8 +432,21 @@ void DrawFinalLap(struct GameTracker *gGT)
 		// 90 frames total in animation, 1.5 seconds
 		textTimer = FPS_DOUBLE(90) - textTimer;
 
-		// camera
-		pb = &gGT->pushBuffer[i];
+#if defined(__vita__)
+		if (NativeAdhoc_IsSingleViewRenderActive())
+		{
+			if (i != NativeAdhoc_GetLocalPlayerIndex())
+			{
+				sdata->finalLapTextTimer[i]--;
+				continue;
+			}
+			pb = NativeAdhoc_GetRenderPushBuffer();
+		}
+		else
+#endif
+		{
+			pb = &gGT->pushBuffer[i];
+		}
 
 		// << 0x10, >> 0x12
 		posY = pb->rect.h / 4;
