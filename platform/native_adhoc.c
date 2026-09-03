@@ -14,7 +14,7 @@
 #include <vitasdk.h>
 
 #define NATIVE_ADHOC_MAGIC 0x41485443u
-#define NATIVE_ADHOC_VERSION 8u
+#define NATIVE_ADHOC_VERSION 10u
 #define NATIVE_ADHOC_PORT 31847
 #define NATIVE_ADHOC_PDP_BUFSIZE 0x8000
 #define NATIVE_ADHOC_NET_MEMORY_SIZE (1024 * 1024)
@@ -75,6 +75,13 @@ struct NativeAdhocPacketHeader
 	u32 sequence;
 };
 
+struct NativeAdhocHelloPacket
+{
+	struct NativeAdhocPacketHeader header;
+	u8 gameMode;
+	u8 reserved[3];
+};
+
 struct NativeAdhocWelcomePacket
 {
 	struct NativeAdhocPacketHeader header;
@@ -82,7 +89,8 @@ struct NativeAdhocWelcomePacket
 	u32 build;
 	u32 unlocks[GAME_PROGRESS_UNLOCK_WORD_COUNT];
 	u8 mirrorMode;
-	u8 reserved[3];
+	u8 gameMode;
+	u8 reserved[2];
 };
 
 struct NativeAdhocMenuInputPacket
@@ -239,7 +247,7 @@ struct NativeAdhocRaceConfigPacket
 	u8 p1Character;
 	u8 p2Character;
 	u8 mirrorMode;
-	u8 reserved;
+	u8 gameMode;
 };
 
 struct NativeAdhocRaceConfigAckPacket
@@ -249,7 +257,8 @@ struct NativeAdhocRaceConfigAckPacket
 	s32 currLEV;
 	u8 p1Character;
 	u8 p2Character;
-	u8 reserved[2];
+	u8 gameMode;
+	u8 reserved;
 };
 
 struct NativeAdhocInputSlot
@@ -270,6 +279,7 @@ struct NativeAdhocContext
 {
 	int role;
 	int status;
+	int gameMode;
 	int socket;
 	int appUtilInitializedByUs;
 	int adhocInitialized;
@@ -420,6 +430,7 @@ static void NativeAdhoc_ApplyHostSessionSettings(const struct NativeAdhocWelcome
 
 	memcpy(sdata->gameProgress.unlocks, packet->unlocks, sizeof(packet->unlocks));
 	gNativeMirrorModeEnabled = packet->mirrorMode != 0;
+	s_nativeAdhoc.gameMode = packet->gameMode;
 }
 
 static void NativeAdhoc_RestoreLocalSessionSettings(void)
@@ -546,6 +557,26 @@ static void NativeAdhoc_ResetRaceConfigState(void)
 	memset(&s_nativeAdhoc.raceConfig, 0, sizeof(s_nativeAdhoc.raceConfig));
 }
 
+static int NativeAdhoc_IsGameModeValid(int gameMode)
+{
+	return (gameMode >= NATIVE_ADHOC_GAME_MODE_ARCADE) && (gameMode < NATIVE_ADHOC_GAME_MODE_COUNT);
+}
+
+static void NativeAdhoc_ApplyGameMode(struct GameTracker *gGT, int gameMode)
+{
+	if ((gGT == NULL) || !NativeAdhoc_IsGameModeValid(gameMode))
+	{
+		return;
+	}
+
+	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+	gGT->gameMode2 &= ~(CUP_ANY_KIND);
+	if (gameMode == NATIVE_ADHOC_GAME_MODE_ARCADE)
+	{
+		gGT->gameMode1 |= ARCADE_MODE;
+	}
+}
+
 static void NativeAdhoc_SendRaceProposal(void)
 {
 	struct NativeAdhocRaceProposalPacket packet;
@@ -576,6 +607,7 @@ static void NativeAdhoc_FillRaceConfig(struct NativeAdhocRaceConfigPacket *packe
 	packet->p1Character = data.characterIDs[0];
 	packet->p2Character = s_nativeAdhoc.raceProposalP2;
 	packet->mirrorMode = gNativeMirrorModeEnabled != 0;
+	packet->gameMode = (u8)s_nativeAdhoc.gameMode;
 }
 
 static void NativeAdhoc_SendRaceConfig(void)
@@ -602,6 +634,7 @@ static void NativeAdhoc_SendRaceConfigAck(const struct NativeAdhocRaceConfigPack
 	packet.currLEV = config->currLEV;
 	packet.p1Character = config->p1Character;
 	packet.p2Character = config->p2Character;
+	packet.gameMode = config->gameMode;
 	NativeAdhoc_SendRaw(&s_nativeAdhoc.peerMac, &packet, sizeof(packet));
 }
 
@@ -612,6 +645,13 @@ static void NativeAdhoc_ApplyRaceConfig(const struct NativeAdhocRaceConfigPacket
 		return;
 	}
 
+	if (!NativeAdhoc_IsGameModeValid(packet->gameMode))
+	{
+		return;
+	}
+
+	s_nativeAdhoc.gameMode = packet->gameMode;
+	NativeAdhoc_ApplyGameMode(gGT, s_nativeAdhoc.gameMode);
 	gGT->currLEV = packet->currLEV;
 	gGT->arcadeDifficulty = packet->arcadeDifficulty;
 	gGT->numLaps = packet->numLaps;
@@ -670,6 +710,7 @@ static u32 NativeAdhoc_RaceSeed(const struct GameTracker *gGT)
 		seed ^= (u32)gGT->currLEV * 0x9e3779b9u;
 		seed ^= (u32)gGT->arcadeDifficulty * 0x85ebca6bu;
 		seed ^= (u32)gGT->numLaps * 0xc2b2ae35u;
+		seed ^= (u32)s_nativeAdhoc.gameMode * 0x27d4eb2du;
 	}
 
 	// Only the two human selections are authoritative before LOAD_Robots2P.
@@ -865,8 +906,10 @@ static int NativeAdhoc_SendRaw(const SceNetEtherAddr *dst, const void *packet, i
 
 static void NativeAdhoc_SendHello(void)
 {
-	struct NativeAdhocPacketHeader packet;
-	NativeAdhoc_InitHeader(&packet, NATIVE_ADHOC_PACKET_HELLO);
+	struct NativeAdhocHelloPacket packet;
+	memset(&packet, 0, sizeof(packet));
+	NativeAdhoc_InitHeader(&packet.header, NATIVE_ADHOC_PACKET_HELLO);
+	packet.gameMode = (u8)s_nativeAdhoc.gameMode;
 	NativeAdhoc_SendRaw(&s_nativeAdhocBroadcastMac, &packet, sizeof(packet));
 }
 
@@ -882,6 +925,7 @@ static void NativeAdhoc_SendWelcome(const SceNetEtherAddr *dst)
 		memcpy(packet.unlocks, sdata->gameProgress.unlocks, sizeof(packet.unlocks));
 	}
 	packet.mirrorMode = gNativeMirrorModeEnabled != 0;
+	packet.gameMode = (u8)s_nativeAdhoc.gameMode;
 	NativeAdhoc_SendRaw(dst, &packet, sizeof(packet));
 }
 
@@ -1199,7 +1243,9 @@ static int NativeAdhoc_SessionMatchesLocal(const struct NativeAdhocSessionPacket
 
 	if ((packet->build != BUILD) || (packet->levelID != gGT->levelID) || (packet->currLEV != gGT->currLEV) ||
 		(packet->arcadeDifficulty != gGT->arcadeDifficulty) || (packet->numLaps != gGT->numLaps) || (packet->language != cfg_language) ||
-		(packet->mirrorMode != (gNativeMirrorModeEnabled != 0)))
+		(packet->mirrorMode != (gNativeMirrorModeEnabled != 0)) ||
+		((packet->gameMode1 & ARCADE_MODE) != (gGT->gameMode1 & ARCADE_MODE)) ||
+		((packet->gameMode2 & CUP_ANY_KIND) != (gGT->gameMode2 & CUP_ANY_KIND)))
 	{
 		return 0;
 	}
@@ -1231,10 +1277,11 @@ static void NativeAdhoc_LogSessionMismatch(const struct NativeAdhocSessionPacket
 	}
 
 	Platform_Log(
-		"[CTR Adhoc] session mismatch build=%u/%u level=%d/%d currLEV=%d/%d diff=%d/%d laps=%d/%d lang=%d/%d p1=%d/%d p2=%d/%d\n",
+		"[CTR Adhoc] session mismatch build=%u/%u level=%d/%d currLEV=%d/%d mode=%u/%u diff=%d/%d laps=%d/%d lang=%d/%d p1=%d/%d p2=%d/%d\n",
 		packet->build, (u32)BUILD,
 		packet->levelID, gGT->levelID,
 		packet->currLEV, gGT->currLEV,
+		(packet->gameMode1 & ARCADE_MODE) != 0, (gGT->gameMode1 & ARCADE_MODE) != 0,
 		packet->arcadeDifficulty, gGT->arcadeDifficulty,
 		packet->numLaps, gGT->numLaps,
 		packet->language, cfg_language,
@@ -1760,12 +1807,16 @@ static void NativeAdhoc_ReceivePackets(void)
 			continue;
 		}
 
-		if (header->type == NATIVE_ADHOC_PACKET_HELLO)
+		if ((header->type == NATIVE_ADHOC_PACKET_HELLO) && (len == (int)sizeof(struct NativeAdhocHelloPacket)))
 		{
 			if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_HOST)
 			{
-				NativeAdhoc_SetPeer(&src);
-				NativeAdhoc_SendWelcome(&src);
+				struct NativeAdhocHelloPacket *packet = (struct NativeAdhocHelloPacket *)buffer;
+				if (NativeAdhoc_IsGameModeValid(packet->gameMode) && (packet->gameMode == s_nativeAdhoc.gameMode))
+				{
+					NativeAdhoc_SetPeer(&src);
+					NativeAdhoc_SendWelcome(&src);
+				}
 			}
 			continue;
 		}
@@ -1775,9 +1826,9 @@ static void NativeAdhoc_ReceivePackets(void)
 			if (s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT)
 			{
 				struct NativeAdhocWelcomePacket *packet = (struct NativeAdhocWelcomePacket *)buffer;
-				if (packet->build != BUILD)
+				if ((packet->build != BUILD) || !NativeAdhoc_IsGameModeValid(packet->gameMode) || (packet->gameMode != s_nativeAdhoc.gameMode))
 				{
-					Platform_Log("[CTR Adhoc] host build mismatch %u/%u\n", packet->build, (u32)BUILD);
+					Platform_Log("[CTR Adhoc] host compatibility mismatch build=%u/%u mode=%u\n", packet->build, (u32)BUILD, packet->gameMode);
 					s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 					continue;
 				}
@@ -1839,7 +1890,9 @@ static void NativeAdhoc_ReceivePackets(void)
 			if ((s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT) && NativeAdhoc_PacketSessionMatches(packet->sessionId) && (packet->build == BUILD))
 			{
 				if ((s_nativeAdhoc.raceSyncPending || s_nativeAdhoc.raceLoadPrepared) &&
-					(packet->p2Character == s_nativeAdhoc.raceProposalP2))
+					(packet->p2Character == s_nativeAdhoc.raceProposalP2) &&
+					NativeAdhoc_IsGameModeValid(packet->gameMode) &&
+					(packet->gameMode == s_nativeAdhoc.gameMode))
 				{
 					s_nativeAdhoc.raceConfig = *packet;
 					s_nativeAdhoc.raceConfigReceived = 1;
@@ -1861,7 +1914,8 @@ static void NativeAdhoc_ReceivePackets(void)
 				s_nativeAdhoc.raceConfigSent &&
 				(packet->currLEV == s_nativeAdhoc.raceConfig.currLEV) &&
 				(packet->p1Character == s_nativeAdhoc.raceConfig.p1Character) &&
-				(packet->p2Character == s_nativeAdhoc.raceConfig.p2Character))
+				(packet->p2Character == s_nativeAdhoc.raceConfig.p2Character) &&
+				(packet->gameMode == s_nativeAdhoc.raceConfig.gameMode))
 			{
 				s_nativeAdhoc.raceConfigAcked = 1;
 			}
@@ -2129,7 +2183,7 @@ int NativeAdhoc_IsSupported(void)
 	return 1;
 }
 
-int NativeAdhoc_Begin(int role)
+int NativeAdhoc_Begin(int role, int gameMode)
 {
 	SceNetAdhocctlAdhocId adhocId;
 	SceNetCheckDialogParam param;
@@ -2138,7 +2192,7 @@ int NativeAdhoc_Begin(int role)
 	SceAppUtilBootParam appUtilBootParam;
 	int result;
 
-	if ((role != NATIVE_ADHOC_ROLE_HOST) && (role != NATIVE_ADHOC_ROLE_CLIENT))
+	if (((role != NATIVE_ADHOC_ROLE_HOST) && (role != NATIVE_ADHOC_ROLE_CLIENT)) || !NativeAdhoc_IsGameModeValid(gameMode))
 	{
 		return 0;
 	}
@@ -2151,6 +2205,7 @@ int NativeAdhoc_Begin(int role)
 	gNativeForce30Fps = 1;
 	memset(&s_nativeAdhoc, 0, sizeof(s_nativeAdhoc));
 	s_nativeAdhoc.role = role;
+	s_nativeAdhoc.gameMode = gameMode;
 	s_nativeAdhoc.status = NATIVE_ADHOC_STATUS_ERROR;
 	s_nativeAdhoc.socket = -1;
 	s_nativeAdhoc.netCtlAdhocCallbackId = -1;
@@ -2832,6 +2887,11 @@ int NativeAdhoc_GetStatus(void)
 	return s_nativeAdhoc.status;
 }
 
+int NativeAdhoc_GetGameMode(void)
+{
+	return s_nativeAdhoc.gameMode;
+}
+
 int NativeAdhoc_GetLocalPlayerIndex(void)
 {
 	return s_nativeAdhoc.role == NATIVE_ADHOC_ROLE_CLIENT ? 1 : 0;
@@ -2909,9 +2969,10 @@ int NativeAdhoc_IsSupported(void)
 	return 0;
 }
 
-int NativeAdhoc_Begin(int role)
+int NativeAdhoc_Begin(int role, int gameMode)
 {
 	(void)role;
+	(void)gameMode;
 	return 0;
 }
 
@@ -3048,6 +3109,11 @@ int NativeAdhoc_GetRole(void)
 int NativeAdhoc_GetStatus(void)
 {
 	return NATIVE_ADHOC_STATUS_OFF;
+}
+
+int NativeAdhoc_GetGameMode(void)
+{
+	return NATIVE_ADHOC_GAME_MODE_ARCADE;
 }
 
 int NativeAdhoc_GetLocalPlayerIndex(void)

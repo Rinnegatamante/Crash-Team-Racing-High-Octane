@@ -2,6 +2,9 @@
 
 #if defined(CTR_NATIVE)
 #include "platform/native_leaderboard.h"
+#if defined(__vita__)
+#include "platform/native_adhoc.h"
+#endif
 #endif
 
 #include "platform/native_user_id.h"
@@ -70,6 +73,7 @@ static const char *s_nativeAdhocJoinText[MM_NATIVE_LANGUAGE_COUNT] =
 
 static s16 s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
 static s16 s_nativeAdhocSuppressInputFrames;
+static s16 s_nativeAdhocGameMode = NATIVE_ADHOC_GAME_MODE_ARCADE;
 #endif
 
 static struct MenuRow s_nativeExtraDifficultyRows[MM_NATIVE_DIFFICULTY_COUNT + 1] =
@@ -108,7 +112,8 @@ static void MM_NativeAdhocWaitProc(struct RectMenu *menu);
 
 static struct MenuRow s_nativeAdhocModeRows[] =
 {
-	{LNG_ARCADE, 0, 0, 0, 0},
+	{LNG_ARCADE, 0, 1, 0, 0},
+	{LNG_VS, 0, 1, 1, 1},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -442,6 +447,7 @@ static void MM_NativeAdhocReturnToMain(void)
 	NativeAdhoc_Shutdown();
 	MM_NativeAdhocResetHierarchy();
 	MM_NativeAdhocSetMainBreadcrumb(NATIVE_MENU_STRING_ADHOC);
+	s_nativeAdhocGameMode = NATIVE_ADHOC_GAME_MODE_ARCADE;
 	s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MAIN;
 	RECTMENU_ClearInput();
 	sdata->ptrDesiredMenu = &D230.menuMainMenu;
@@ -472,9 +478,20 @@ static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
 
 	if (NativeAdhoc_IsConnected())
 	{
+		int adhocGameMode = NativeAdhoc_GetGameMode();
+		if ((adhocGameMode != NATIVE_ADHOC_GAME_MODE_ARCADE) && (adhocGameMode != NATIVE_ADHOC_GAME_MODE_VS))
+		{
+			MM_NativeAdhocReturnToMain();
+			return 1;
+		}
+
+		s_nativeAdhocGameMode = (s16)adhocGameMode;
 		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 		gGT->gameMode2 &= ~(CUP_ANY_KIND);
-		gGT->gameMode1 |= ARCADE_MODE;
+		if (adhocGameMode == NATIVE_ADHOC_GAME_MODE_ARCADE)
+		{
+			gGT->gameMode1 |= ARCADE_MODE;
+		}
 		gGT->numPlyrNextGame = 2;
 		gGT->numLaps = MM_DEFAULT_LAP_COUNT;
 		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
@@ -483,11 +500,18 @@ static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
 		}
 
 		MM_NativeAdhocResetHierarchy();
-		MM_NativeAdhocSetMainBreadcrumb(LNG_ARCADE);
+		MM_NativeAdhocSetMainBreadcrumb(adhocGameMode == NATIVE_ADHOC_GAME_MODE_ARCADE ? LNG_ARCADE : LNG_VS);
 		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_GAME_FLOW;
 		RECTMENU_ClearInput();
 
-		gGT->gameMode2 &= ~(CUP_ANY_KIND);
+		if (adhocGameMode == NATIVE_ADHOC_GAME_MODE_VS)
+		{
+			D230.characterSelectTransitionState = EXITING_MENU;
+			D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+			D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
+			return 1;
+		}
+
 		MM_NativeExtraDifficultyPrepare();
 		s_nativeExtraDifficultyMenu.ptrPrevBox_InHierarchy = &D230.menuMainMenu;
 		s_nativeExtraDifficultyMenu.ptrNextBox_InHierarchy = NULL;
@@ -527,8 +551,9 @@ static void MM_NativeAdhocModeProc(struct RectMenu *menu)
 		return;
 	}
 
-	if (menu->rowSelected == 0)
+	if ((menu->rowSelected == 0) || (menu->rowSelected == 1))
 	{
+		s_nativeAdhocGameMode = menu->rowSelected == 0 ? NATIVE_ADHOC_GAME_MODE_ARCADE : NATIVE_ADHOC_GAME_MODE_VS;
 		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_ROLE;
 		MM_NativeAdhocApplyText();
 		s_nativeAdhocRoleMenu.rowSelected = 0;
@@ -559,7 +584,7 @@ static void MM_NativeAdhocRoleProc(struct RectMenu *menu)
 	if ((menu->rowSelected == 0) || (menu->rowSelected == 1))
 	{
 		int role = menu->rowSelected == 0 ? NATIVE_ADHOC_ROLE_HOST : NATIVE_ADHOC_ROLE_CLIENT;
-		if (!NativeAdhoc_Begin(role))
+		if (!NativeAdhoc_Begin(role, s_nativeAdhocGameMode))
 		{
 			MM_NativeAdhocReturnToMain();
 			return;
@@ -798,7 +823,8 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		return;
 	}
 
-	if ((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
+	if (((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0) &&
+	    (s_nativeAdhocMenuStage != MM_NATIVE_ADHOC_STAGE_GAME_FLOW))
 	{
 		if (NativeAdhoc_IsActive())
 		{
@@ -860,7 +886,16 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 		if ((D230.menuMainMenu.state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
 		{
-			gGT->numPlyrNextGame = 1;
+#if defined(__vita__)
+			if ((s_nativeAdhocMenuStage == MM_NATIVE_ADHOC_STAGE_GAME_FLOW) && NativeAdhoc_IsConnected())
+			{
+				gGT->numPlyrNextGame = 2;
+			}
+			else
+#endif
+			{
+				gGT->numPlyrNextGame = 1;
+			}
 
 			// if no buttons pressed, check demo mode
 			if (sdata->gGamepads->anyoneHeldCurr == 0)
@@ -1063,6 +1098,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		s_nativeAdhocWaitMenu.state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
 		s_nativeAdhocWaitMenu.ptrNextBox_InHierarchy = NULL;
 		s_nativeAdhocSuppressInputFrames = 0;
+		s_nativeAdhocGameMode = NATIVE_ADHOC_GAME_MODE_ARCADE;
 		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_MODE;
 		s_nativeAdhocModeMenu.rowSelected = 0;
 		s_nativeAdhocModeMenu.ptrPrevBox_InHierarchy = mainMenu;

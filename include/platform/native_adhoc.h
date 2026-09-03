@@ -21,8 +21,15 @@ enum NativeAdhocStatus
 	NATIVE_ADHOC_STATUS_ERROR,
 };
 
+enum NativeAdhocGameMode
+{
+	NATIVE_ADHOC_GAME_MODE_ARCADE = 0,
+	NATIVE_ADHOC_GAME_MODE_VS,
+	NATIVE_ADHOC_GAME_MODE_COUNT,
+};
+
 int NativeAdhoc_IsSupported(void);
-int NativeAdhoc_Begin(int role);
+int NativeAdhoc_Begin(int role, int gameMode);
 void NativeAdhoc_Shutdown(void);
 void NativeAdhoc_ShutdownImmediate(void);
 void NativeAdhoc_Update(void);
@@ -50,6 +57,7 @@ int NativeAdhoc_ShouldDrawConnectionLostNotice(void);
 int NativeAdhoc_IsReturningToMainMenu(void);
 int NativeAdhoc_GetRole(void);
 int NativeAdhoc_GetStatus(void);
+int NativeAdhoc_GetGameMode(void);
 int NativeAdhoc_GetLocalPlayerIndex(void);
 int NativeAdhoc_GetRemotePlayerIndex(void);
 u32 NativeAdhoc_GetSimulationFrame(void);

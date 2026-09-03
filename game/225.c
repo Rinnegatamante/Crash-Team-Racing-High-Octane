@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 global_variable struct RectMenu menuVS;
 global_variable struct RectMenu menuBattle;
 
@@ -82,6 +86,12 @@ void VB_EndEvent_DrawMenu(void)
 	s32 numPlayers = gGT->numPlyrCurrGame;
 	s32 playerCountIndex = numPlayers - VB_MIN_PLAYERS;
 	b32 isBattleMode = (gGT->gameMode1 & BATTLE_MODE) != 0;
+#if defined(__vita__)
+	b32 adhocSingleView = NativeAdhoc_IsConnected() && (numPlayers == 2) &&
+	                       (NativeAdhoc_GetGameMode() == NATIVE_ADHOC_GAME_MODE_VS);
+#else
+	b32 adhocSingleView = false;
+#endif
 
 	if (sdata->framesSinceRaceEnded < FPS_DOUBLE(VB_RESULT_MAX_FRAMES))
 	{
@@ -250,6 +260,11 @@ void VB_EndEvent_DrawMenu(void)
 		if (bigNum != NULL)
 		{
 			bigNum->scale = (SVec3){{0, 0, 0}};
+		}
+
+		if (adhocSingleView)
+		{
+			continue;
 		}
 
 		s32 winnerDriverID = isBattleMode ? gGT->winnerIndex[0] : gGT->driversInRaceOrder[0]->driverID;

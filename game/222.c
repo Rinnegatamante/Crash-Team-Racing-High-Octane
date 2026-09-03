@@ -422,19 +422,19 @@ void AA_EndEvent_DrawMenu(void)
 		return;
 	}
 
+#if defined(__vita__)
+	if (NativeAdhoc_IsConnected())
+	{
+		RECTMENU_Show(&s_nativeAdhocRaceEndMenu);
+		sdata->menuReadyToPass |= AA_MENU_READY_FLAG;
+		return;
+	}
+#endif
+
 	// If you're in Arcade mode
 	if ((gGT->gameMode1 & ARCADE_MODE) != 0)
 	{
-#if defined(__vita__)
-		if (NativeAdhoc_IsConnected())
-		{
-			RECTMENU_Show(&s_nativeAdhocRaceEndMenu);
-		}
-		else
-#endif
-		{
-			RECTMENU_Show((numPlayers == 1) ? &menu222 : &menu222_2P);
-		}
+		RECTMENU_Show((numPlayers == 1) ? &menu222 : &menu222_2P);
 
 		// record that the menu is drawing
 		sdata->menuReadyToPass |= AA_MENU_READY_FLAG;

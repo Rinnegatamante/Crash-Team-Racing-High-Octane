@@ -177,6 +177,16 @@ void UI_RaceStart_IntroText1P(void)
 						goto LAB_80055930;
 					}
 
+#if defined(__vita__)
+					if (NativeAdhoc_IsSingleViewRenderActive() &&
+					    (gGT->numPlyrCurrGame == 2) &&
+					    (NativeAdhoc_GetGameMode() == NATIVE_ADHOC_GAME_MODE_VS))
+					{
+						textID = LNG_VERSUS;
+						goto LAB_80055930;
+					}
+#endif
+
 					if (-1 < gameMode)
 					{
 						// TROPHY RACE

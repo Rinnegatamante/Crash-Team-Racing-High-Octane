@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80054a08-0x80054a78
 u32 UI_VsQuipReadDriver(struct Driver *d, int offset, int size)
 {
@@ -456,6 +460,17 @@ void UI_VsQuipDrawAll(void)
 
 	struct GameTracker *gGT = sdata->gGT;
 	struct Thread *thread;
+#if defined(__vita__)
+	int adhocSingleView = NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) &&
+	                      (NativeAdhoc_GetGameMode() == NATIVE_ADHOC_GAME_MODE_VS);
+	int adhocLocalPlayer = adhocSingleView ? NativeAdhoc_GetLocalPlayerIndex() : 0;
+	struct PushBuffer adhocDisplayPB;
+	if (adhocSingleView)
+	{
+		memset(&adhocDisplayPB, 0, sizeof(adhocDisplayPB));
+		PushBuffer_Init(&adhocDisplayPB, adhocLocalPlayer, 1);
+	}
+#endif
 
 	// loop through player threads
 	int playerIndex = 0;
@@ -463,9 +478,18 @@ void UI_VsQuipDrawAll(void)
 	{
 		// get player struct from thread
 		d = (struct Driver *)thread->object;
+#if defined(__vita__)
+		if (adhocSingleView && (d->driverID != adhocLocalPlayer))
+		{
+			continue;
+		}
+		int pressStateIndex = adhocSingleView ? d->driverID : playerIndex;
+#else
+		int pressStateIndex = playerIndex;
+#endif
 
 		// If driver already pressed X to continue
-		if ((sdata->Battle_EndOfRace.boolPressX[playerIndex] & 2) != 0)
+		if ((sdata->Battle_EndOfRace.boolPressX[pressStateIndex] & 2) != 0)
 		{
 			continue;
 		}
@@ -508,6 +532,12 @@ void UI_VsQuipDrawAll(void)
 
 		// get current player's pushBuffer
 		RECT *r = &gGT->pushBuffer[playerIndex].rect;
+#if defined(__vita__)
+		if (adhocSingleView)
+		{
+			r = &adhocDisplayPB.rect;
+		}
+#endif
 
 		// Draw the string with a box around it
 		RECTMENU_DrawQuip(print,
@@ -548,6 +578,17 @@ void UI_VsWaitForPressX(void)
 
 	struct GameTracker *gGT = sdata->gGT;
 	u8 numPlayers = gGT->numPlyrCurrGame;
+#if defined(__vita__)
+	int adhocSingleView = NativeAdhoc_IsConnected() && (numPlayers == 2) &&
+	                      (NativeAdhoc_GetGameMode() == NATIVE_ADHOC_GAME_MODE_VS);
+	int adhocLocalPlayer = adhocSingleView ? NativeAdhoc_GetLocalPlayerIndex() : 0;
+	struct PushBuffer adhocDisplayPB;
+	if (adhocSingleView)
+	{
+		memset(&adhocDisplayPB, 0, sizeof(adhocDisplayPB));
+		PushBuffer_Init(&adhocDisplayPB, adhocLocalPlayer, 1);
+	}
+#endif
 
 	int readyCount = 0;
 
@@ -558,6 +599,12 @@ void UI_VsWaitForPressX(void)
 
 		struct Driver *driver = gGT->drivers[playerIndex];
 		RECT *viewport = &gGT->pushBuffer[playerIndex].rect;
+#if defined(__vita__)
+		if (adhocSingleView && (playerIndex == adhocLocalPlayer))
+		{
+			viewport = &adhocDisplayPB.rect;
+		}
+#endif
 		int buttonsTapped = sdata->gGamepads->gamepad[playerIndex].buttonsTapped;
 
 		// If Player has not pressed X to continue
@@ -656,9 +703,14 @@ void UI_VsWaitForPressX(void)
 		{
 			// Stop drawing comment + battle stats
 
-			memset(&clearColor, 0, sizeof(clearColor));
-			clearRect = *viewport;
-			CTR_Box_DrawClearBox(&clearRect, &clearColor, 0, gGT->backBuffer->otMem.uiOT);
+#if defined(__vita__)
+			if (!adhocSingleView)
+#endif
+			{
+				memset(&clearColor, 0, sizeof(clearColor));
+				clearRect = *viewport;
+				CTR_Box_DrawClearBox(&clearRect, &clearColor, 0, gGT->backBuffer->otMem.uiOT);
+			}
 
 			// Allow Go-Back option to YouHit/HitYou
 			if ((buttonsTapped & BTN_SQUARE_two) != 0)
