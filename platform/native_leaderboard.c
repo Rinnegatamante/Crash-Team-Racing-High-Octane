@@ -7,6 +7,9 @@
 #include <SDL3/SDL.h>
 #include <curl/curl.h>
 #include <openssl/sha.h>
+#if defined(__vita__)
+#include <psp2/io/fcntl.h>
+#endif
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +21,7 @@
 #define CTR_NATIVE_LEADERBOARD_UPLOAD_URL "https://www.rinnegatamante.eu/ctr/upload_record.php"
 #endif
 
-enum { NATIVE_LEADERBOARD_JOB_QUEUE_SIZE = 8, NATIVE_LEADERBOARD_HTTP_MAX_JSON = 512 * 1024, NATIVE_LEADERBOARD_HTTP_MAX_GHOST = 300 * 1024 };
+enum { NATIVE_LEADERBOARD_JOB_QUEUE_SIZE = 8, NATIVE_LEADERBOARD_HTTP_MAX_JSON = 512 * 1024, NATIVE_LEADERBOARD_HTTP_MAX_GHOST = 300 * 1024, NATIVE_LEADERBOARD_CLIENT_VERSION_SIZE = SHA256_DIGEST_LENGTH * 2 + 1 };
 enum NativeLeaderboardJobType { NATIVE_LEADERBOARD_JOB_NONE = 0, NATIVE_LEADERBOARD_JOB_REFRESH, NATIVE_LEADERBOARD_JOB_UPLOAD, NATIVE_LEADERBOARD_JOB_GHOST };
 
 struct NativeLeaderboardUpload
@@ -46,6 +49,7 @@ struct NativeLeaderboardContext
     b32 initialized;
     b32 shutdown;
     b32 workerBusy;
+    char clientVersion[NATIVE_LEADERBOARD_CLIENT_VERSION_SIZE];
     struct NativeLeaderboardJob jobs[NATIVE_LEADERBOARD_JOB_QUEUE_SIZE];
     int jobRead;
     int jobWrite;
@@ -63,6 +67,68 @@ struct NativeLeaderboardContext
 
 static struct NativeLeaderboardContext s_nativeLeaderboard;
 struct NativeLeaderboardJson { const char *p; const char *end; };
+
+static b32 NativeLeaderboard_InitClientVersion(void)
+{
+#if defined(__vita__)
+    static const char hex[] = "0123456789ABCDEF";
+    u8 buffer[16 * 1024];
+    u8 digest[SHA256_DIGEST_LENGTH];
+    SHA256_CTX context;
+    SceUID fd = sceIoOpen("app0:/eboot.bin", SCE_O_RDONLY, 0);
+    if (fd < 0)
+    {
+        Platform_LogError("[CTR Leaderboard] Failed to open app0:/eboot.bin for client fingerprint: 0x%08X\n", fd);
+        return false;
+    }
+
+    if (SHA256_Init(&context) != 1)
+    {
+        sceIoClose(fd);
+        Platform_LogError("[CTR Leaderboard] Failed to initialize eboot SHA-256\n");
+        return false;
+    }
+
+    for (;;)
+    {
+        int bytesRead = sceIoRead(fd, buffer, sizeof(buffer));
+        if (bytesRead < 0)
+        {
+            sceIoClose(fd);
+            Platform_LogError("[CTR Leaderboard] Failed to read app0:/eboot.bin for client fingerprint: 0x%08X\n", bytesRead);
+            return false;
+        }
+        if (bytesRead == 0)
+        {
+            break;
+        }
+        if (SHA256_Update(&context, buffer, (size_t)bytesRead) != 1)
+        {
+            sceIoClose(fd);
+            Platform_LogError("[CTR Leaderboard] Failed to update eboot SHA-256\n");
+            return false;
+        }
+    }
+    sceIoClose(fd);
+
+    if (SHA256_Final(digest, &context) != 1)
+    {
+        Platform_LogError("[CTR Leaderboard] Failed to finalize eboot SHA-256\n");
+        return false;
+    }
+
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        s_nativeLeaderboard.clientVersion[i * 2] = hex[digest[i] >> 4];
+        s_nativeLeaderboard.clientVersion[i * 2 + 1] = hex[digest[i] & 0xf];
+    }
+    s_nativeLeaderboard.clientVersion[sizeof(s_nativeLeaderboard.clientVersion) - 1] = '\0';
+    return true;
+#else
+    snprintf(s_nativeLeaderboard.clientVersion, sizeof(s_nativeLeaderboard.clientVersion), "%s", CTR_NATIVE_VERSION);
+    return true;
+#endif
+}
 
 static void NativeLeaderboard_FreeUpload(struct NativeLeaderboardUpload *upload)
 {
@@ -493,7 +559,7 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
     NativeLeaderboard_AddFormText(&form, &last, "nickname", upload->nickname);
     NativeLeaderboard_AddFormText(&form, &last, "track_id", trackText);
     NativeLeaderboard_AddFormText(&form, &last, "character_id", characterText);
-    NativeLeaderboard_AddFormText(&form, &last, "client_version", CTR_NATIVE_VERSION);
+    NativeLeaderboard_AddFormText(&form, &last, "client_version", s_nativeLeaderboard.clientVersion);
     if (upload->raceBest)
     {
         NativeLeaderboard_AddFormText(&form, &last, "race_time_ms", raceText);
@@ -605,6 +671,7 @@ int NativeLeaderboard_Init(void)
 {
     if (s_nativeLeaderboard.initialized) return 1;
     memset(&s_nativeLeaderboard, 0, sizeof(s_nativeLeaderboard));
+    if (!NativeLeaderboard_InitClientVersion()) return 0;
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return 0;
     s_nativeLeaderboard.mutex = SDL_CreateMutex();
     s_nativeLeaderboard.condition = SDL_CreateCondition();
