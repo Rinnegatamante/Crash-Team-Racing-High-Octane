@@ -52,7 +52,7 @@ It focuses on new features, enhancements and optimization.
 - Added support for multiple controllers on PSTV and PSVita with MiniVitaTV, allowing for local splitscreen games (up to 4 players).
 - Made so that Sewer Speedway and Blizzard Bluffs environmental hazards are now deterministic. This also fixes broken ghosts on these specific tracks.
 - Added an Online Leaderboard for Time Trial results. Your best scores will automatically be uploaded to it and you can watch ghosts of the top 5 scores worldwide.
-- Fixed two different bugs both causing some tiles to be incorrectly clipped under certain circumstacnes.
+- Fixed two different bugs both causing some tiles to be incorrectly clipped under certain circumstances.
 - Made so that when an AdHoc connection is interrupted, the console will automatically return in Internet mode.
 - Fixed a bug causing missiles used by enemy AIs to not be homing and instead always proceeding in a straight line.
 
@@ -69,6 +69,10 @@ It focuses on new features, enhancements and optimization.
 - Fixed a bug in vanilla game that was causing Penta Penguin powerup HUD to show Uka-Uka instead of Aku-Aku.
 - Fixed a bug causing the Uka-Uka/Aku-Aku powerup to occasionally enter in stale setups, resulting in audio glitches (eg: powerup music playing permanently or playing when you were recovered from an out of track).
 - Added ability to skip the intro from the very first frame of the SCEA copyright screen by pressing START.
+
+## vitaGL flags for compilation
+
+`HAVE_SHADER_CACHE=1 NO_DEBUG=1 READBACKS_SPEEDHACK=1 CIRCULAR_POOL_SPEEDHACK=1`
 
 ## Credits
 
