@@ -18,6 +18,10 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef __vita__
+#include <png.h>
+#endif
+
 #ifdef _WIN32
 #include "platform/native_win32.h"
 
@@ -264,6 +268,15 @@ global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 global_variable TextureID s_whiteTexture = (TextureID)-1;
 global_variable TextureID s_lastBoundTexture = (TextureID)-1;
 
+#ifdef __vita__
+global_variable TextureID s_ghostReplayVitaTexture;
+global_variable TextureID s_ghostReplayHighlightTexture;
+global_variable TextureID s_ghostReplayShoulderTexture[2];
+global_variable int s_ghostReplayVitaWidth;
+global_variable int s_ghostReplayVitaHeight;
+global_variable b32 s_ghostReplayOverlayLoadAttempted;
+#endif
+
 TextureID NativeRenderer_GetVRAMTexture(void)
 {
 	return s_vram.texture;
@@ -485,6 +498,10 @@ void NativeRenderer_Shutdown(void)
 	NativeRenderer_DestroyTexture(s_whiteTexture);
 	NativeRenderer_DestroyTexture(s_rgLutTexture);
 #ifdef __vita__
+	NativeRenderer_DestroyTexture(s_ghostReplayVitaTexture);
+	NativeRenderer_DestroyTexture(s_ghostReplayHighlightTexture);
+	NativeRenderer_DestroyTexture(s_ghostReplayShoulderTexture[0]);
+	NativeRenderer_DestroyTexture(s_ghostReplayShoulderTexture[1]);
 	for (int cacheIndex = 0; cacheIndex < NATIVE_P4_CACHE_CAPACITY; cacheIndex++)
 	{
 		for (int bufferIndex = 0; bufferIndex < 2; bufferIndex++)
@@ -3348,6 +3365,190 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	s_previousShader = (ShaderID)-1;
 	s_lastBoundTexture = (TextureID)-1;
 }
+
+#ifdef __vita__
+internal TextureID NativeRenderer_CreateGhostReplayTexture(int width, int height, const u8 *pixels)
+{
+	TextureID texture = 0;
+	glGenTextures(1, &texture);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	s_lastBoundTexture = (TextureID)-1;
+	return texture;
+}
+
+internal b32 NativeRenderer_LoadGhostReplayOverlay(void)
+{
+	png_image image;
+	u8 *pixels = NULL;
+	u8 highlight[32 * 32 * 4];
+	u8 shoulder[2][48 * 16 * 4];
+
+	if (s_ghostReplayOverlayLoadAttempted)
+	{
+		return (s_ghostReplayVitaTexture != 0) && (s_ghostReplayHighlightTexture != 0) &&
+		       (s_ghostReplayShoulderTexture[0] != 0) && (s_ghostReplayShoulderTexture[1] != 0);
+	}
+	s_ghostReplayOverlayLoadAttempted = true;
+
+	memset(&image, 0, sizeof(image));
+	image.version = PNG_IMAGE_VERSION;
+	if (!png_image_begin_read_from_file(&image, "app0:/vita.png"))
+	{
+		NATIVE_RENDERER_ERROR("%s\n", "Failed to load app0:/vita.png for Ghost Replay overlay");
+		return false;
+	}
+
+	image.format = PNG_FORMAT_RGBA;
+	pixels = (u8 *)malloc(PNG_IMAGE_SIZE(image));
+	if ((pixels == NULL) || !png_image_finish_read(&image, NULL, pixels, 0, NULL))
+	{
+		free(pixels);
+		png_image_free(&image);
+		NATIVE_RENDERER_ERROR("%s\n", "Failed to decode app0:/vita.png for Ghost Replay overlay");
+		return false;
+	}
+
+	s_ghostReplayVitaWidth = (int)image.width;
+	s_ghostReplayVitaHeight = (int)image.height;
+	s_ghostReplayVitaTexture = NativeRenderer_CreateGhostReplayTexture(s_ghostReplayVitaWidth, s_ghostReplayVitaHeight, pixels);
+
+	for (int y = 0; y < 32; y++)
+	{
+		for (int x = 0; x < 32; x++)
+		{
+			const int dx = (x * 2) - 31;
+			const int dy = (y * 2) - 31;
+			const int dist2 = dx * dx + dy * dy;
+			const int pixel = (y * 32 + x) * 4;
+			highlight[pixel + 0] = 255;
+			highlight[pixel + 1] = 128;
+			highlight[pixel + 2] = 0;
+			highlight[pixel + 3] = (dist2 <= 729) ? 190 : ((dist2 <= 961) ? 100 : 0);
+		}
+	}
+	s_ghostReplayHighlightTexture = NativeRenderer_CreateGhostReplayTexture(32, 32, highlight);
+
+	const int shoulderImageX[2] = {16, 237};
+	for (int side = 0; side < 2; side++)
+	{
+		for (int y = 0; y < 16; y++)
+		{
+			for (int x = 0; x < 48; x++)
+			{
+				const int sourceX = shoulderImageX[side] + x;
+				const int sourcePixel = (y * s_ghostReplayVitaWidth + sourceX) * 4;
+				const int dstPixel = (y * 48 + x) * 4;
+				const u8 sourceAlpha = pixels[sourcePixel + 3];
+				const int luminance = ((int)pixels[sourcePixel + 0] + (int)pixels[sourcePixel + 1] + (int)pixels[sourcePixel + 2]) / 3;
+				const u8 maskAlpha = (sourceAlpha > 32 && luminance > 70) ? (u8)((sourceAlpha * 220) / 255) : 0;
+
+				shoulder[side][dstPixel + 0] = 255;
+				shoulder[side][dstPixel + 1] = 128;
+				shoulder[side][dstPixel + 2] = 0;
+				shoulder[side][dstPixel + 3] = maskAlpha;
+			}
+		}
+		s_ghostReplayShoulderTexture[side] = NativeRenderer_CreateGhostReplayTexture(48, 16, shoulder[side]);
+	}
+
+	free(pixels);
+	png_image_free(&image);
+
+	return (s_ghostReplayVitaTexture != 0) && (s_ghostReplayHighlightTexture != 0) &&
+	       (s_ghostReplayShoulderTexture[0] != 0) && (s_ghostReplayShoulderTexture[1] != 0);
+}
+
+internal void NativeRenderer_DrawGhostReplayQuad(TextureID texture, int x, int y, int width, int height)
+{
+	if ((texture == 0) || (width <= 0) || (height <= 0))
+	{
+		return;
+	}
+
+	NativeRenderer_SetViewPort(x, y, width, height);
+	glUseProgram(s_presentRgbaShader);
+	glUniform1f(s_presentRgbaFlipYLoc, 1.0f);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
+}
+
+internal void NativeRenderer_DrawGhostReplayHighlight(int overlayX, int overlayY, int overlayW, int overlayH,
+	                                                   int imageX, int imageY, int width, int height)
+{
+	const int centerX = overlayX + (imageX * overlayW) / s_ghostReplayVitaWidth;
+	const int centerY = overlayY + overlayH - (imageY * overlayH) / s_ghostReplayVitaHeight;
+	const int scaledW = (width * overlayW) / s_ghostReplayVitaWidth;
+	const int scaledH = (height * overlayH) / s_ghostReplayVitaHeight;
+	NativeRenderer_DrawGhostReplayQuad(s_ghostReplayHighlightTexture, centerX - scaledW / 2, centerY - scaledH / 2, scaledW, scaledH);
+}
+
+internal void NativeRenderer_DrawGhostReplayImageRegion(TextureID texture, int overlayX, int overlayY, int overlayW, int overlayH,
+	                                                     int imageX, int imageY, int imageW, int imageH)
+{
+	const int x = overlayX + (imageX * overlayW) / s_ghostReplayVitaWidth;
+	const int y = overlayY + overlayH - ((imageY + imageH) * overlayH) / s_ghostReplayVitaHeight;
+	const int width = (imageW * overlayW) / s_ghostReplayVitaWidth;
+	const int height = (imageH * overlayH) / s_ghostReplayVitaHeight;
+	NativeRenderer_DrawGhostReplayQuad(texture, x, y, width, height);
+}
+
+void NativeRenderer_DrawGhostReplayOverlay(void)
+{
+	u32 buttonsHeld;
+
+	if (!NativeGhostInput_GetReplayOverlayState(&buttonsHeld) || !NativeRenderer_LoadGhostReplayOverlay())
+	{
+		return;
+	}
+
+	const int overlayW = (s_presentViewport.w * 23) / 100;
+	const int overlayH = (overlayW * s_ghostReplayVitaHeight) / s_ghostReplayVitaWidth;
+	const int overlayX = s_presentViewport.x + 14;
+	const int overlayY = s_presentViewport.y + 12;
+	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	NativeRenderer_SetScissorState(0);
+	NativeRenderer_EnableDepth(0);
+	NativeRenderer_SetBlendMode(BM_AVERAGE);
+	glDisable(GL_STENCIL_TEST);
+
+	NativeRenderer_DrawGhostReplayQuad(s_ghostReplayVitaTexture, overlayX, overlayY, overlayW, overlayH);
+
+	if ((buttonsHeld & BTN_UP) != 0)       NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 28, 39, 14, 14);
+	if ((buttonsHeld & BTN_DOWN) != 0)     NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 28, 62, 14, 14);
+	if ((buttonsHeld & BTN_LEFT) != 0)     NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 17, 51, 14, 14);
+	if ((buttonsHeld & BTN_RIGHT) != 0)    NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 39, 51, 14, 14);
+	if ((buttonsHeld & BTN_TRIANGLE) != 0) NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 272, 38, 14, 14);
+	if ((buttonsHeld & BTN_CIRCLE) != 0)   NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 284, 51, 14, 14);
+	if ((buttonsHeld & BTN_CROSS) != 0)    NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 272, 64, 14, 14);
+	if ((buttonsHeld & BTN_SQUARE) != 0)   NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 260, 51, 14, 14);
+	if ((buttonsHeld & (BTN_L1 | BTN_L2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[0], overlayX, overlayY, overlayW, overlayH, 16, 0, 48, 16);
+	if ((buttonsHeld & (BTN_R1 | BTN_R2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[1], overlayX, overlayY, overlayW, overlayH, 237, 0, 48, 16);
+
+	if (previousStencilEnabled)
+	{
+		glEnable(GL_STENCIL_TEST);
+	}
+	NativeRenderer_SetBlendMode(BM_NONE);
+	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+	glBindVertexArray(0);
+	s_previousShader = (ShaderID)-1;
+	s_lastBoundTexture = (TextureID)-1;
+}
+#else
+void NativeRenderer_DrawGhostReplayOverlay(void)
+{
+}
+#endif
 
 void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight, int displayHeight)
 {

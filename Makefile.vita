@@ -32,7 +32,7 @@ $(TARGET).vpk: $(TARGET).velf
 	vita-make-fself -c -s -na $< eboot.bin
 	vita-mksfoex -s TITLE_ID=$(TITLE) -d ATTRIBUTE2=12 "CTR: High Octane" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin $(TARGET).vpk \
-		-a sce_sys=sce_sys
+		-a sce_sys=sce_sys -a vita.png=vita.png
 
 %.velf: %.elf
 	cp $< $<.unstripped.elf

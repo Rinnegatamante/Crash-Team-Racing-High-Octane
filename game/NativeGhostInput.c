@@ -56,6 +56,8 @@ static b32 s_nativeGhostInputRecordingInvalid;
 static b32 s_nativeGhostInputPendingValid;
 static b32 s_nativeGhostInputPlaybackActive;
 static b32 s_nativeGhostInputExternalLoaded;
+static b32 s_nativeGhostInputDisplayValid;
+static struct NativeGhostInputFrame s_nativeGhostInputDisplayFrame;
 static char s_nativeGhostInputSelectedName[0x40];
 
 static b32 NativeGhostInput_HeaderUses60Fps(const struct NativeGhostInputHeader *header)
@@ -124,7 +126,25 @@ void NativeGhostInput_ClearSelection(void)
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputPlaybackTimerPhasePending = false;
     s_nativeGhostInputExternalLoaded = false;
+    s_nativeGhostInputDisplayValid = false;
     gNativeGhostReplayFpsOverride = -1;
+}
+
+b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld)
+{
+    if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive || !s_nativeGhostInputDisplayValid ||
+        (sdata->gGT == NULL) || (sdata->Loading.stage != LOAD_IDLE) ||
+        ((sdata->gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0) ||
+        ((sdata->gGT->gameMode1 & (PAUSE_ALL | END_OF_RACE | MAIN_MENU | LOADING | GAME_CUTSCENE)) != 0))
+    {
+        return false;
+    }
+
+    if (buttonsHeld != NULL)
+    {
+        *buttonsHeld = s_nativeGhostInputDisplayFrame.buttonsHeld;
+    }
+    return true;
 }
 
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID)
@@ -160,6 +180,7 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputRecordingInvalid = false;
     s_nativeGhostInputPendingValid = false;
     s_nativeGhostInputPlaybackActive = false;
+    s_nativeGhostInputDisplayValid = false;
     s_nativeGhostInputFrameCount = 0;
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputTotalTimeMS = 0;
@@ -204,6 +225,8 @@ static void NativeGhostInput_SetReplayPad(struct GamepadSystem *gGamepads)
         replayHeld = frame->buttonsHeld;
         stickLX = frame->stickLX;
         stickLY = frame->stickLY;
+        s_nativeGhostInputDisplayFrame = *frame;
+        s_nativeGhostInputDisplayValid = true;
 
         if (s_nativeGhostInputPlaybackIndex != 0)
         {
@@ -236,6 +259,7 @@ void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads)
             ((sdata->gGT->gameMode1 & END_OF_RACE) != 0))
         {
             s_nativeGhostInputPlaybackActive = false;
+            s_nativeGhostInputDisplayValid = false;
             return;
         }
 
@@ -433,6 +457,7 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
+    s_nativeGhostInputDisplayValid = false;
 
     if (s_nativeGhostInputExternalLoaded)
     {

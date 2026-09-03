@@ -15,6 +15,7 @@ void NativeRenderer_UpdateSwapIntervalState(int swapInterval);
 void NativeRenderer_SwapWindow(void);
 void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h);
 void NativeRenderer_PresentMainRenderTarget(void);
+void NativeRenderer_DrawGhostReplayOverlay(void);
 void NativeRenderer_PresentVRAMDisplay(void);
 void NativeRenderer_PresentVRAMRect(int x, int y, int w, int h);
 void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight, int displayHeight);

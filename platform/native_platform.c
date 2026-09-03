@@ -492,6 +492,7 @@ void Platform_EndScene(void)
 	NativeRenderer_StoreFrameBuffer(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
 #ifdef __vita__
 	NativeRenderer_PresentMainRenderTarget();
+	NativeRenderer_DrawGhostReplayOverlay();
 #else
 	NativeRenderer_PresentVRAMRect(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
 #endif
