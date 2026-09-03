@@ -1015,7 +1015,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponInst->scale.y = SHIELD_SCALE;
 		weaponInst->scale.z = SHIELD_SCALE;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
-		OtherFX_Play(SOUND_SHIELD, 1);
+		if (VehPickupItem_ShouldPlayLocalDriverFx(d))
+		{
+			OtherFX_Play(SOUND_SHIELD, 1);
+		}
 
 		modelID = DYNAMIC_SHIELD_GREEN;
 		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)

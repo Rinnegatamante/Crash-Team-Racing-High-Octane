@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 static void RB_MovingExplosive_CallThCollide(struct Thread *hitTh, struct Thread *sourceTh)
 {
 	void *funcThCollide = hitTh->funcThCollide;
@@ -53,7 +57,13 @@ void RB_MovingExplosive_ThTick(struct Thread *t)
 			sound = 0x59;
 		}
 	LAB_800adc00:
-		PlaySound3D_Flags(&tw->soundIDCount, sound, inst);
+#if defined(__vita__)
+		if (((modelID != DYNAMIC_SHIELD) && (modelID != DYNAMIC_SHIELD_GREEN)) ||
+		    (tw->driverParent == NULL) || NativeAdhoc_ShouldPresentDriver(tw->driverParent->driverID))
+#endif
+		{
+			PlaySound3D_Flags(&tw->soundIDCount, sound, inst);
+		}
 	}
 
 LAB_800adc08:;

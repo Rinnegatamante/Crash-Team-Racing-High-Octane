@@ -313,7 +313,12 @@ void RB_ShieldDark_ThTick_Pop(struct Thread *t)
 	// === Animation Done ===
 
 	// play 3D sound for "shield pop"
-	PlaySound3D(0x58, instDark);
+#if defined(__vita__)
+	if (NativeAdhoc_ShouldPresentDriver(driverOwner->driverID))
+#endif
+	{
+		PlaySound3D(0x58, instDark);
+	}
 
 	INSTANCE_Death(instColor);
 	INSTANCE_Death(sh->instHighlight);
@@ -635,7 +640,12 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 LAB_800b0d6c:
 
 	// green shield fade away sound
-	PlaySound3D(0x58, shieldInst);
+#if defined(__vita__)
+	if (NativeAdhoc_ShouldPresentDriver(player->driverID))
+#endif
+	{
+		PlaySound3D(0x58, shieldInst);
+	}
 
 	// shield and highlight
 	INSTANCE_Death(colorInst);

@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 
 // NOTE(aalhendi): ASM-verified helper for NTSC-U 926 0x8005e104-0x8005e214.
 void VehPhysForce_ConvertSpeedToVecOut(struct Driver *driver, Vec3 *vel)
@@ -851,7 +855,12 @@ static void VehPhysForce_TranslateMatrix_UpdateSquashStretch(struct Instance *in
 	{
 		if (d->instSelf->thread->modelIndex == DYNAMIC_PLAYER)
 		{
-			OtherFX_Play_Echo(VEH_PHYS_FORCE_SQUISH_RESTORE_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(d->driverID))
+#endif
+			{
+				OtherFX_Play_Echo(VEH_PHYS_FORCE_SQUISH_RESTORE_SFX, 1, (d->actionsFlagSet & ACTION_ENGINE_ECHO) != 0);
+			}
 		}
 
 		inst->scale.y = (s16)CTR_MipsAddLo((u16)d->jumpSquishStretch, VEH_PHYS_FORCE_KART_SCALE_BASE);

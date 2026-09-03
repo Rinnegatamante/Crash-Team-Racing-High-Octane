@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include "platform/native_adhoc.h"
+#endif
+
 enum
 {
 	VEH_PHYS_CRASH_FAST_SQRT_ITERATIONS = 0x10,
@@ -258,7 +262,12 @@ int VehPhysCrash_Attack(struct Driver *driver1, struct Driver *driver2, b32 canP
 
 				if (boolPlayBubblePop != 0)
 				{
-					OtherFX_Play(VEH_PHYS_CRASH_BUBBLE_POP_FX, 1);
+#if defined(__vita__)
+					if (NativeAdhoc_ShouldPresentDriver(driver2->driverID))
+#endif
+					{
+						OtherFX_Play(VEH_PHYS_CRASH_BUBBLE_POP_FX, 1);
+					}
 				}
 
 				Voiceline_RequestPlay(VEH_PHYS_CRASH_VOICELINE_CRASH, data.characterIDs[driver1->driverID], VEH_PHYS_CRASH_VOICELINE_PRIORITY);

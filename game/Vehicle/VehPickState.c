@@ -181,7 +181,12 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 		if (victimState != KS_SPINNING)
 		{
 			// squish sound
-			OtherFX_Play_Echo(VEH_PICK_SOUND_SQUISH, 1, victimDriver->actionsFlagSet & ACTION_ENGINE_ECHO);
+#if defined(__vita__)
+			if (NativeAdhoc_ShouldPresentDriver(victimDriver->driverID))
+#endif
+			{
+				OtherFX_Play_Echo(VEH_PICK_SOUND_SQUISH, 1, victimDriver->actionsFlagSet & ACTION_ENGINE_ECHO);
+			}
 
 			voice = VEH_PICK_VOICELINE_SQUISH;
 		}
