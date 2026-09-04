@@ -163,7 +163,7 @@ void AH_Pause_Draw(s32 pageID, s32 posX)
 
 	// orange/red
 	s32 colorIndex = AH_PAUSE_ARROW_COLOR_PRIMARY;
-	if ((sdata->frameCounter & 4) == 0)
+	if ((FPS_HALF(sdata->frameCounter) & 4) == 0)
 	{
 		colorIndex = AH_PAUSE_ARROW_COLOR_SECONDARY;
 	}
@@ -583,7 +583,7 @@ void AH_Pause_Draw(s32 pageID, s32 posX)
 		}
 
 		rot->y = inst->matrix.t[0] * AH_PAUSE_MODEL_ROT_X_WEIGHT + inst->matrix.t[1] * AH_PAUSE_MODEL_ROT_Y_WEIGHT +
-		         sdata->frameCounter * AH_PAUSE_MODEL_ROT_FRAME_WEIGHT;
+		         sdata->frameCounter * FPS_HALF(AH_PAUSE_MODEL_ROT_FRAME_WEIGHT);
 
 		rot->y &= AH_PAUSE_MODEL_ROT_MASK;
 	}
@@ -679,7 +679,7 @@ void AH_Pause_Update(void)
 		D232.pausePagePrev = D232.pausePageCurr;
 		D232.pausePageDir_dup = D232.pausePageDir;
 
-		D232.pausePageTimer = AH_PAUSE_PAGE_FLIP_FRAMES;
+		D232.pausePageTimer = FPS_DOUBLE(AH_PAUSE_PAGE_FLIP_FRAMES);
 
 		D232.pausePageCurr = gGT->advPausePage;
 	}
@@ -688,17 +688,17 @@ void AH_Pause_Update(void)
 	s32 posX;
 
 	// second half
-	if (D232.pausePageTimer < AH_PAUSE_PAGE_FLIP_SECOND_HALF)
+	if (D232.pausePageTimer < FPS_DOUBLE(AH_PAUSE_PAGE_FLIP_SECOND_HALF))
 	{
 		pageID = D232.pausePageCurr;
-		posX = D232.pausePageTimer * D232.pausePageDir * -AH_PAUSE_PAGE_FLIP_X_STEP;
+		posX = D232.pausePageTimer * D232.pausePageDir * -FPS_HALF(AH_PAUSE_PAGE_FLIP_X_STEP);
 	}
 
 	// first half
 	else
 	{
 		pageID = D232.pausePagePrev;
-		posX = (AH_PAUSE_PAGE_FLIP_FRAMES - D232.pausePageTimer) * D232.pausePageDir * AH_PAUSE_PAGE_FLIP_X_STEP;
+		posX = (FPS_DOUBLE(AH_PAUSE_PAGE_FLIP_FRAMES) - D232.pausePageTimer) * D232.pausePageDir * FPS_HALF(AH_PAUSE_PAGE_FLIP_X_STEP);
 	}
 
 	AH_Pause_Draw(pageID, posX);
