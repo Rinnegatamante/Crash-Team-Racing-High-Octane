@@ -173,6 +173,11 @@ void CS_Podium_Stand_Init(struct CsThreadInitData *podiumData)
 	ConvertRotToMatrix(&inst->matrix, &podiumData->derivedRot.vec);
 }
 
+internal b32 CS_Podium_Prize_ShouldStep(void)
+{
+	return !CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0);
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800af7c0-0x800af994
 void CS_Podium_Prize_Spin(struct Instance *inst, struct Prize *prize)
 {
@@ -270,6 +275,11 @@ void CS_Podium_Prize_Spin(struct Instance *inst, struct Prize *prize)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800af994-0x800afbc8
 void CS_Podium_Prize_ThTick3(struct Thread *th)
 {
+	if (!CS_Podium_Prize_ShouldStep())
+	{
+		return;
+	}
+
 	struct GameTracker *gGT;
 	struct Instance *inst = th->inst;
 	struct Prize *prize = th->object;
@@ -371,6 +381,11 @@ void CS_Podium_Prize_ThTick3(struct Thread *th)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800afbc8-0x800afcc4
 void CS_Podium_Prize_ThTick2(struct Thread *th)
 {
+	if (!CS_Podium_Prize_ShouldStep())
+	{
+		return;
+	}
+
 	int currScale;
 
 	struct Prize *prize = th->object;
@@ -425,6 +440,11 @@ void CS_Podium_Prize_ThTick2(struct Thread *th)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800afcc4-0x800afe58
 void CS_Podium_Prize_ThTick1(struct Thread *th)
 {
+	if (!CS_Podium_Prize_ShouldStep())
+	{
+		return;
+	}
+
 	struct Instance *inst = th->inst;
 	struct Prize *prize = th->object;
 	int trig;
