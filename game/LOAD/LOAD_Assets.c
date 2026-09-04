@@ -264,7 +264,9 @@ void LOAD_LangFile(int bigfilePtr, int lang)
 	{
 		strArray[i] = (char *)((u32)strArray[i] + (u32)lngFile);
 	}
-#if BUILD == EurRetail
+#if defined(CTR_NATIVE)
+	NativeAudio_SetVoiceLanguage(lang);
+#elif BUILD == EurRetail
 	// set voicelines to new lang
 	CDSYS_SetXAToLang(lang);
 #endif

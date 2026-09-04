@@ -2,6 +2,7 @@
 #include <platform/native_audio.h>
 #include <platform/native_assets.h>
 #include <platform/native_disc_image.h>
+#include <platform/native_path.h>
 #include <platform/native_perf.h>
 
 #include <SDL3/SDL.h>
@@ -58,6 +59,7 @@
 #define NATIVE_AUDIO_REVERB_FIR_TAPS        39
 
 #define XA_NUM_TYPES                        3
+#define NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT 6
 #define XA_HEADER_SIZE                      0x44
 #define XA_NUM_XAS_TOTAL_OFFSET             0x0c
 #define XA_NUM_TRACKS_TOTAL_OFFSET          0x10
@@ -470,6 +472,10 @@ struct NativeAudioSnapshot
 global_variable struct NativeAudioState s_audio;
 global_variable struct NativeAudioXaLoader s_xaLoader;
 global_variable struct NativeAudioByteBuffer s_xaXnfCache;
+global_variable struct NativeAudioByteBuffer s_palVoiceXnfCache[NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT];
+global_variable int s_palVoiceLanguageFileIndex = 2;
+global_variable u8 s_palVoiceXnfCacheAttempted[NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT];
+global_variable int s_palVoiceLoggedLanguage = -1;
 global_variable SDL_AtomicInt s_xaPendingPlayback;
 global_variable s32 s_reverbOffsetSamples[NATIVE_AUDIO_REV_REG_COUNT];
 global_variable const struct NativeAudioReverbPreset *s_reverbCurrentPreset;
@@ -1784,6 +1790,64 @@ internal void NativeAudio_FreeByteBuffer(struct NativeAudioByteBuffer *bytes)
 	bytes->size = 0;
 }
 
+internal int NativeAudio_ReadDirectFileBytes(const char *path, struct NativeAudioByteBuffer *bytes)
+{
+	struct NativeAudioReadFile file;
+	s64 fileSize;
+
+	bytes->data = NULL;
+	bytes->size = 0;
+	if ((path == NULL) || !NativeAudio_ReadFileOpen(&file, path))
+	{
+		return 0;
+	}
+
+	fileSize = NativeAudio_ReadFileSize(&file);
+	if ((fileSize <= 0) || (fileSize > INT_MAX))
+	{
+		NativeAudio_ReadFileClose(&file);
+		return 0;
+	}
+
+	bytes->data = (u8 *)malloc((size_t)fileSize);
+	if ((bytes->data == NULL) || !NativeAudio_ReadFileAt(&file, bytes->data, (size_t)fileSize, 0))
+	{
+		NativeAudio_ReadFileClose(&file);
+		NativeAudio_FreeByteBuffer(bytes);
+		return 0;
+	}
+
+	NativeAudio_ReadFileClose(&file);
+	bytes->size = (int)fileSize;
+	return 1;
+}
+
+internal int NativeAudio_DirectFileExists(const char *path)
+{
+	struct NativeAudioReadFile file;
+	if ((path == NULL) || !NativeAudio_ReadFileOpen(&file, path))
+	{
+		return 0;
+	}
+	NativeAudio_ReadFileClose(&file);
+	return 1;
+}
+
+void NativeAudio_SetVoiceLanguage(int languageFileIndex)
+{
+	if ((languageFileIndex < 2) || (languageFileIndex > 7))
+	{
+		languageFileIndex = 2;
+	}
+	if (s_palVoiceLanguageFileIndex != languageFileIndex)
+	{
+		static const char *languageCodes[NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT] = {"ENG", "FRN", "GRM", "ITL", "SPN", "DCH"};
+		s_palVoiceLanguageFileIndex = languageFileIndex;
+		s_palVoiceLoggedLanguage = -1;
+		printf("[CTR Native] PAL voice language selected: %s\n", languageCodes[languageFileIndex - 2]);
+	}
+}
+
 internal int NativeAudio_PcmReserve(struct NativeAudioPcmBuffer *pcm, int extra)
 {
 	int target;
@@ -2147,9 +2211,107 @@ internal int NativeAudio_GetXnfCache(struct NativeAudioByteBuffer *xnf)
 	return loaded && (xnf->data != NULL);
 }
 
-internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct NativeAudioXaTrackInfo *info)
+internal const char *NativeAudio_GetPalVoiceLanguageCode(int languageFileIndex)
 {
-	struct NativeAudioByteBuffer xnf;
+	switch (languageFileIndex)
+	{
+	case 2:
+		return "ENG";
+	case 3:
+		return "FRN";
+	case 4:
+		return "GRM";
+	case 5:
+		return "ITL";
+	case 6:
+		return "SPN";
+	case 7:
+		return "DCH";
+	default:
+		return NULL;
+	}
+}
+
+internal int NativeAudio_BuildPalVoiceModPathWithRoot(char *path, size_t pathSize, const char *modRoot, int languageFileIndex, int categoryID, int fileNumber, int xnfPath)
+{
+	const char *code = NativeAudio_GetPalVoiceLanguageCode(languageFileIndex);
+	const char *category = NULL;
+	char relative[160];
+	int written;
+
+	if ((code == NULL) || (modRoot == NULL))
+	{
+		return 0;
+	}
+	if (xnfPath)
+	{
+		written = snprintf(relative, sizeof(relative), "mods/%s/XA/%s.XNF", modRoot, code);
+	}
+	else
+	{
+		if (categoryID == 1)
+		{
+			category = "EXTRA";
+		}
+		else if (categoryID == 2)
+		{
+			category = "GAME";
+		}
+		else
+		{
+			return 0;
+		}
+		written = snprintf(relative, sizeof(relative), "mods/%s/XA/%s/%s/S%02d.XA", modRoot, code, category, fileNumber);
+	}
+	if ((written <= 0) || ((size_t)written >= sizeof(relative)))
+	{
+		return 0;
+	}
+	return NativePath_Join(path, pathSize, NativeStr8_FromCString(NativeAssets_GetBaseDir()), NativeStr8_FromCString(relative));
+}
+
+internal int NativeAudio_BuildPalVoiceModPath(char *path, size_t pathSize, int languageFileIndex, int categoryID, int fileNumber, int xnfPath)
+{
+	return NativeAudio_BuildPalVoiceModPathWithRoot(path, pathSize, "pal-voices", languageFileIndex, categoryID, fileNumber, xnfPath);
+}
+
+internal int NativeAudio_GetPalVoiceXnfCache(int languageFileIndex, struct NativeAudioByteBuffer *xnf)
+{
+	char path[512];
+	int slot = languageFileIndex - 2;
+
+	if ((slot < 0) || (slot >= NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT))
+	{
+		return 0;
+	}
+	if (s_xaLoader.mutex != NULL)
+	{
+		SDL_LockMutex(s_xaLoader.mutex);
+	}
+	if (!s_palVoiceXnfCacheAttempted[slot])
+	{
+		const char *code = NativeAudio_GetPalVoiceLanguageCode(languageFileIndex);
+		s_palVoiceXnfCacheAttempted[slot] = 1;
+		if (NativeAudio_BuildPalVoiceModPath(path, sizeof(path), languageFileIndex, 0, 0, 1) &&
+		    NativeAudio_ReadDirectFileBytes(path, &s_palVoiceXnfCache[slot]))
+		{
+			printf("[CTR Native] PAL voice pack found: %s (%s)\n", code != NULL ? code : "???", path);
+		}
+		else
+		{
+			printf("[CTR Native] PAL voice pack missing: %s (expected %s)\n", code != NULL ? code : "???", path);
+		}
+	}
+	*xnf = s_palVoiceXnfCache[slot];
+	if (s_xaLoader.mutex != NULL)
+	{
+		SDL_UnlockMutex(s_xaLoader.mutex);
+	}
+	return xnf->data != NULL;
+}
+
+internal int NativeAudio_ParseXATrackInfo(const struct NativeAudioByteBuffer *xnf, int categoryID, int xaID, struct NativeAudioXaTrackInfo *info)
+{
 	int numXasTotal;
 	int numTracksTotal;
 	int xaSizeOffset;
@@ -2159,65 +2321,73 @@ internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct Nati
 	int entryIndex;
 	const u8 *entry;
 
-	if ((categoryID < 0) || (categoryID >= XA_NUM_TYPES) || (xaID < 0))
+	if ((xnf == NULL) || (info == NULL) || (categoryID < 0) || (categoryID >= XA_NUM_TYPES) || (xaID < 0) || (xnf->size < XA_HEADER_SIZE))
+	{
+		return 0;
+	}
+	if ((NativeAudio_ReadLE32(&xnf->data[0]) != 0x464e4958) || (NativeAudio_ReadLE32(&xnf->data[4]) != 102) ||
+	    (NativeAudio_ReadLE32(&xnf->data[8]) != XA_NUM_TYPES))
 	{
 		return 0;
 	}
 
-	if (!NativeAudio_GetXnfCache(&xnf))
-	{
-		return 0;
-	}
-
-	if (xnf.size < XA_HEADER_SIZE)
-	{
-		return 0;
-	}
-
-	if ((NativeAudio_ReadLE32(&xnf.data[0]) != 0x464e4958) || (NativeAudio_ReadLE32(&xnf.data[4]) != 102) ||
-	    (NativeAudio_ReadLE32(&xnf.data[8]) != XA_NUM_TYPES))
-	{
-		return 0;
-	}
-
-	numXasTotal = NativeAudio_ReadLE32(&xnf.data[XA_NUM_XAS_TOTAL_OFFSET]);
-	numTracksTotal = NativeAudio_ReadLE32(&xnf.data[XA_NUM_TRACKS_TOTAL_OFFSET]);
+	numXasTotal = NativeAudio_ReadLE32(&xnf->data[XA_NUM_XAS_TOTAL_OFFSET]);
+	numTracksTotal = NativeAudio_ReadLE32(&xnf->data[XA_NUM_TRACKS_TOTAL_OFFSET]);
 	if ((numXasTotal < 0) || (numTracksTotal < 0) || (numXasTotal > ((INT_MAX - XA_HEADER_SIZE) / 4)))
 	{
 		return 0;
 	}
-
 	xaSizeOffset = XA_HEADER_SIZE + numXasTotal * 4;
 	if (numTracksTotal > ((INT_MAX - xaSizeOffset) / XA_SIZE_ENTRY_BYTES))
 	{
 		return 0;
 	}
-
 	xaSizeEnd = xaSizeOffset + numTracksTotal * XA_SIZE_ENTRY_BYTES;
-	if ((xaSizeEnd < xaSizeOffset) || (xaSizeEnd > xnf.size))
+	if ((xaSizeEnd < xaSizeOffset) || (xaSizeEnd > xnf->size))
 	{
 		return 0;
 	}
 
-	numSongs = NativeAudio_ReadLE32(&xnf.data[XA_NUM_SONGS_OFFSET + categoryID * 4]);
-	firstSongIndex = NativeAudio_ReadLE32(&xnf.data[XA_FIRST_SONG_INDEX_OFFSET + categoryID * 4]);
+	numSongs = NativeAudio_ReadLE32(&xnf->data[XA_NUM_SONGS_OFFSET + categoryID * 4]);
+	firstSongIndex = NativeAudio_ReadLE32(&xnf->data[XA_FIRST_SONG_INDEX_OFFSET + categoryID * 4]);
 	if (xaID >= numSongs)
 	{
 		return 0;
 	}
-
 	entryIndex = firstSongIndex + xaID;
 	if ((entryIndex < 0) || (entryIndex >= numTracksTotal))
 	{
 		return 0;
 	}
 
-	entry = &xnf.data[xaSizeOffset + entryIndex * XA_SIZE_ENTRY_BYTES];
+	entry = &xnf->data[xaSizeOffset + entryIndex * XA_SIZE_ENTRY_BYTES];
 	info->channelFilter = entry[0];
 	info->fileNumber = entry[1];
 	info->numSectors = NativeAudio_ReadLE16Signed(entry + 2);
-
 	return info->numSectors > 0;
+}
+
+internal int NativeAudio_LookupXATrackInfo(int categoryID, int xaID, struct NativeAudioXaTrackInfo *info)
+{
+	struct NativeAudioByteBuffer xnf;
+	return NativeAudio_GetXnfCache(&xnf) && NativeAudio_ParseXATrackInfo(&xnf, categoryID, xaID, info);
+}
+
+internal int NativeAudio_LookupPalVoiceTrackInfo(int categoryID, int xaID, struct NativeAudioXaTrackInfo *info, char *path, size_t pathSize)
+{
+	int languageFileIndex = s_palVoiceLanguageFileIndex;
+	struct NativeAudioByteBuffer xnf;
+
+	if ((categoryID != 1) && (categoryID != 2))
+	{
+		return 0;
+	}
+	if (!NativeAudio_GetPalVoiceXnfCache(languageFileIndex, &xnf) || !NativeAudio_ParseXATrackInfo(&xnf, categoryID, xaID, info) ||
+	    !NativeAudio_BuildPalVoiceModPath(path, pathSize, languageFileIndex, categoryID, info->fileNumber, 0) || !NativeAudio_DirectFileExists(path))
+	{
+		return 0;
+	}
+	return 1;
 }
 
 internal int NativeAudio_GetXASectorLayout(int byteCount, int *sectorSizeOut, int *sectorBaseOut, int *totalSectorsOut)
@@ -2409,6 +2579,28 @@ internal void NativeAudio_XaSourceClose(struct NativeAudioXaSource *src)
 	NativeAudio_ReadFileInit(&src->file);
 }
 
+internal int NativeAudio_XaSourceOpenHostPath(const char *path, struct NativeAudioXaSource *src)
+{
+	s64 fileSize;
+
+	memset(src, 0, sizeof(*src));
+	NativeAudio_ReadFileInit(&src->file);
+	if (!NativeAudio_ReadFileOpen(&src->file, path))
+	{
+		return 0;
+	}
+	fileSize = NativeAudio_ReadFileSize(&src->file);
+	if ((fileSize <= 0) || (fileSize > 0x7fffffffL) ||
+	    !NativeAudio_GetXASectorLayout((int)fileSize, &src->sectorSize, &src->sectorBase, &src->totalSectors))
+	{
+		NativeAudio_XaSourceClose(src);
+		return 0;
+	}
+	src->kind = NATIVE_AUDIO_XA_SOURCE_HOST_FILE;
+	src->nextSector = -1;
+	return 1;
+}
+
 // Open the temporary preparation source: a host handle or disc-image extent.
 internal int NativeAudio_XaSourceOpen(const char *path, struct NativeAudioXaSource *src)
 {
@@ -2419,22 +2611,7 @@ internal int NativeAudio_XaSourceOpen(const char *path, struct NativeAudioXaSour
 
 	if (NativeAssets_ResolvePath(path, resolved, sizeof(resolved)))
 	{
-		s64 fileSize;
-
-		if (!NativeAudio_ReadFileOpen(&src->file, resolved))
-		{
-			return 0;
-		}
-		fileSize = NativeAudio_ReadFileSize(&src->file);
-		if ((fileSize <= 0) || (fileSize > 0x7fffffffL) ||
-		    !NativeAudio_GetXASectorLayout((int)fileSize, &src->sectorSize, &src->sectorBase, &src->totalSectors))
-		{
-			NativeAudio_XaSourceClose(src);
-			return 0;
-		}
-		src->kind = NATIVE_AUDIO_XA_SOURCE_HOST_FILE;
-		src->nextSector = -1;
-		return 1;
+		return NativeAudio_XaSourceOpenHostPath(resolved, src);
 	}
 
 	if (NativeDiscImage_FindFile(path, &src->discFile))
@@ -2618,9 +2795,26 @@ internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeA
 {
 	struct NativeAudioXaTrackInfo info;
 	struct NativeAudioXaSource source;
-	char path[128];
+	char path[512];
 
 	memset(prepared, 0, sizeof(*prepared));
+	if (NativeAudio_LookupPalVoiceTrackInfo(categoryID, xaID, &info, path, sizeof(path)) && NativeAudio_XaSourceOpenHostPath(path, &source))
+	{
+		if (NativeAudio_PrepareXAStream(&source, info.channelFilter, info.numSectors, prepared))
+		{
+			NativeAudio_XaSourceClose(&source);
+			if (s_palVoiceLoggedLanguage != s_palVoiceLanguageFileIndex)
+			{
+				const char *code = NativeAudio_GetPalVoiceLanguageCode(s_palVoiceLanguageFileIndex);
+				printf("[CTR Native] PAL voice mod active: %s\n", code != NULL ? code : "???");
+				s_palVoiceLoggedLanguage = s_palVoiceLanguageFileIndex;
+			}
+			return 1;
+		}
+		NativeAudio_XaSourceClose(&source);
+		NativeAudio_XaPreparedStreamClose(prepared);
+	}
+
 	if (!NativeAudio_LookupXATrackInfo(categoryID, xaID, &info) ||
 	    !NativeAudio_BuildXAPath(path, sizeof(path), categoryID, info.fileNumber) || !NativeAudio_XaSourceOpen(path, &source))
 	{
@@ -3771,6 +3965,11 @@ void NativeAudio_Shutdown(void)
 {
 	NativeAudio_XaLoaderShutdown();
 	NativeAudio_FreeByteBuffer(&s_xaXnfCache);
+	for (int i = 0; i < NATIVE_AUDIO_PAL_VOICE_LANGUAGE_COUNT; i++)
+	{
+		NativeAudio_FreeByteBuffer(&s_palVoiceXnfCache[i]);
+		s_palVoiceXnfCacheAttempted[i] = 0;
+	}
 
 	if (s_audio.output.stream != NULL)
 	{
@@ -4440,7 +4639,12 @@ internal void NativeAudio_UpdateXAReadbackNoLock(void)
 int NativeAudio_GetXATrackLength(int categoryID, int xaID)
 {
 	struct NativeAudioXaTrackInfo info;
+	char path[512];
 
+	if (NativeAudio_LookupPalVoiceTrackInfo(categoryID, xaID, &info, path, sizeof(path)))
+	{
+		return info.numSectors;
+	}
 	if (!NativeAudio_LookupXATrackInfo(categoryID, xaID, &info))
 	{
 		return 0;
