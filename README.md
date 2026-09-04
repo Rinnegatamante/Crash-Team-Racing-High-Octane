@@ -26,6 +26,10 @@ It focuses on new features, enhancements and optimization.
 - Online leaderboard for Time Trials results.
 - Splitscreen support for up to 4 players local multiplayer for PSTV users or PSVita users with MiniVitaTV.
 
+## Online leaderboard
+
+The full online leaderboard for Time Trails is available at this link: <a href="https://www.rinnegatamante.eu/ctr/leaderboard/">Online Leaderboard</a>.
+
 ## Known Issues
 
 - The demo cutscene gets slightly de-synced during Oxide speech.
