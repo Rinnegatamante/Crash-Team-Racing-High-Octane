@@ -158,6 +158,7 @@ struct NativeP4CacheEntry
 	TextureID texture[2];
 	s16 page;
 	u16 clut;
+	u8 superTurboTint;
 	u32 lastUse;
 	u32 lastUseFrame;
 	u32 pageVersion;
@@ -193,6 +194,11 @@ internal u32 NativeRenderer_P4HashSlot(u32 key)
 	return (key * 2654435761u) & (NATIVE_P4_HASH_CAPACITY - 1);
 }
 
+internal u32 NativeRenderer_P4Key(int page, int clut, int superTurboTint)
+{
+	return ((u32)(page & 0x1f) << 17) | ((u32)(superTurboTint != 0) << 16) | (u16)clut;
+}
+
 internal void NativeRenderer_InsertP4Hash(u32 key, int cacheIndex)
 {
 	u32 slot = NativeRenderer_P4HashSlot(key);
@@ -217,7 +223,7 @@ internal void NativeRenderer_RebuildP4Hash(void)
 		const struct NativeP4CacheEntry *entry = &s_p4Cache[cacheIndex];
 		if (entry->occupied)
 		{
-			const u32 key = ((u32)(u16)entry->page << 16) | entry->clut;
+			const u32 key = NativeRenderer_P4Key(entry->page, entry->clut, entry->superTurboTint);
 			NativeRenderer_InsertP4Hash(key, cacheIndex);
 		}
 	}
@@ -239,7 +245,7 @@ internal int NativeRenderer_FindP4Hash(u32 key)
 			if (cacheIndex >= 0 && cacheIndex < NATIVE_P4_CACHE_CAPACITY)
 			{
 				const struct NativeP4CacheEntry *entry = &s_p4Cache[cacheIndex];
-				if (entry->occupied && entry->page == (s16)(key >> 16) && entry->clut == (u16)key)
+				if (entry->occupied && NativeRenderer_P4Key(entry->page, entry->clut, entry->superTurboTint) == key)
 				{
 					return cacheIndex;
 				}
@@ -2419,9 +2425,20 @@ internal void NativeRenderer_UpdateP4Buffer(struct NativeP4CacheEntry *entry, in
 	for (int colorIndex = 0; colorIndex < 16; colorIndex++)
 	{
 		const u16 color = palette[colorIndex];
-		paletteOut[colorIndex * 4 + 0] = (u8)((color & 31) << 3);
-		paletteOut[colorIndex * 4 + 1] = (u8)(((color >> 5) & 31) << 3);
-		paletteOut[colorIndex * 4 + 2] = (u8)(((color >> 10) & 31) << 3);
+		u8 r = (u8)(color & 31);
+		u8 g = (u8)((color >> 5) & 31);
+		u8 b = (u8)((color >> 10) & 31);
+		if (entry->superTurboTint && color != 0)
+		{
+			const u8 luminance = r > g ? (r > b ? r : b) : (g > b ? g : b);
+			const int boosted = (luminance * 5 + 3) / 4;
+			r = (u8)((luminance * 3) / 10);
+			g = (u8)(boosted > 31 ? 31 : boosted);
+			b = (u8)(boosted + 2 > 31 ? 31 : boosted + 2);
+		}
+		paletteOut[colorIndex * 4 + 0] = (u8)(r << 3);
+		paletteOut[colorIndex * 4 + 1] = (u8)(g << 3);
+		paletteOut[colorIndex * 4 + 2] = (u8)(b << 3);
 		paletteOut[colorIndex * 4 + 3] = color == 0 ? 0 : (color & 0x8000) != 0 ? 255 : 128;
 	}
 
@@ -2446,7 +2463,7 @@ internal void NativeRenderer_UpdateP4Buffer(struct NativeP4CacheEntry *entry, in
 	entry->bufferPaletteVersion[bufferIndex] = entry->paletteVersion;
 }
 
-TextureID NativeRenderer_GetCachedP4Texture(int page, int clut)
+TextureID NativeRenderer_GetCachedP4Texture(int page, int clut, int superTurboTint)
 {
 
 	if (page < 0 || page >= 32 || clut < 0)
@@ -2462,14 +2479,15 @@ TextureID NativeRenderer_GetCachedP4Texture(int page, int clut)
 		return (0);
 	}
 
-	const u32 key = ((u32)page << 16) | (u16)clut;
+	const u8 tint = (u8)(superTurboTint != 0);
+	const u32 key = NativeRenderer_P4Key(page, clut, tint);
 	struct NativeP4CacheEntry *entry = NULL;
 	struct NativeP4CacheEntry *replacement = NULL;
 
 	if (s_p4LastLookupIndex >= 0 && s_p4LastLookupIndex < NATIVE_P4_CACHE_CAPACITY && s_p4LastLookupKey == key)
 	{
 		struct NativeP4CacheEntry *candidate = &s_p4Cache[s_p4LastLookupIndex];
-		if (candidate->occupied && candidate->page == page && candidate->clut == (u16)clut)
+		if (candidate->occupied && candidate->page == page && candidate->clut == (u16)clut && candidate->superTurboTint == tint)
 		{
 			entry = candidate;
 		}
@@ -2532,6 +2550,7 @@ TextureID NativeRenderer_GetCachedP4Texture(int page, int clut)
 		const int entryIndex = (int)(entry - s_p4Cache);
 		entry->page = (s16)page;
 		entry->clut = (u16)clut;
+		entry->superTurboTint = tint;
 		entry->occupied = true;
 		if (++entry->pageVersion == 0)
 			entry->pageVersion = 1;

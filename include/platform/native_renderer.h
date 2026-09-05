@@ -36,7 +36,7 @@ TextureID NativeRenderer_GetWhiteTexture(void);
 #define NATIVE_PALETTE_HAS_OPAQUE      0x2
 #define NATIVE_PALETTE_HAS_STP         0x4
 int NativeRenderer_GetPaletteProperties(TexFormat format, int clut);
-TextureID NativeRenderer_GetCachedP4Texture(int page, int clut);
+TextureID NativeRenderer_GetCachedP4Texture(int page, int clut, int superTurboTint);
 #endif
 TextureID NativeRenderer_CreateStreamingTexture(int width, int height);
 void NativeRenderer_UpdateStreamingTexture(TextureID texture, int width, int height, const u8 *rgbaPixels);

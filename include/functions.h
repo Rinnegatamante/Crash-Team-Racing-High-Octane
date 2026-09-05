@@ -332,6 +332,9 @@ void JitPool_Remove(struct JitPool *AP, struct Item *item);
 // LevInstDef
 void LevInstDef_UnPack(struct mesh_info *ptr_mesh_info);
 void LevInstDef_RePack(struct mesh_info *ptr_mesh_info, b32 boolAdvHub);
+#if defined(CTR_NATIVE)
+b32 LevInstDef_IsSuperTurboVisualQuad(const struct QuadBlock *quad);
+#endif
 
 struct Instance *LinkedCollide_Hitbox_Desc(struct HitboxDesc *objBoxDesc);
 struct Instance *LinkedCollide_Hitbox(struct Instance *objInst, struct Thread *_objTh, struct Thread *thBucket, struct BoundingBox bbox);

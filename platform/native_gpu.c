@@ -45,6 +45,7 @@ extern int g_dbg_polygonSelected;
 
 #define GET_CLUT_X(clut)           ((clut & 0x3F) << 4)
 #define GET_CLUT_Y(clut)           (clut >> 6)
+#define NATIVE_GPU_TPAGE_SUPER_TURBO_TINT 0x8000u
 
 internal TexFormat GetTPageFormat(int tpage)
 {
@@ -98,6 +99,7 @@ typedef struct
 #ifdef __vita__
 	bool psxTextureFullyOpaque;
 	bool p4CacheEligible;
+	bool p4SuperTurboTint;
 	s16 p4Page;
 	u16 p4Clut;
 #endif
@@ -723,6 +725,7 @@ void ClearSplits(void)
 #ifdef __vita__
 	s_gpu.splits[0].psxTextureFullyOpaque = false;
 	s_gpu.splits[0].p4CacheEligible = false;
+	s_gpu.splits[0].p4SuperTurboTint = false;
 	s_gpu.splits[0].p4Page = -1;
 	s_gpu.splits[0].p4Clut = 0;
 #endif
@@ -1230,6 +1233,19 @@ void MakeColourNoShade(GrVertex *vertex, int n)
 	}
 }
 
+void MakeColourSuperTurboTint(GrVertex *vertex, int n)
+{
+	--n;
+	while (n >= 0)
+	{
+		vertex[n].r = 96;
+		vertex[n].g = 144;
+		vertex[n].b = 160;
+		vertex[n].a = 255;
+		--n;
+	}
+}
+
 void MakeColourLine(GrVertex *vertex, bool shadeTexOn, u8 *col0, u8 *col1)
 {
 	if (!shadeTexOn)
@@ -1509,6 +1525,8 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 
 #ifdef __vita__
 	const bool p4CacheEligible = textured && s_gpu.overrideTexture == 0 && texFormat == TF_4_BIT && !framebufferFeedback;
+	const bool superTurboTintRequested = (((u32)tpage & NATIVE_GPU_TPAGE_SUPER_TURBO_TINT) != 0);
+	const bool p4SuperTurboTint = p4CacheEligible && superTurboTintRequested;
 	const s16 p4Page = p4CacheEligible ? GetTPageBase(tpage) : -1;
 	const u16 p4Clut = p4CacheEligible ? (u16)clut : 0;
 #endif
@@ -1519,7 +1537,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 	    curSplit->psxTextureOutputSTP == psxTextureOutputSTP && curSplit->psxDrawMaskSet == s_gpu.psxDrawMaskSet &&
 #ifdef __vita__
 	    curSplit->p4CacheEligible == p4CacheEligible &&
-	    (!p4CacheEligible || (curSplit->p4Page == p4Page && curSplit->p4Clut == p4Clut)) &&
+	    (!p4CacheEligible || (curSplit->p4Page == p4Page && curSplit->p4Clut == p4Clut && curSplit->p4SuperTurboTint == p4SuperTurboTint)) &&
 #endif
 	    curSplit->drawenv.clip.x == activeDrawEnv.clip.x && curSplit->drawenv.clip.y == activeDrawEnv.clip.y &&
 	    curSplit->drawenv.clip.w == activeDrawEnv.clip.w && curSplit->drawenv.clip.h == activeDrawEnv.clip.h && curSplit->drawenv.dfe == activeDrawEnv.dfe &&
@@ -1547,6 +1565,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 #ifdef __vita__
 	split->psxTextureFullyOpaque = false;
 	split->p4CacheEligible = p4CacheEligible;
+	split->p4SuperTurboTint = p4SuperTurboTint;
 	split->p4Page = p4Page;
 	split->p4Clut = p4Clut;
 #endif
@@ -1569,7 +1588,7 @@ internal void NativeGpu_SetSplitShaderState(const GPUDrawSplit *split, int semiT
 #ifdef __vita__
 	if (split->p4CacheEligible)
 	{
-		const TextureID cachedTexture = NativeRenderer_GetCachedP4Texture(split->p4Page, split->p4Clut);
+		const TextureID cachedTexture = NativeRenderer_GetCachedP4Texture(split->p4Page, split->p4Clut, split->p4SuperTurboTint);
 		if (cachedTexture != 0)
 		{
 			texture = cachedTexture;
@@ -1728,7 +1747,8 @@ internal bool NativeGpu_DepthPassStateCompatible(const GPUDrawSplit *first, int 
 	    first->drawPrimMode != second->drawPrimMode || first->psxTextureOutputSTP != second->psxTextureOutputSTP ||
 	    first->psxDrawMaskSet != second->psxDrawMaskSet || first->psxTextureFullyOpaque != second->psxTextureFullyOpaque ||
 	    first->p4CacheEligible != second->p4CacheEligible ||
-	    (first->p4CacheEligible && (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut)) ||
+	    (first->p4CacheEligible &&
+	     (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut || first->p4SuperTurboTint != second->p4SuperTurboTint)) ||
 	    first->debugText != second->debugText || first->drawenv.dfe != second->drawenv.dfe)
 	{
 		return false;
@@ -1878,6 +1898,7 @@ internal u32 NativeGpu_GetDepthStateHash(const GPUDrawSplit *split, int semiTran
 	{
 		hash = NativeGpu_DepthHashMix(hash, (u32)split->p4Page);
 		hash = NativeGpu_DepthHashMix(hash, (u32)split->p4Clut);
+		hash = NativeGpu_DepthHashMix(hash, (u32)split->p4SuperTurboTint);
 	}
 	hash = NativeGpu_DepthHashMix(hash, (u32)(uintptr_t)split->debugText);
 	hash = NativeGpu_DepthHashMix(hash, (u32)split->drawenv.dfe);
@@ -2098,7 +2119,8 @@ internal bool NativeGpu_BlendPassStateCompatible(const GPUDrawSplit *first, int 
 	    first->texFormat != second->texFormat || first->psxTextureOutputSTP != second->psxTextureOutputSTP ||
 	    first->psxDrawMaskSet != second->psxDrawMaskSet || first->psxTextureFullyOpaque != second->psxTextureFullyOpaque ||
 	    first->p4CacheEligible != second->p4CacheEligible ||
-	    (first->p4CacheEligible && (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut)) ||
+	    (first->p4CacheEligible &&
+	     (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut || first->p4SuperTurboTint != second->p4SuperTurboTint)) ||
 	    first->debugText != second->debugText || first->drawenv.dfe != second->drawenv.dfe)
 	{
 		return false;
@@ -2173,7 +2195,7 @@ internal int NativeGpu_BlendCandidateScore(const NativeGpuBlendNode *candidate, 
 		score += 1 << 20;
 	}
 	if (candidateSplit->p4CacheEligible && previousSplit->p4CacheEligible && candidateSplit->p4Page == previousSplit->p4Page &&
-	    candidateSplit->p4Clut == previousSplit->p4Clut)
+	    candidateSplit->p4Clut == previousSplit->p4Clut && candidateSplit->p4SuperTurboTint == previousSplit->p4SuperTurboTint)
 	{
 		score += 1 << 18;
 	}
@@ -2404,7 +2426,9 @@ internal bool NativeGpu_SemiTransSplitsCanMerge(const GPUDrawSplit *first, const
 	if (first->blendMode != second->blendMode || first->texFormat != second->texFormat || first->textureId != second->textureId ||
 	    first->drawPrimMode != second->drawPrimMode || first->psxTextureOutputSTP != second->psxTextureOutputSTP ||
 	    first->psxDrawMaskSet != second->psxDrawMaskSet || first->p4CacheEligible != second->p4CacheEligible ||
-	    (first->p4CacheEligible && (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut)) || first->debugText != second->debugText ||
+	    (first->p4CacheEligible &&
+	     (first->p4Page != second->p4Page || first->p4Clut != second->p4Clut || first->p4SuperTurboTint != second->p4SuperTurboTint)) ||
+	    first->debugText != second->debugText ||
 	    memcmp(&first->drawenv, &second->drawenv, sizeof(first->drawenv)) != 0 || memcmp(&first->dispenv, &second->dispenv, sizeof(first->dispenv)) != 0)
 	{
 		return false;
@@ -3093,10 +3117,14 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage), poly->clut);
 
-		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
-		MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2);
-		MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut, GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
-		MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r2);
+			GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
+			MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2);
+			MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut, GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
+			MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r2);
+			if (((u32)poly->tpage & NATIVE_GPU_TPAGE_SUPER_TURBO_TINT) != 0)
+			{
+					MakeColourSuperTurboTint(firstVertex, 3);
+			}
 
 		s_gpu.vertexIndex += 3;
 
@@ -3126,11 +3154,15 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage), poly->clut);
 
-		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
-		MakeVertexQuad(firstVertex, &poly->x0, &poly->x1, &poly->x3, &poly->x2);
-		MakeTexcoordQuad(firstVertex, &poly->u0, &poly->u1, &poly->u3, &poly->u2, poly->tpage, poly->clut,
-		                 GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
-		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r3, &poly->r2);
+			GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
+			MakeVertexQuad(firstVertex, &poly->x0, &poly->x1, &poly->x3, &poly->x2);
+			MakeTexcoordQuad(firstVertex, &poly->u0, &poly->u1, &poly->u3, &poly->u2, poly->tpage, poly->clut,
+			                 GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
+			MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r3, &poly->r2);
+			if (((u32)poly->tpage & NATIVE_GPU_TPAGE_SUPER_TURBO_TINT) != 0)
+			{
+					MakeColourSuperTurboTint(firstVertex, 4);
+			}
 
 		TriangulateQuad();
 
