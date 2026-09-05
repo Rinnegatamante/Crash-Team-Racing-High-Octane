@@ -870,7 +870,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 					u32 ghostTextFlags;
 
 					// Flash Colors
-					if ((sdata->frameCounter & MM_TRACK_SELECT_GHOST_FLASH_FRAME_BIT) == 0)
+					if ((FPS_HALF(sdata->frameCounter) & MM_TRACK_SELECT_GHOST_FLASH_FRAME_BIT) == 0)
 					{
 						ghostTextFlags = (JUSTIFY_CENTER | WHITE);
 					}
