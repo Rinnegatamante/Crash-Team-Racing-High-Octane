@@ -3,6 +3,34 @@
 #define RENDER_WEATHER_XY_MASK   0xfffeffffu
 #define RENDER_WEATHER_WRAP_MASK 0x07fe07ffu
 
+static s32 RenderWeather_GetFrameVelocityStep(s32 velocity, int framePhase)
+{
+	if (!CTR_NATIVE_60FPS_ACTIVE)
+	{
+		return velocity;
+	}
+
+	const s32 firstHalf = velocity / 2;
+	return framePhase ? velocity - firstHalf : firstHalf;
+}
+
+static u32 RenderWeather_GetFrameVelocityXY(u32 packedVelocity, int framePhase)
+{
+	packedVelocity &= RENDER_WEATHER_XY_MASK;
+
+	if (!CTR_NATIVE_60FPS_ACTIVE)
+	{
+		return packedVelocity;
+	}
+
+	const s32 velocityX = (s16)(packedVelocity & 0xffffu);
+	const s32 velocityY = (s16)(packedVelocity >> 16);
+	const s32 stepX = RenderWeather_GetFrameVelocityStep(velocityX, framePhase);
+	const s32 stepY = RenderWeather_GetFrameVelocityStep(velocityY, framePhase);
+
+	return CTR_PackS16Pair(stepX, stepY) & RENDER_WEATHER_XY_MASK;
+}
+
 struct RenderWeatherScratch
 {
 	u32 colorTop;
@@ -152,6 +180,8 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	u32 state1;
 	u32 rngXY;
 	u32 rngZ;
+	const int framePhase = CTR_NATIVE_60FPS_ACTIVE ? (sdata->gGT->timer & 1) : 0;
+	const b32 updateParticleCount = !CTR_NATIVE_60FPS_ACTIVE || (framePhase != 0);
 
 	(void)numPlyr;
 
@@ -178,7 +208,7 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	CTC2((u32)pb->distanceToScreen_PREV, 26);
 
 	currentParticles = rainBuffer->numParticles_curr;
-	if (gameMode1 == 0)
+	if ((gameMode1 == 0) && updateParticleCount)
 	{
 		s32 maxParticles = (u16)rainBuffer->numParticles_max;
 		s32 vanishRate = (u16)rainBuffer->vanishRate;
@@ -211,8 +241,8 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 
 	scrollXY = rainWords[2];
 	scrollZ = (s32)rainWords[3];
-	velocityXY = rainWords[4] & RENDER_WEATHER_XY_MASK;
-	velocityZ = (s32)rainWords[5];
+	velocityXY = RenderWeather_GetFrameVelocityXY(rainWords[4], framePhase);
+	velocityZ = RenderWeather_GetFrameVelocityStep((s32)rainWords[5], framePhase);
 
 	scrollXYEnd = (scrollXY + velocityXY) & RENDER_WEATHER_XY_MASK;
 	scrollZEnd = scrollZ + velocityZ;
@@ -222,8 +252,16 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 		rainWords[3] = (u32)scrollZEnd;
 	}
 
-	scrollXYStart = (scrollXY + ((u32)((s32)velocityXY >> 1) & RENDER_WEATHER_XY_MASK)) & RENDER_WEATHER_XY_MASK;
-	scrollZStart = scrollZ + (velocityZ >> 1);
+	if (CTR_NATIVE_60FPS_ACTIVE)
+	{
+		scrollXYStart = scrollXY;
+		scrollZStart = scrollZ;
+	}
+	else
+	{
+		scrollXYStart = (scrollXY + ((u32)((s32)velocityXY >> 1) & RENDER_WEATHER_XY_MASK)) & RENDER_WEATHER_XY_MASK;
+		scrollZStart = scrollZ + (velocityZ >> 1);
+	}
 
 	cameraXY = RenderWeather_ReadWord(pb, 0x00) & RENDER_WEATHER_XY_MASK;
 	cameraZ = pb->pos.z;
