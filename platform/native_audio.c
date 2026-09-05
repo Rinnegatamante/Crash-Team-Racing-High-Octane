@@ -2310,6 +2310,12 @@ internal int NativeAudio_GetPalVoiceXnfCache(int languageFileIndex, struct Nativ
 	return xnf->data != NULL;
 }
 
+int NativeAudio_HasPalVoicePack(void)
+{
+	struct NativeAudioByteBuffer xnf;
+	return NativeAudio_GetPalVoiceXnfCache(s_palVoiceLanguageFileIndex, &xnf);
+}
+
 internal int NativeAudio_ParseXATrackInfo(const struct NativeAudioByteBuffer *xnf, int categoryID, int xaID, struct NativeAudioXaTrackInfo *info)
 {
 	int numXasTotal;
@@ -2777,6 +2783,65 @@ internal int NativeAudio_PrepareXAStream(struct NativeAudioXaSource *src, int ch
 	return 1;
 }
 
+internal int NativeAudio_ResolvePalVoiceXaID(int categoryID, int xaID)
+{
+	if (xaID < 0)
+	{
+		return -1;
+	}
+
+	if (categoryID == 1)
+	{
+		// PAL EXTRA removes NTSC-U 0x3e/0x3f and 0x53..0x56. Everything
+		// after the first removed pair therefore moves down by two slots.
+		if (xaID <= 0x3d)
+		{
+			return xaID;
+		}
+		if ((xaID >= 0x40) && (xaID <= 0x52))
+		{
+			return xaID - 2;
+		}
+		return -1;
+	}
+
+	if (categoryID == 2)
+	{
+		if (xaID <= 0x12f)
+		{
+			int characterID = xaID / 19;
+			int characterVoiceIndex = xaID % 19;
+
+			if ((characterID >= 0) && (characterID <= 15) && (characterID != 10) && (characterVoiceIndex < 16))
+			{
+				return characterID * 16 + characterVoiceIndex;
+			}
+
+			if ((xaID >= 0xc0) && (xaID <= 0xcd))
+			{
+				return xaID - 0x1e;
+			}
+			return -1;
+		}
+
+		if (xaID == 0x130)
+		{
+			return 0x100;
+		}
+		if (xaID == 0x131)
+		{
+			return 0x101;
+		}
+		if ((xaID >= 0x134) && (xaID <= 0x139))
+		{
+			return xaID - 0x32;
+		}
+		return -1;
+	}
+
+	return xaID;
+}
+
 internal void NativeAudio_XaStreamStartNoLock(struct NativeAudioXaPreparedStream *prepared)
 {
 	struct NativeAudioXaStream *xs = &s_audio.xaStream;
@@ -2796,9 +2861,11 @@ internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeA
 	struct NativeAudioXaTrackInfo info;
 	struct NativeAudioXaSource source;
 	char path[512];
+	int palXaID = NativeAudio_ResolvePalVoiceXaID(categoryID, xaID);
 
 	memset(prepared, 0, sizeof(*prepared));
-	if (NativeAudio_LookupPalVoiceTrackInfo(categoryID, xaID, &info, path, sizeof(path)) && NativeAudio_XaSourceOpenHostPath(path, &source))
+	if ((palXaID >= 0) && NativeAudio_LookupPalVoiceTrackInfo(categoryID, palXaID, &info, path, sizeof(path)) &&
+	    NativeAudio_XaSourceOpenHostPath(path, &source))
 	{
 		if (NativeAudio_PrepareXAStream(&source, info.channelFilter, info.numSectors, prepared))
 		{
@@ -4640,8 +4707,9 @@ int NativeAudio_GetXATrackLength(int categoryID, int xaID)
 {
 	struct NativeAudioXaTrackInfo info;
 	char path[512];
+	int palXaID = NativeAudio_ResolvePalVoiceXaID(categoryID, xaID);
 
-	if (NativeAudio_LookupPalVoiceTrackInfo(categoryID, xaID, &info, path, sizeof(path)))
+	if ((palXaID >= 0) && NativeAudio_LookupPalVoiceTrackInfo(categoryID, palXaID, &info, path, sizeof(path)))
 	{
 		return info.numSectors;
 	}
