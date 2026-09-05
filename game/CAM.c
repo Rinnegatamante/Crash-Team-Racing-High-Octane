@@ -550,8 +550,8 @@ void CAM_EndOfRace_Battle(struct CameraDC *cDC, struct Driver *d)
 	cDC->flags |= CAMERA_FLAG_BATTLE_END_OF_RACE;
 
 	cDC->transitionBlend = 0;
-	cDC->transitionFrame = 60;
-	cDC->transitionFrameCount = 60;
+	cDC->transitionFrame = FPS_DOUBLE(60);
+	cDC->transitionFrameCount = FPS_DOUBLE(60);
 
 	struct PushBuffer *pb = cDC->pushBuffer;
 	s32 dx = CTR_MipsSubLo(pb->pos.x, CTR_MipsSra(d->posCurr.x, 8));
@@ -922,6 +922,22 @@ static s32 CAM_FollowDriver_TrackPath_MulLo(s32 a, s32 b)
 	return (s32)(u32)((s64)a * (s64)b);
 }
 
+static s32 CAM_RetailFrameStep(s32 step)
+{
+	if (!CTR_NATIVE_60FPS_ACTIVE)
+	{
+		return step;
+	}
+
+	const s32 firstHalf = step / 2;
+	return (sdata->gGT->timer & 1) ? step - firstHalf : firstHalf;
+}
+
+static b32 CAM_RetailFrameTick(void)
+{
+	return !CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0);
+}
+
 static struct CheckpointNode *CAM_FollowDriver_TrackPath_GetNode(struct CameraDC *cDC, struct CheckpointNode *node, s32 speed)
 {
 	struct CheckpointNode *nodes = sdata->gGT->level1->ptr_restart_points;
@@ -972,6 +988,7 @@ u32 CAM_FollowDriver_TrackPath(struct CameraDC *cDC, SVec3 *pos, s32 speed, s32 
 	s32 yaw;
 	s32 nextYaw;
 	s32 yawDelta;
+	s32 pathStep = update ? CAM_RetailFrameStep(speed) : speed;
 
 	segmentLength = CAM_FollowDriver_TrackPath_Length(curr, next, &dx, &dy, &dz);
 
@@ -981,11 +998,11 @@ u32 CAM_FollowDriver_TrackPath(struct CameraDC *cDC, SVec3 *pos, s32 speed, s32 
 	}
 	else if (speed > 0)
 	{
-		pathProgress = cDC->trackPathProgress + speed;
+		pathProgress = cDC->trackPathProgress + pathStep;
 	}
 	else
 	{
-		pathProgress = cDC->trackPathProgress - speed;
+		pathProgress = cDC->trackPathProgress - pathStep;
 	}
 
 	while (pathProgress >= segmentLength)
@@ -1053,6 +1070,7 @@ void CAM_LookAtPosition(struct CameraScratchWork *scratchWork, Vec3 *positions, 
 void CAM_FollowDriver_Spin360(struct CameraDC *cDC, struct CameraScratchWork *scratchWork, struct Driver *d, SVec3 *desiredPos, SVec3 *desiredRot)
 {
 	s32 ratio;
+	s32 spinStep = CAM_RetailFrameStep(cDC->transitionTo.pos.x);
 
 	// Not really "transitionTo" but the variables
 	// are shared with other camera modes, therefore
@@ -1061,12 +1079,12 @@ void CAM_FollowDriver_Spin360(struct CameraDC *cDC, struct CameraScratchWork *sc
 	// rotate other way for odd number
 	if ((d->driverID & 1) != 0)
 	{
-		cDC->spin360Angle -= cDC->transitionTo.pos.x;
+		cDC->spin360Angle -= spinStep;
 	}
 	else
 	{
 		// rotate one way
-		cDC->spin360Angle += cDC->transitionTo.pos.x;
+		cDC->spin360Angle += spinStep;
 	}
 
 	s32 angle = cDC->spin360Angle;
@@ -2170,17 +2188,18 @@ SkipNewCameraEOR:
 						    trap(0x1800);
 						}
 						*/
-						cDC->trackPathProgress = cDC->trackPathProgress + (((cDC->transitionFrame * 0x1000) / 0x1e) * iVar7 >> 0xc);
+						s32 pointPathStep = (((cDC->transitionFrame * 0x1000) / 0x1e) * iVar7 >> 0xc);
+						cDC->trackPathProgress = cDC->trackPathProgress + CAM_RetailFrameStep(pointPathStep);
 						if (iVar8 < 1)
 						{
 							if (iVar25 < 0x1001)
 							{
-								if (cDC->transitionFrame < 0x1e)
+								if ((cDC->transitionFrame < 0x1e) && CAM_RetailFrameTick())
 								{
 									cDC->transitionFrame = cDC->transitionFrame + 1;
 								}
 							}
-							else if (cDC->transitionFrame != 0)
+							else if ((cDC->transitionFrame != 0) && CAM_RetailFrameTick())
 							{
 								cDC->transitionFrame = cDC->transitionFrame + -1;
 							}
