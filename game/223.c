@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern struct RectMenu menu224NoSave;
+#endif
+
 enum RelicRaceEndMenuConstants
 {
 	RR_RELIC_TIERS = 3,
@@ -31,6 +35,7 @@ enum RelicRaceEndMenuConstants
 	RR_RELIC_FULL_SCALE = 0xc00,
 	RR_RELIC_GROW_STEP = 0x80,
 	RR_SCREEN_DEPTH = 0x100,
+	RR_SAPPHIRE_RELIC_COLOR = INST_COLOR_SAPPHIRE_RELIC,
 	RR_PLATINUM_RELIC_COLOR = INST_COLOR_PLATINUM_RELIC,
 	RR_GOLD_RELIC_COLOR = INST_COLOR_GOLD_RELIC,
 	RR_RELIC_AWARD_SFX = 0x67,
@@ -153,6 +158,24 @@ void RR_EndEvent_DrawMenu(void)
 
 	rewardBit = gGT->levelID + ADV_REWARD_FIRST_PLATINUM_RELIC;
 
+#if defined(CTR_NATIVE)
+	if (gNativeRelicRaceMode != 0)
+	{
+		if (gNativeRelicRaceResultTier == 2)
+		{
+			relic->colorRGBA = RR_PLATINUM_RELIC_COLOR;
+		}
+		else if (gNativeRelicRaceResultTier == 1)
+		{
+			relic->colorRGBA = RR_GOLD_RELIC_COLOR;
+		}
+		else
+		{
+			relic->colorRGBA = RR_SAPPHIRE_RELIC_COLOR;
+		}
+	}
+	else
+#endif
 	// check if platinum is unlocked, set platinum color
 	if (CHECK_ADV_BIT(adv->rewards, rewardBit))
 	{
@@ -495,7 +518,11 @@ skipRelicAwarded:
 		if ((sdata->AnyPlayerTap & RR_CONFIRM_BUTTON_MASK) != 0)
 		{
 			RECTMENU_ClearInput();
+#if defined(CTR_NATIVE)
+			RECTMENU_Show((gNativeRelicRaceMode != 0) ? &menu224NoSave : &data.menuRetryExit);
+#else
 			RECTMENU_Show(&data.menuRetryExit);
+#endif
 
 			// record that you have pressed X to continue
 			sdata->menuReadyToPass |= RR_MENU_READY_FLAG;

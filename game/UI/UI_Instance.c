@@ -351,6 +351,13 @@ void UI_INSTANCE_InitAll(void)
 		}
 
 		// Get Relic Time to put in HUD
+#if defined(CTR_NATIVE)
+		if (gNativeRelicRaceMode != 0)
+		{
+			relicType = 0;
+		}
+		else
+#endif
 		if (
 		    // no platinum and no gold
 		    !CHECK_ADV_BIT(sdata->advProgress.rewards, gGT->levelID + ADV_REWARD_FIRST_PLATINUM_RELIC) &&

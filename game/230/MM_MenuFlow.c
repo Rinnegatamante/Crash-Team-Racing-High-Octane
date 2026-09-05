@@ -193,10 +193,11 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 
 static struct MenuRow s_nativeTimeTrialRows[] =
 {
-	{LNG_TIME_TRIAL, 3, 1, 0, 0},
-	{NATIVE_MENU_STRING_GHOST_REPLAY, 0, 2, 1, 1},
-	{LNG_HIGH_SCORE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_ONLINE_LEADERBOARD, 2, 0, 3, 3},
+	{LNG_TIME_TRIAL, 4, 1, 0, 0},
+	{LNG_RELIC_RACE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_GHOST_REPLAY, 1, 3, 2, 2},
+	{LNG_HIGH_SCORE, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_ONLINE_LEADERBOARD, 3, 0, 4, 4},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -253,7 +254,7 @@ static void MM_NativeTimeTrialRefreshOnlineRow(void)
 	{
 		onlineString |= MENU_ROW_LOCKED;
 	}
-	s_nativeTimeTrialRows[3].stringIndex = onlineString;
+	s_nativeTimeTrialRows[4].stringIndex = onlineString;
 }
 static struct RectMenu s_nativeTimeTrialMenu =
 {
@@ -486,7 +487,7 @@ static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
 		}
 
 		s_nativeAdhocGameMode = (s16)adhocGameMode;
-		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | RELIC_RACE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 		gGT->gameMode2 &= ~(CUP_ANY_KIND);
 		if (adhocGameMode == NATIVE_ADHOC_GAME_MODE_ARCADE)
 		{
@@ -636,6 +637,8 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 
 	gNativeGhostReplayMode = 0;
 	gNativeOnlineLeaderboardMode = 0;
+	gNativeRelicRaceMode = 0;
+	gNativeRelicRaceResultTier = -1;
 	NativeGhostInput_ClearSelection();
 
 	if (choose == LNG_TIME_TRIAL)
@@ -644,6 +647,18 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 		D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
 		gGT->numPlyrNextGame = 1;
 		gGT->gameMode1 |= TIME_TRIAL;
+		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
+		return;
+	}
+
+	if (choose == LNG_RELIC_RACE)
+	{
+		gNativeRelicRaceMode = 1;
+		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+		D230.desiredMenuIndex = MM_EXIT_ROUTE_CHARACTER_SELECT;
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 &= ~TIME_TRIAL;
+		gGT->gameMode1 |= RELIC_RACE;
 		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
 		return;
 	}
@@ -962,7 +977,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	}
 
 	// clear flags from game mode
-	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | RELIC_RACE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 
 	// clear more game mode flags
 	gGT->gameMode2 &= ~(CUP_ANY_KIND);
@@ -978,6 +993,8 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	s16 choose = mainMenu->rows[mainMenu->rowSelected].stringIndex;
 
 	gNativeGhostReplayMode = 0;
+	gNativeRelicRaceMode = 0;
+	gNativeRelicRaceResultTier = -1;
 	NativeGhostInput_ClearSelection();
 	NativeBossFight_Clear();
 
@@ -1535,7 +1552,9 @@ void MM_JumpTo_Title_FirstTime(void)
 	// distance to screen (perspective)
 	gGT->pushBuffer[0].distanceToScreen_PREV = TITLE_DEFAULT_DISTANCE_TO_SCREEN;
 	gGT->pushBuffer[0].distanceToScreen_CURR = TITLE_DEFAULT_DISTANCE_TO_SCREEN;
-	gGT->gameMode1 &= ~(TIME_TRIAL);
+	gGT->gameMode1 &= ~(TIME_TRIAL | RELIC_RACE);
+	gNativeRelicRaceMode = 0;
+	gNativeRelicRaceResultTier = -1;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b43f4-0x800b4430.

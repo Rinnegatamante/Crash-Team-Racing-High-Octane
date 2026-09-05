@@ -177,7 +177,7 @@ void MM_Title_MenuUpdate(void)
 
 		MM_Title_KillThread();
 
-		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+		gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | RELIC_RACE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 		gGT->gameMode2 &= ~(CUP_ANY_KIND);
 
 		// enable Arcade Mode

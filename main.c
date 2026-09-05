@@ -66,6 +66,10 @@ DIR *__wrap_opendir(const char *fname) {
 #endif
 
 #include <platform.h>
+
+int gNativeRelicRaceMode = 0;
+int gNativeRelicRaceResultTier = -1;
+
 #include "game/game_unity.h"
 
 #include "game/zGlobal_RDATA.c"

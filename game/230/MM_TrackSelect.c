@@ -647,7 +647,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				OtherFX_Play(1, 1);
 
 				// if not Battle, Time Trial, or native Boss Fight, open LapSelectMenu
-				if (((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL)) == 0)
+				if (((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL | RELIC_RACE)) == 0)
 				    && (gNativeBossFightMode == 0)
 				)
 				{

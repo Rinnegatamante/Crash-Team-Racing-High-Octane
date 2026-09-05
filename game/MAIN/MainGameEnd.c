@@ -532,6 +532,29 @@ static void MainGameEnd_CheckTimeTrialGhost(struct GameTracker *gGT, struct Driv
 	}
 	if ((gGT->gameMode1 & RELIC_RACE) != 0)
 	{
+#if defined(CTR_NATIVE)
+		if (gNativeRelicRaceMode != 0)
+		{
+			int raceTime = player->timeElapsedInRace;
+			if (player->numTimeCrates == gGT->timeCratesInLEV)
+			{
+				raceTime -= 0x2580;
+			}
+
+			gNativeRelicRaceResultTier = -1;
+			for (int relicTier = 2; relicTier >= 0; relicTier--)
+			{
+				if (raceTime <= data.RelicTime[gGT->levelID * 3 + relicTier])
+				{
+					gNativeRelicRaceResultTier = relicTier;
+					gGT->podiumRewardID = STATIC_RELIC;
+					gGT->gameModeEnd |= NEW_RELIC;
+					break;
+				}
+			}
+			return;
+		}
+#endif
 		RR_EndEvent_UnlockAward();
 		return;
 	}
