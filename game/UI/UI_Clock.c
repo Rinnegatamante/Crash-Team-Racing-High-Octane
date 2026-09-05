@@ -156,7 +156,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 		fontType = FONT_BIG;
 
 		// Results screens draw the label right-justified and flash it when requested.
-		if (((flags & UI_RACE_CLOCK_FLASH_TOTAL) == 0) || (labelFlags = (JUSTIFY_RIGHT | WHITE), (gGT->timer & 2) != 0))
+		if (((flags & UI_RACE_CLOCK_FLASH_TOTAL) == 0) || (labelFlags = (JUSTIFY_RIGHT | WHITE), (FPS_HALF(gGT->timer) & 2) != 0))
 		{
 			labelFlags = (JUSTIFY_RIGHT | ORANGE);
 		}
@@ -182,7 +182,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 	{
 		// use timer to change color on even and odd frames
 		// timeColor equals either 4 (white) or 0 (orange)
-		timeColor = (u16)((gGT->timer & 2) == 0) << 2;
+		timeColor = (u16)((FPS_HALF(gGT->timer) & 2) == 0) << 2;
 	}
 
 	if (gGT->numLaps == UI_RACE_CLOCK_EXTENDED_MINUTE_LAP_COUNT)
@@ -288,7 +288,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 				    ((numLaps == 2) && ((flags & UI_RACE_CLOCK_FLASH_LAP_3) != 0)))
 				{
 					// Change color based on frame counter
-					lapOrRelicColor = ((u16)(gGT->timer >> 1) ^ 1) & 1;
+					lapOrRelicColor = ((u16)(FPS_HALF(gGT->timer) >> 1) ^ 1) & 1;
 				}
 
 				// Otherwise, color is white by default, you can see that in "lapOrRelicColor = 1" near lap 3 check
@@ -499,7 +499,7 @@ void UI_DrawLimitClock(s16 posX, s16 posY, s16 fontType)
 	    (timeRemaining < UI_LIMIT_CLOCK_FLASH_THRESHOLD) &&
 
 	    // if number of frames is an even number
-	    ((gGT->timer & 1) == 0))
+	    ((FPS_HALF(gGT->timer) & 1) == 0))
 	{
 		// set color to white
 		flags = WHITE;
