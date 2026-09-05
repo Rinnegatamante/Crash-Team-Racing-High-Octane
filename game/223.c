@@ -154,7 +154,7 @@ void RR_EndEvent_DrawMenu(void)
 	// driver->numTimeCrates = gGT->timeCratesInLEV;
 
 	// change color
-	textColor = (gGT->timer & 1) ? 0xffff8000 : 0xffff8004;
+	textColor = (FPS_HALF(gGT->timer) & 1) ? 0xffff8000 : 0xffff8004;
 
 	rewardBit = gGT->levelID + ADV_REWARD_FIRST_PLATINUM_RELIC;
 
@@ -204,20 +204,21 @@ void RR_EndEvent_DrawMenu(void)
 	if (driver->numTimeCrates != gGT->timeCratesInLEV)
 	{
 		// if race ended 59-80 frames ago
-		if ((u32)(sdata->framesSinceRaceEnded - RR_MISSED_CRATE_SKIP_BASE) < RR_MISSED_CRATE_SKIP_PERFECT_WINDOW)
+		if ((u32)(sdata->framesSinceRaceEnded - FPS_DOUBLE(RR_MISSED_CRATE_SKIP_BASE)) < FPS_DOUBLE(RR_MISSED_CRATE_SKIP_PERFECT_WINDOW))
 		{
 			// advance timer to 140 frames, since we can skip the amount of time
 			// that would have been taken to draw "PERFECT" text
-			sdata->framesSinceRaceEnded = RR_PERFECT_SKIP_FRAME;
+			sdata->framesSinceRaceEnded = FPS_DOUBLE(RR_PERFECT_SKIP_FRAME);
 		}
 
 		// if race ended 229-250 frames ago, and no relic was won
-		if (((gGT->gameModeEnd & NEW_RELIC) == 0) && ((u32)(sdata->framesSinceRaceEnded - RR_MISSED_CRATE_SKIP_BASE) < RR_MISSED_CRATE_SKIP_RELIC_WINDOW))
+		if (((gGT->gameModeEnd & NEW_RELIC) == 0) &&
+		    ((u32)(sdata->framesSinceRaceEnded - FPS_DOUBLE(RR_MISSED_CRATE_SKIP_BASE)) < FPS_DOUBLE(RR_MISSED_CRATE_SKIP_RELIC_WINDOW)))
 		{
 			// advance timer to 370 frames, since we can skip the amount of time
 			// that would have been taken to draw the animation
 			// to deduct 10 seconds from the relic timer
-			sdata->framesSinceRaceEnded = RR_RELIC_SKIP_FRAME;
+			sdata->framesSinceRaceEnded = FPS_DOUBLE(RR_RELIC_SKIP_FRAME);
 		}
 	}
 
@@ -225,9 +226,9 @@ void RR_EndEvent_DrawMenu(void)
 	// Draw Race Clock,
 	// Reset local frame counter
 	elapsedFrames = sdata->framesSinceRaceEnded;
-	if (elapsedFrames >= RR_FLYOUT_START_FRAME)
+	if (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_START_FRAME))
 	{
-		elapsedFrames -= RR_FLYOUT_FRAME_OFFSET;
+		elapsedFrames -= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET);
 
 		startX = 0x100;
 		endY = -0x32;
@@ -240,7 +241,7 @@ void RR_EndEvent_DrawMenu(void)
 
 
 	// interpolate fly-in
-	UI_Lerp2D_Linear(pos.v, startX, 0x32, 0x100, endY, elapsedFrames, RR_LERP_FRAMES);
+	UI_Lerp2D_Linear(pos.v, startX, 0x32, 0x100, endY, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 
 	UI_DrawRaceClock(pos.x, pos.y - 8, UI_RACE_CLOCK_SHOW_RESULTS, driver);
 
@@ -251,18 +252,18 @@ void RR_EndEvent_DrawMenu(void)
 
 	if ((gGT->gameModeEnd & NEW_RELIC) != 0)
 	{
-		if (elapsedFrames >= RR_FLYOUT_START_FRAME)
+		if (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_START_FRAME))
 		{
-			elapsedFrames -= RR_FLYOUT_FRAME_OFFSET;
+			elapsedFrames -= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET);
 
 			UI_Lerp2D_Linear(pos.v, UI_ConvertX_2(0x100, RR_SCREEN_DEPTH), UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), UI_ConvertX_2(-0x64, RR_SCREEN_DEPTH),
-			                 UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), elapsedFrames, RR_LERP_FRAMES);
+			                 UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 		}
 
-		else if (elapsedFrames >= RR_RELIC_GROW_START_FRAME)
+		else if (elapsedFrames >= FPS_DOUBLE(RR_RELIC_GROW_START_FRAME))
 		{
 			// on exactly the 251st frame after race ends
-			if (elapsedFrames == RR_RELIC_GROW_START_FRAME)
+			if (elapsedFrames == FPS_DOUBLE(RR_RELIC_GROW_START_FRAME))
 			{
 				// play sound of unlocking relic
 				// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800a04cc-0x800a04d4 for relic unlock SFX.
@@ -271,13 +272,13 @@ void RR_EndEvent_DrawMenu(void)
 
 			if (relic->scale.x < RR_RELIC_FULL_SCALE)
 			{
-				relic->scale.x += RR_RELIC_GROW_STEP;
-				relic->scale.y += RR_RELIC_GROW_STEP;
-				relic->scale.z += RR_RELIC_GROW_STEP;
+				relic->scale.x += FPS_HALF(RR_RELIC_GROW_STEP);
+				relic->scale.y += FPS_HALF(RR_RELIC_GROW_STEP);
+				relic->scale.z += FPS_HALF(RR_RELIC_GROW_STEP);
 			}
 
 			UI_Lerp2D_Linear(pos.v, UI_ConvertX_2(0x100, RR_SCREEN_DEPTH), UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), UI_ConvertX_2(0x100, RR_SCREEN_DEPTH),
-			                 UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), elapsedFrames - RR_RELIC_AWARD_START_FRAME, RR_LERP_FRAMES);
+			                 UI_ConvertY_2(0xa2, RR_SCREEN_DEPTH), elapsedFrames - FPS_DOUBLE(RR_RELIC_AWARD_START_FRAME), FPS_DOUBLE(RR_LERP_FRAMES));
 		}
 	}
 
@@ -288,17 +289,17 @@ void RR_EndEvent_DrawMenu(void)
 	// Reset local frame counter
 	elapsedFrames = sdata->framesSinceRaceEnded;
 	{
-		if (elapsedFrames >= RR_FLYOUT_START_FRAME)
+		if (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_START_FRAME))
 		{
-			elapsedFrames -= RR_FLYOUT_FRAME_OFFSET;
+			elapsedFrames -= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET);
 
 			// interpolate fly-in
-			UI_Lerp2D_Linear(pos.v, 200, 0x79, 0x264, 0x79, elapsedFrames, RR_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, 200, 0x79, 0x264, 0x79, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 		}
 
 		else
 		{
-			UI_Lerp2D_Linear(pos.v, 200, 0x79, 200, 0x79, elapsedFrames, RR_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, 200, 0x79, 200, 0x79, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 		}
 
 		sdata->ptrTimebox1->matrix.t[0] = UI_ConvertX_2(pos.x, RR_SCREEN_DEPTH);
@@ -317,13 +318,13 @@ void RR_EndEvent_DrawMenu(void)
 		elapsedFrames = sdata->framesSinceRaceEnded;
 
 		// PERFECT text, fade-in and fade-out
-		if (elapsedFrames >= RR_PERFECT_START_FRAME)
+		if (elapsedFrames >= FPS_DOUBLE(RR_PERFECT_START_FRAME))
 		{
-			elapsedFrames -= RR_PERFECT_START_FRAME;
+			elapsedFrames -= FPS_DOUBLE(RR_PERFECT_START_FRAME);
 
 			// fade-out PERFECT
 			// 170 frames after the first 80
-			if (elapsedFrames >= RR_PERFECT_FLYOUT_OFFSET)
+			if (elapsedFrames >= FPS_DOUBLE(RR_PERFECT_FLYOUT_OFFSET))
 			{
 				startX = 0x100;
 				endX = 0x296;
@@ -343,7 +344,7 @@ void RR_EndEvent_DrawMenu(void)
 				}
 			}
 
-			UI_Lerp2D_Linear(pos.v, startX, 0, endX, 0, elapsedFrames, RR_LERP_FRAMES);
+			UI_Lerp2D_Linear(pos.v, startX, 0, endX, 0, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 
 			DecalFont_DrawLine(sdata->lngStrings[LNG_PERFECT], pos.x, 0x8a, 1, textColor);
 		}
@@ -352,30 +353,30 @@ void RR_EndEvent_DrawMenu(void)
 		elapsedFrames = sdata->framesSinceRaceEnded;
 
 		// fade-in COUNTDOWN (-10, -9, -8...)
-		if (elapsedFrames >= RR_COUNTDOWN_START_FRAME)
+		if (elapsedFrames >= FPS_DOUBLE(RR_COUNTDOWN_START_FRAME))
 		{
 			char *str = countdownText;
 			sprintf(str, s_countdownStartFormat223);
 
 			drawCountdown = 0;
 
-			if (elapsedFrames >= RR_FLYOUT_FRAME_OFFSET)
+			if (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET))
 			{
 				// interpolate fly-out
-				UI_Lerp2D_Linear(pos.v, 0x199, 0x32, 0x199, -0x32, elapsedFrames - RR_COUNTDOWN_START_FRAME, RR_LERP_FRAMES);
+				UI_Lerp2D_Linear(pos.v, 0x199, 0x32, 0x199, -0x32, elapsedFrames - FPS_DOUBLE(RR_COUNTDOWN_START_FRAME), FPS_DOUBLE(RR_LERP_FRAMES));
 				drawCountdown = 1;
 			}
 
-			else if ((u32)(elapsedFrames - RR_COUNTDOWN_START_FRAME) < RR_COUNTDOWN_WINDOW_FRAMES)
+			else if ((u32)(elapsedFrames - FPS_DOUBLE(RR_COUNTDOWN_START_FRAME)) < FPS_DOUBLE(RR_COUNTDOWN_WINDOW_FRAMES))
 			{
 				// 20 frames after fly-in starts, do the countdown
-				if (elapsedFrames >= RR_COUNTDOWN_TICK_START_FRAME)
+				if (elapsedFrames >= FPS_DOUBLE(RR_COUNTDOWN_TICK_START_FRAME))
 				{
-					s32 countdownDelta = RR_COUNTDOWN_TICK_START_FRAME - elapsedFrames;
+					s32 countdownDelta = FPS_DOUBLE(RR_COUNTDOWN_TICK_START_FRAME) - elapsedFrames;
 
 					// 10, 9, 8, 7...
 					// changes once every 5 frames
-					s32 minusSeconds = 10 + (countdownDelta / RR_COUNTDOWN_STEP_FRAMES);
+					s32 minusSeconds = 10 + (countdownDelta / FPS_DOUBLE(RR_COUNTDOWN_STEP_FRAMES));
 
 					if (minusSeconds < 0)
 					{
@@ -383,7 +384,8 @@ void RR_EndEvent_DrawMenu(void)
 					}
 
 					// "if != 10" means "if text is not -10"
-					else if ((minusSeconds != 10) && (countdownDelta == ((countdownDelta / RR_COUNTDOWN_STEP_FRAMES) * RR_COUNTDOWN_STEP_FRAMES)))
+					else if ((minusSeconds != 10) &&
+					         (countdownDelta == ((countdownDelta / FPS_DOUBLE(RR_COUNTDOWN_STEP_FRAMES)) * FPS_DOUBLE(RR_COUNTDOWN_STEP_FRAMES))))
 					{
 						// subtract a second
 						driver->timeElapsedInRace -= RR_RACE_TIME_ONE_SECOND;
@@ -395,7 +397,7 @@ void RR_EndEvent_DrawMenu(void)
 				}
 
 				// interpolate fly-in
-				UI_Lerp2D_Linear(pos.v, 0x296, 0x2a, 0x199, 0x2a, elapsedFrames - RR_COUNTDOWN_START_FRAME, RR_LERP_FRAMES);
+				UI_Lerp2D_Linear(pos.v, 0x296, 0x2a, 0x199, 0x2a, elapsedFrames - FPS_DOUBLE(RR_COUNTDOWN_START_FRAME), FPS_DOUBLE(RR_LERP_FRAMES));
 				drawCountdown = 1;
 			}
 
@@ -414,27 +416,28 @@ void RR_EndEvent_DrawMenu(void)
 
 	if ((gGT->gameModeEnd & NEW_RELIC) != 0)
 	{
-		if (((gGT->gameModeEnd & (NEW_RELIC | NEW_HIGH_SCORE)) == NEW_RELIC) && (elapsedFrames >= RR_FLYOUT_FRAME_OFFSET))
+		if (((gGT->gameModeEnd & (NEW_RELIC | NEW_HIGH_SCORE)) == NEW_RELIC) && (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET)))
 		{
 			startX = 0x100;
 			endX = 0x296;
-			elapsedFrames -= RR_FLYOUT_FRAME_OFFSET;
+			elapsedFrames -= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET);
 		}
 
 		// Fade-out early, so "NEW HIGH SCORE" can fade-in
-		else if (((gGT->gameModeEnd & (NEW_RELIC | NEW_HIGH_SCORE)) == (NEW_RELIC | NEW_HIGH_SCORE)) && (elapsedFrames >= RR_HIGH_SCORE_BANNER_START_FRAME))
+		else if (((gGT->gameModeEnd & (NEW_RELIC | NEW_HIGH_SCORE)) == (NEW_RELIC | NEW_HIGH_SCORE)) &&
+		         (elapsedFrames >= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_START_FRAME)))
 		{
 			startX = 0x100;
 			endX = 0x296;
-			elapsedFrames -= RR_HIGH_SCORE_BANNER_START_FRAME;
+			elapsedFrames -= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_START_FRAME);
 		}
 
 		// Fade-In
-		else if (elapsedFrames >= RR_RELIC_AWARD_START_FRAME)
+		else if (elapsedFrames >= FPS_DOUBLE(RR_RELIC_AWARD_START_FRAME))
 		{
 			startX = -0x96;
 			endX = 0x100;
-			elapsedFrames -= RR_RELIC_AWARD_START_FRAME;
+			elapsedFrames -= FPS_DOUBLE(RR_RELIC_AWARD_START_FRAME);
 		}
 
 		else
@@ -443,7 +446,7 @@ void RR_EndEvent_DrawMenu(void)
 		}
 
 		// interpolate fly-in
-		UI_Lerp2D_Linear(pos.v, startX, 0x50, endX, 0x50, elapsedFrames, RR_LERP_FRAMES);
+		UI_Lerp2D_Linear(pos.v, startX, 0x50, endX, 0x50, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 
 		DecalFont_DrawLine(sdata->lngStrings[LNG_RELIC_AWARDED], pos.x, pos.y, 1, textColor);
 	}
@@ -453,9 +456,9 @@ skipRelicAwarded:
 	// copy to local frame counter
 	elapsedFrames = sdata->framesSinceRaceEnded;
 
-	if ((elapsedFrames >= RR_HIGH_SCORE_BANNER_START_FRAME) && ((gGT->gameModeEnd & NEW_HIGH_SCORE) != 0))
+	if ((elapsedFrames >= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_START_FRAME)) && ((gGT->gameModeEnd & NEW_HIGH_SCORE) != 0))
 	{
-		elapsedFrames -= RR_HIGH_SCORE_BANNER_START_FRAME;
+		elapsedFrames -= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_START_FRAME);
 
 		// 4 seconds after the 370 initial frames
 		if (elapsedFrames >= FPS_DOUBLE(RR_HIGH_SCORE_BANNER_HOLD_FRAMES))
@@ -473,7 +476,7 @@ skipRelicAwarded:
 		}
 
 		// Interpolate fly-in
-		UI_Lerp2D_Linear(pos.v, startX, 0x50, endX, 0x50, elapsedFrames, RR_LERP_FRAMES);
+		UI_Lerp2D_Linear(pos.v, startX, 0x50, endX, 0x50, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 
 		DecalFont_DrawLine(sdata->lngStrings[LNG_NEW_HIGH_SCORE], pos.x, pos.y, 1, textColor);
 	}
@@ -485,12 +488,12 @@ skipRelicAwarded:
 	pos.y = 0xc;
 
 	// if race ended more than 490 frames ago
-	if (elapsedFrames >= RR_FLYOUT_START_FRAME)
+	if (elapsedFrames >= FPS_DOUBLE(RR_FLYOUT_START_FRAME))
 	{
-		elapsedFrames -= RR_FLYOUT_FRAME_OFFSET;
+		elapsedFrames -= FPS_DOUBLE(RR_FLYOUT_FRAME_OFFSET);
 
 		// Interpolate, vertical fly-out
-		UI_Lerp2D_Linear(pos.v, -0xa, 0xc, -0xa, -0x58, elapsedFrames, RR_LERP_FRAMES);
+		UI_Lerp2D_Linear(pos.v, -0xa, 0xc, -0xa, -0x58, elapsedFrames, FPS_DOUBLE(RR_LERP_FRAMES));
 	}
 
 
@@ -553,7 +556,7 @@ void RR_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	// Start and End are the same
 
 	// interpolate fly-in
-	UI_Lerp2D_Linear(pos.v, startX, startY, startX, startY, sdata->framesSinceRaceEnded, RR_LERP_FRAMES);
+	UI_Lerp2D_Linear(pos.v, startX, startY, startX, startY, sdata->framesSinceRaceEnded, FPS_DOUBLE(RR_LERP_FRAMES));
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_BEST_TIMES], pos.x, pos.y, 1, 0xffff8000);
 
@@ -572,10 +575,10 @@ void RR_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		if (gGT->newHighScoreIndex == rowIndex)
 		{
 			// make name color flash every odd frame
-			nameColor = (gGT->timer & RR_HIGH_SCORE_FLASH_TIMER_BIT) ? 4 : nameColor;
+			nameColor = (FPS_HALF(gGT->timer) & RR_HIGH_SCORE_FLASH_TIMER_BIT) ? 4 : nameColor;
 
 			// flash color of time
-			timeColor = ((gGT->timer & RR_HIGH_SCORE_FLASH_TIMER_BIT) << 1);
+			timeColor = ((FPS_HALF(gGT->timer) & RR_HIGH_SCORE_FLASH_TIMER_BIT) << 1);
 		}
 
 		// Make a rank on the high score list ('1', '2', '3', '4', '5')
@@ -628,7 +631,7 @@ void RR_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		DecalFont_DrawLine(sdata->lngStrings[LNG_BEST_LAP], startX, startY + 0x95, 1, timeColor);
 
 		// If you got a new best lap
-		if (((gGT->gameModeEnd & NEW_BEST_LAP) != 0) && ((gGT->timer & RR_HIGH_SCORE_FLASH_TIMER_BIT) != 0))
+		if (((gGT->gameModeEnd & NEW_BEST_LAP) != 0) && ((FPS_HALF(gGT->timer) & RR_HIGH_SCORE_FLASH_TIMER_BIT) != 0))
 		{
 			timeColor = 0xffff8004;
 		}
