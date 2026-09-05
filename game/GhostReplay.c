@@ -24,7 +24,7 @@ void GhostReplay_ThTick(struct Thread *t)
 	if ((sdata->ghostOverflowTextTimer != 0) && (d->ghostID == 0))
 	{
 		s32 color = 0xFFFF8004;
-		if (sdata->ghostOverflowTextTimer & 1)
+		if (FPS_HALF(sdata->ghostOverflowTextTimer) & 1)
 		{
 			color = 0xFFFF8003;
 		}
