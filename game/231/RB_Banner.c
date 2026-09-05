@@ -204,6 +204,12 @@ void RB_Banner_ThTick(struct Thread *t)
 
 	if (banner->numVertices != 0)
 	{
+#if CTR_NATIVE_60FPS
+		if (CTR_NATIVE_60FPS_ACTIVE && ((sdata->gGT->timer & 1) == 0))
+		{
+			return;
+		}
+#endif
 		RB_Banner_Animate_Play(t->inst->model->headers, banner->numVertices);
 	}
 }
