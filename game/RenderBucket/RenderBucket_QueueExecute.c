@@ -4,6 +4,7 @@
 #include "platform/native_adhoc.h"
 extern int gNativeMirrorModeRenderActive;
 extern int gNativeMirrorModeDoubleFlipActive;
+extern int gNativeReverseTrackEnabled;
 #endif
 
 
@@ -5509,9 +5510,10 @@ void RenderBucket_Execute(void *param_1, struct PrimMem *param_2)
 		{
 			gNativeMirrorModeRenderActive = 0;
 		}
+		const b32 nativeStartBanner = ctx.inst->model == sdata->gGT->modelPtr[STATIC_STARTBANNERWAVE];
 		gNativeMirrorModeDoubleFlipActive =
-			(gNativeMirrorModeRenderActive != 0) &&
-			(ctx.inst->model == sdata->gGT->modelPtr[STATIC_STARTBANNERWAVE]);
+			nativeStartBanner &&
+			((gNativeMirrorModeRenderActive != 0) != (gNativeReverseTrackEnabled != 0));
 #endif
 		RenderBucket_DispatchDrawFunc(&ctx);
 #if defined(CTR_NATIVE)

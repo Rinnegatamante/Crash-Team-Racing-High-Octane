@@ -54,6 +54,13 @@ void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 	{
 		return;
 	}
+#if defined(CTR_NATIVE)
+	// Reverse variants have their own records, but never participate in the retail N. Tropy/Oxide unlock chain.
+	if (gNativeReverseTrackEnabled != 0)
+	{
+		return;
+	}
+#endif
 
 	if ((gGT->gameModeEnd & 4) != 0)
 	{
@@ -144,18 +151,21 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	{
 		b32 raceBest = highScoreIndex == 0;
 		b32 lapBest = (gameModeEnd & NEW_BEST_LAP) != 0;
-		NativeLeaderboard_StageTimeTrialRecord(gGT->levelID, data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
+		NativeLeaderboard_StageTimeTrialRecord(NativeReverseTrack_GetCurrentLogicalTrackId(), data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
 		                                       player->timeElapsedInRace, gGT->bestLapTime, raceBest, lapBest);
 	}
 	else if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
 	{
-		NativeLeaderboard_StageRelicRaceRecord(gGT->levelID, data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
+		NativeLeaderboard_StageRelicRaceRecord(NativeReverseTrack_GetCurrentLogicalTrackId(), data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
 		                                      player->timeElapsedInRace, highScoreIndex == 0);
 	}
 #endif
 
 	if (highScoreIndex < 0)
 	{
+#if defined(CTR_NATIVE)
+		if (gNativeReverseTrackEnabled != 0) NativeReverseTrack_SaveHighScores();
+#endif
 		return;
 	}
 
@@ -170,6 +180,9 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	entry->name[0] = 0;
 	entry->characterID = data.characterIDs[(u8)player->driverID];
 	memmove(entry->name, gGT->prevNameEntered, 0x11);
+#if defined(CTR_NATIVE)
+	if (gNativeReverseTrackEnabled != 0) NativeReverseTrack_SaveHighScores();
+#endif
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003a3fc-0x8003aee8

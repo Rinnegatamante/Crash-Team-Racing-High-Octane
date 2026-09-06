@@ -5,6 +5,11 @@ enum
 	MM_HIGHSCORE_MAIN_TRANSITION_MAX_FRAME = 0xc,
 	MM_HIGHSCORE_SLIDE_TRANSITION_FRAMES = 8,
 	MM_HIGHSCORE_LAST_ARCADE_TRACK = 0x11,
+#if defined(CTR_NATIVE)
+	MM_HIGHSCORE_LAST_TRACK = 0x19,
+#else
+	MM_HIGHSCORE_LAST_TRACK = MM_HIGHSCORE_LAST_ARCADE_TRACK,
+#endif
 	MM_HIGHSCORE_TRACK_SLIDE_STEP_X = 0x40,
 	MM_HIGHSCORE_ROW_SLIDE_STEP_Y = 0x1b,
 	MM_HIGHSCORE_OFFSCREEN_X = 0x200,
@@ -78,6 +83,28 @@ void MM_HighScore_Text3D(char *string, int posX, int posY, s16 font, u32 flags)
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800b2fbc-0x800b3914.
 #if defined(CTR_NATIVE)
+static s16 MM_HighScore_GetLogicalTrackId(u16 menuTrackIndex)
+{
+	if (menuTrackIndex <= MM_HIGHSCORE_LAST_ARCADE_TRACK) return D230.arcadeTracks[menuTrackIndex].levID;
+	return (s16)(18 + (menuTrackIndex - (MM_HIGHSCORE_LAST_ARCADE_TRACK + 1)));
+}
+
+static int MM_HighScore_GetArcadeIndexForLogical(s16 logicalTrackId)
+{
+	s16 physicalLevelId = NativeReverseTrack_GetPhysicalFromLogical(logicalTrackId);
+	for (int i = 0; i <= MM_HIGHSCORE_LAST_ARCADE_TRACK; i++)
+	{
+		if (D230.arcadeTracks[i].levID == physicalLevelId) return i;
+	}
+	return 0;
+}
+
+static b32 MM_HighScore_IsMenuTrackOpen(u16 menuTrackIndex)
+{
+	int arcadeIndex = MM_HighScore_GetArcadeIndexForLogical(MM_HighScore_GetLogicalTrackId(menuTrackIndex));
+	return MM_TrackSelect_boolTrackOpen(&D230.arcadeTracks[arcadeIndex]);
+}
+
 #include "MM_HighScore_Online.c"
 #endif
 void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
@@ -87,9 +114,19 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	s16 offsetX = (s16)posX;
 	s16 offsetY = (s16)posY;
 
+#if defined(CTR_NATIVE)
+	s16 logicalTrackId = MM_HighScore_GetLogicalTrackId(trackIndex);
+	s16 levelID = NativeReverseTrack_GetPhysicalFromLogical(logicalTrackId);
+	int arcadeTrackIndex = MM_HighScore_GetArcadeIndexForLogical(logicalTrackId);
+	char trackName[64];
+	NativeReverseTrack_FormatName(logicalTrackId, trackName, sizeof(trackName));
+#else
 	s16 levelID = D230.arcadeTracks[trackIndex].levID;
+	int arcadeTrackIndex = trackIndex;
+	char *trackName = sdata->lngStrings[data.metaDataLEV[levelID].name_LNG];
+#endif
 
-	s16 lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], FONT_BIG);
+	s16 lineWidth = DecalFont_GetLineWidth(trackName, FONT_BIG);
 	lineWidth = lineWidth >> 1;
 
 	// get color data
@@ -113,7 +150,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	                 colorPtr[2], colorPtr[3], 0, MM_HIGHSCORE_ARROW_SCALE, 0);
 
 	// draw track name
-	DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], titleMeta->currX + (s16)(posX + MM_HIGHSCORE_TITLE_X_OFFSET),
+	DecalFont_DrawLine(trackName, titleMeta->currX + (s16)(posX + MM_HIGHSCORE_TITLE_X_OFFSET),
 	                   titleMeta->currY + (s16)(posY + MM_HIGHSCORE_TITLE_Y_OFFSET), FONT_BIG, JUSTIFY_CENTER);
 
 	Color iconColor = D230.highscore_iconColor;
@@ -122,7 +159,12 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	                    bestTrackMeta->currY + offsetY + MM_HIGHSCORE_BEST_TRACK_LABEL_Y_OFFSET, FONT_SMALL, 0);
 
 	// first entry: Time Trial or Relic
+#if defined(CTR_NATIVE)
+	struct HighScoreTrack *scoreTrack = NativeReverseTrack_GetHighScoreTrack(logicalTrackId);
+	struct HighScoreEntry *entry = &scoreTrack->scoreEntry[rowIndex * MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE];
+#else
 	struct HighScoreEntry *entry = &sdata->gameProgress.highScoreTracks[levelID].scoreEntry[rowIndex * MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE];
+#endif
 
 	// if Time Trial
 	// with ghost stars, and Best Lap
@@ -133,7 +175,10 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		gGT->levelID = levelID;
 		GAMEPROG_GetPtrHighScoreTrack();
 
-		// draw ghost stars
+		// Reverse variants do not participate in N. Tropy/Oxide progression.
+#if defined(CTR_NATIVE)
+		if (!NativeReverseTrack_IsLogicalReverse(logicalTrackId))
+#endif
 		for (s32 ghostStarIndex = 0; ghostStarIndex < MM_HIGHSCORE_GHOST_STAR_COUNT; ghostStarIndex++)
 		{
 			if (((sdata->gameProgress.highScoreTracks[gGT->levelID].timeTrialFlags >> D230.highScoreGhostStars.beatenFlagBit[ghostStarIndex]) & 1) != 0)
@@ -209,7 +254,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	videoBox.x = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currX + offsetX + MM_HIGHSCORE_VIDEO_BOX_X_OFFSET;
 	videoBox.y = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currY + offsetY + MM_HIGHSCORE_VIDEO_BOX_Y_OFFSET;
 
-	MM_TrackSelect_Video_Draw(&videoBox, &D230.arcadeTracks[0], trackIndex, (D230.highScoreTransition.state == EXITING_MENU), 0);
+	MM_TrackSelect_Video_Draw(&videoBox, &D230.arcadeTracks[0], arcadeTrackIndex, (D230.highScoreTransition.state == EXITING_MENU), 0);
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b3914-0x800b3954.
@@ -324,11 +369,15 @@ void MM_HighScore_MenuProc(struct RectMenu *menu_unused)
 				do
 				{
 					D230.highScoreSelection.targetTrack = D230.highScoreSelection.targetTrack + 1;
-					if (MM_HIGHSCORE_LAST_ARCADE_TRACK < D230.highScoreSelection.targetTrack)
+					if (MM_HIGHSCORE_LAST_TRACK < D230.highScoreSelection.targetTrack)
 					{
 						D230.highScoreSelection.targetTrack = 0;
 					}
+					#if defined(CTR_NATIVE)
+					trackOpen = MM_HighScore_IsMenuTrackOpen(D230.highScoreSelection.targetTrack);
+#else
 					trackOpen = MM_TrackSelect_boolTrackOpen(D230.arcadeTracks + D230.highScoreSelection.targetTrack);
+#endif
 				} while (!trackOpen);
 			}
 		}
@@ -342,9 +391,13 @@ void MM_HighScore_MenuProc(struct RectMenu *menu_unused)
 				D230.highScoreSelection.targetTrack = D230.highScoreSelection.targetTrack - 1;
 				if (D230.highScoreSelection.targetTrack < 0)
 				{
-					D230.highScoreSelection.targetTrack = MM_HIGHSCORE_LAST_ARCADE_TRACK;
+					D230.highScoreSelection.targetTrack = MM_HIGHSCORE_LAST_TRACK;
 				}
-				trackOpen = MM_TrackSelect_boolTrackOpen(D230.arcadeTracks + D230.highScoreSelection.targetTrack);
+				#if defined(CTR_NATIVE)
+					trackOpen = MM_HighScore_IsMenuTrackOpen(D230.highScoreSelection.targetTrack);
+#else
+					trackOpen = MM_TrackSelect_boolTrackOpen(D230.arcadeTracks + D230.highScoreSelection.targetTrack);
+#endif
 			} while (!trackOpen);
 		}
 	}

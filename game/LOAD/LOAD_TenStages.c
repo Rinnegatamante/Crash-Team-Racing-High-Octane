@@ -512,6 +512,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		gGT->level1 = lev;
 		gGT->visMem1 = lev->visMem;
+#if defined(CTR_NATIVE)
+		NativeReverseTrack_ApplyToLevel(lev);
+#endif
 
 		if (lev != 0)
 		{

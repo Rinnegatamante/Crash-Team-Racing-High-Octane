@@ -76,6 +76,53 @@ CTR_STATIC_ASSERT(MM_TRACK_VIDEO_START_STREAM == 2);
 CTR_STATIC_ASSERT(MM_TRACK_VIDEO_PLAYING == 3);
 CTR_STATIC_ASSERT(MM_TRACK_SELECT_INPUT == 0x40073);
 
+#if defined(CTR_NATIVE)
+static struct MenuRow s_reverseVariantRows[] =
+{
+	{NATIVE_MENU_STRING_TRACK_NORMAL, 1, 1, 0, 0},
+	{NATIVE_MENU_STRING_TRACK_REVERSE, 0, 0, 1, 1},
+	{RECTMENU_STRING_NONE},
+};
+
+static struct RectMenu s_reverseVariantMenu =
+{
+	.stringIndexTitle = RECTMENU_STRING_NONE,
+	.posX_curr = 0x18c,
+	.posY_curr = 0x7c,
+	.state = USE_SMALL_FONT | CENTER_ON_X,
+	.rows = s_reverseVariantRows,
+};
+
+static b32 s_reverseVariantOpen;
+
+static b32 MM_TrackSelect_CanChooseReverse(struct GameTracker *gGT, s16 physicalLevelId)
+{
+	if (!NativeReverseTrack_IsPhysicalSupported(physicalLevelId))
+	{
+		return false;
+	}
+
+	return (gNativeGhostReplayMode != 0) ||
+	       ((gGT->gameMode1 & TIME_TRIAL) != 0) ||
+	       ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0));
+}
+
+static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLevelId, b32 reverse)
+{
+	NativeReverseTrack_SelectPhysical(physicalLevelId, reverse);
+	s16 logicalTrackId = NativeReverseTrack_GetTrackIdForPhysical(physicalLevelId);
+	gGT->currLEV = logicalTrackId;
+
+	if ((gNativeGhostReplayMode != 0) && (RefreshCard_CountModernGhostProfilesForLEV(logicalTrackId) == 0))
+	{
+		OtherFX_Play(5, 1);
+		return false;
+	}
+
+	return true;
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800afa44-0x800afa94.
 void MM_TrackSelect_Video_SetDefaults(void)
 {
@@ -403,6 +450,11 @@ void MM_TrackSelect_Init(void)
 	// lap selection menu is closed by default
 	D230.trackSelect.lapBoxOpen = false;
 	D230.trackSelect.transition.state = ENTERING_MENU;
+#if defined(CTR_NATIVE)
+	s_reverseVariantOpen = false;
+	s_reverseVariantMenu.rowSelected = 0;
+	NativeReverseTrack_ClearSelection();
+#endif
 
 	// set track index to the index selected in track selection menu, starts at 0 for both Arcade and Battle
 	D230.menuTrackSelect.rowSelected = sdata->trackSelBackup;
@@ -571,6 +623,40 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 	// if lap selection menu is closed
 	if (D230.trackSelect.lapBoxOpen == 0)
 	{
+#if defined(CTR_NATIVE)
+		if (s_reverseVariantOpen)
+		{
+			int variantResult = 0;
+			if (D230.trackSelect.transition.state == IN_MENU)
+			{
+				variantResult = RECTMENU_ProcessInput(&s_reverseVariantMenu);
+			}
+
+			RECTMENU_DrawSelf(&s_reverseVariantMenu, 0, 0, MM_TRACK_SELECT_LAP_MENU_WIDTH);
+
+			if (variantResult == 1)
+			{
+				s16 physicalLevelId = selectMenu[D230.trackSelect.currentTrack].levID;
+				b32 reverse = s_reverseVariantMenu.rowSelected == 1;
+				if (MM_TrackSelect_ChooseVariant(gGT, physicalLevelId, reverse))
+				{
+					OtherFX_Play(1, 1);
+					s_reverseVariantOpen = false;
+					D230.trackSelect.transition.startAfterExit = D230.trackSelect.transition.state;
+					D230.trackSelect.transition.state = EXITING_MENU;
+				}
+			}
+			else if (variantResult == -1)
+			{
+				OtherFX_Play(2, 1);
+				s_reverseVariantOpen = false;
+				NativeReverseTrack_ClearSelection();
+			}
+			RECTMENU_ClearInput();
+		}
+		else
+#endif
+		{
 		int importantButton = sdata->buttonTapPerPlayer[0] & MM_TRACK_SELECT_INPUT;
 
 		if (
@@ -635,6 +721,19 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			case BTN_CROSS_one:
 			case BTN_CIRCLE:
+#if defined(CTR_NATIVE)
+			{
+				s16 physicalLevelId = selectMenu[D230.trackSelect.currentTrack].levID;
+				if (MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
+				{
+					OtherFX_Play(1, 1);
+					s_reverseVariantMenu.rowSelected = 0;
+					s_reverseVariantOpen = true;
+					break;
+				}
+				NativeReverseTrack_SelectPhysical(physicalLevelId, false);
+			}
+#endif
 
 				if ((gNativeGhostReplayMode != 0) &&
 				    (RefreshCard_CountModernGhostProfilesForLEV(selectMenu[D230.trackSelect.currentTrack].levID) == 0))
@@ -671,6 +770,9 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 				D230.trackSelect.transition.startAfterExit = 0;
 				D230.trackSelect.transition.state = EXITING_MENU;
+#if defined(CTR_NATIVE)
+				NativeReverseTrack_ClearSelection();
+#endif
 				break;
 			default:
 				break;
@@ -678,6 +780,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			// clear gamepad input (for menus)
 			RECTMENU_ClearInput();
+		}
 		}
 	}
 
@@ -753,7 +856,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 	MM_TrackSelect_Video_State(resetPreviewVideo);
 
+#if defined(CTR_NATIVE)
+	gGT->currLEV = NativeReverseTrack_GetTrackIdForPhysical(selectMenu[menu->rowSelected].levID);
+#else
 	gGT->currLEV = selectMenu[menu->rowSelected].levID;
+#endif
 	s32 scanTrack = (int)menu->rowSelected + -1;
 
 	for (s32 hiddenRowIndex = 0; hiddenRowIndex < MM_TRACK_SELECT_CENTER_ROW; hiddenRowIndex++)
@@ -920,6 +1027,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			previewRect.w = MM_TRACK_VIDEO_WIDTH;
 			previewRect.h = MM_TRACK_VIDEO_HEIGHT;
 
+			b32 rightSideMenuOpen = D230.trackSelect.lapBoxOpen != 0;
+#if defined(CTR_NATIVE)
+			rightSideMenuOpen |= s_reverseVariantOpen;
+#endif
+
 			// posX of "SELECT LEVEL"
 			previewRect.x = D230.trackSelect_previewTransition.currX + MM_TRACK_SELECT_PREVIEW_X;
 
@@ -934,8 +1046,8 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			// D230.trackSelect.lapBoxOpen controls the 3/5/7 lap menu.
 
-			// If the lap selection menu is closed
-			if (D230.trackSelect.lapBoxOpen == 0)
+			// Keep the preview area clear while either the lap or Reverse chooser is open.
+			if (!rightSideMenuOpen)
 			{
 				DecalFont_DrawLine(sdata->lngStrings[LNG_SELECT_LEVEL_SELECT], (D230.trackSelect_titleTransition.currX + MM_TRACK_SELECT_TITLE_X),
 				                   (D230.trackSelect_titleTransition.currY + (u32)previewRect.y), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
@@ -951,8 +1063,8 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			if ((-1 < selectMenu[menu->rowSelected].mapTextureID) &&
 
-			    // If lap selection menu is closed
-			    (D230.trackSelect.lapBoxOpen == 0))
+			    // If neither lap nor Reverse selection is covering the preview area
+			    !rightSideMenuOpen)
 			{
 				s32 mapID = selectMenu[menu->rowSelected].mapTextureID;
 				struct Icon *iconMap0 = gGT->ptrIcons[mapID + 0];

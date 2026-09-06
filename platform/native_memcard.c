@@ -91,7 +91,7 @@ internal int NativeMemcard_CopyString(char *dst, int dst_size, const char *src)
 
 internal int NativeMemcard_IsCtrSaveName(const char *name)
 {
-	return (strcmp(name, "BASCUS-94426-SLOTS") == 0) || (strncmp(name, "BASCUS-94426G", 13) == 0);
+	return (strcmp(name, "BASCUS-94426-SLOTS") == 0) || (strcmp(name, "BASCUS-94426R") == 0) || (strncmp(name, "BASCUS-94426G", 13) == 0);
 }
 
 internal int NativeMemcard_JoinPath(char *dst, int dst_size, const char *left, const char *right)

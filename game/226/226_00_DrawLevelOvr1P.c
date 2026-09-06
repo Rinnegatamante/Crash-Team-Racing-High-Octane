@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern int gNativeReverseTrackEnabled;
+#endif
+
 #define NATIVE_LEVEL_TPAGE_SUPER_TURBO_TINT 0x8000u
 
 static u16 DrawLevelOvr1P_GetNativeDecoratedTpage(const struct QuadBlock *block, u16 tpage)
@@ -683,15 +687,33 @@ static u16 DrawLevelOvr1P_PackUv(u8 u, u8 v)
 	return (u16)u | ((u16)v << 8);
 }
 
-static void DrawLevelOvr1P_WriteProjectedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
-                                            u32 tableWord)
+static void DrawLevelOvr1P_GetTextureUv(const struct QuadBlock *block, const struct TextureLayout *texture, u16 uv[4])
 {
-	u16 uv[4];
-
 	uv[0] = DrawLevelOvr1P_PackUv(texture->u0, texture->v0);
 	uv[1] = DrawLevelOvr1P_PackUv(texture->u1, texture->v1);
 	uv[2] = DrawLevelOvr1P_PackUv(texture->u2, texture->v2);
 	uv[3] = DrawLevelOvr1P_PackUv(texture->u3, texture->v3);
+
+#if defined(CTR_NATIVE)
+	if ((gNativeReverseTrackEnabled != 0) && LevInstDef_IsTurboVisualQuad(block))
+	{
+		u16 temp = uv[0];
+		uv[0] = uv[2];
+		uv[2] = temp;
+		temp = uv[1];
+		uv[1] = uv[3];
+		uv[3] = temp;
+	}
+#else
+	(void)block;
+#endif
+}
+
+static void DrawLevelOvr1P_WriteProjectedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block,
+                                            const struct TextureLayout *texture, u32 tableWord)
+{
+	u16 uv[4];
+	DrawLevelOvr1P_GetTextureUv(block, texture, uv);
 
 	DrawLevelOvr1P_Scratch()->uv.uv0 = uv[0] | ((u32)texture->clut << 16);
 	DrawLevelOvr1P_Scratch()->uv.uv1 = uv[1] | ((u32)texture->tpage << 16);
@@ -4497,10 +4519,10 @@ static struct TextureLayout *Ovr226_800a3e00_SelectGround4x1SelectorTexture(cons
 	return texture;
 }
 
-static void Ovr226_800a3e44_WriteGround4x1SelectorUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
+static void Ovr226_800a3e44_WriteGround4x1SelectorUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block, const struct TextureLayout *texture,
                                                      u32 tableWord)
 {
-	DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+	DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 }
 
 static int Ovr226_800a3eb0_Ground4x1NearOrDirect(struct PushBuffer *pb, struct PrimMem *primMem, const struct QuadBlock *block,
@@ -4705,7 +4727,7 @@ static int Ovr226_800a3c70_Ground4x1SelectorNearGate(struct PushBuffer *pb, stru
 	struct TextureLayout *texture = Ovr226_800a3e00_SelectGround4x1SelectorTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		Ovr226_800a3e44_WriteGround4x1SelectorUv(projected, indices, texture, tableWord);
+		Ovr226_800a3e44_WriteGround4x1SelectorUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a3eb0_Ground4x1NearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtIndex);
@@ -4725,10 +4747,10 @@ static struct TextureLayout *Ovr226_800a49e0_SelectGround4x1RenderedTexture(cons
 	return Ovr226_800a3e00_SelectGround4x1SelectorTexture(block, projected, maxDepth);
 }
 
-static void Ovr226_800a4a28_WriteGround4x1RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
+static void Ovr226_800a4a28_WriteGround4x1RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block, const struct TextureLayout *texture,
                                                      u32 tableWord)
 {
-	DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+	DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 }
 
 static void Ovr226_800a4950_StoreGround4x1RenderedClipHeader(u32 tableWord)
@@ -5054,7 +5076,7 @@ static int Ovr226_800a47f4_Ground4x1RenderedSelectorNearGate(struct PushBuffer *
 	struct TextureLayout *texture = Ovr226_800a49e0_SelectGround4x1RenderedTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		Ovr226_800a4a28_WriteGround4x1RenderedUv(projected, indices, texture, tableWord);
+		Ovr226_800a4a28_WriteGround4x1RenderedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a4ad0_Ground4x1RenderedNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtEntry);
@@ -5424,7 +5446,7 @@ static int Ovr226_800a58ec_Ground4x2SelectorNearGate(struct PushBuffer *pb, stru
 	struct TextureLayout *texture = Ovr226_800a3e00_SelectGround4x1SelectorTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+		DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a5b2c_Ground4x2NearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtIndex);
@@ -5722,7 +5744,7 @@ static int Ovr226_800a7668_DynamicListSelectorNearGate(struct PushBuffer *pb, st
 	struct TextureLayout *texture = Ovr226_800a3e00_SelectGround4x1SelectorTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+		DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a78a8_DynamicListNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtIndex);
@@ -6020,7 +6042,7 @@ static int Ovr226_800a9288_WideDynamicSelectorNearGate(struct PushBuffer *pb, st
 	struct TextureLayout *texture = Ovr226_800a3e00_SelectGround4x1SelectorTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+		DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a94c8_WideDynamicNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtIndex);
@@ -6061,10 +6083,10 @@ static struct TextureLayout *Ovr226_800a6930_SelectGround4x2RenderedTexture(cons
 	return Ovr226_800a49e0_SelectGround4x1RenderedTexture(block, projected, maxDepth);
 }
 
-static void Ovr226_800a6970_WriteGround4x2RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
+static void Ovr226_800a6970_WriteGround4x2RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block, const struct TextureLayout *texture,
                                                      u32 tableWord)
 {
-	DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+	DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 }
 
 static int Ovr226_800a6d6c_WriteGround4x2RenderedClippedRecordAtOtEntry(struct PushBuffer *pb, const struct QuadBlock *block,
@@ -6487,7 +6509,7 @@ static int Ovr226_800a6740_Ground4x2RenderedSelectorNearGate(struct PushBuffer *
 	struct TextureLayout *texture = Ovr226_800a6930_SelectGround4x2RenderedTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		Ovr226_800a6970_WriteGround4x2RenderedUv(projected, indices, texture, tableWord);
+		Ovr226_800a6970_WriteGround4x2RenderedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a69dc_Ground4x2RenderedNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtEntry);
@@ -6527,10 +6549,10 @@ static struct TextureLayout *Ovr226_800a856c_SelectDynamicRenderedTexture(const 
 	return Ovr226_800a6930_SelectGround4x2RenderedTexture(block, projected, maxDepth);
 }
 
-static void Ovr226_800a85b0_WriteDynamicRenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
+static void Ovr226_800a85b0_WriteDynamicRenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block, const struct TextureLayout *texture,
                                                    u32 tableWord)
 {
-	DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+	DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 }
 
 static int Ovr226_800a898c_WriteDynamicRenderedClippedRecordAtOtEntry(struct PushBuffer *pb, const struct QuadBlock *block,
@@ -6921,7 +6943,7 @@ static int Ovr226_800a8380_DynamicRenderedSelectorNearGate(struct PushBuffer *pb
 	struct TextureLayout *texture = Ovr226_800a856c_SelectDynamicRenderedTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		Ovr226_800a85b0_WriteDynamicRenderedUv(projected, indices, texture, tableWord);
+		Ovr226_800a85b0_WriteDynamicRenderedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800a861c_DynamicRenderedNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtEntry);
@@ -6961,10 +6983,10 @@ static struct TextureLayout *Ovr226_800aa18c_SelectQuad4x4RenderedTexture(const 
 	return Ovr226_800a6930_SelectGround4x2RenderedTexture(block, projected, maxDepth);
 }
 
-static void Ovr226_800aa1d0_WriteQuad4x4RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct TextureLayout *texture,
+static void Ovr226_800aa1d0_WriteQuad4x4RenderedUv(struct DrawLevelOvr1PScratchVertex *projected, const int *indices, const struct QuadBlock *block, const struct TextureLayout *texture,
                                                    u32 tableWord)
 {
-	DrawLevelOvr1P_WriteProjectedUv(projected, indices, texture, tableWord);
+	DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, texture, tableWord);
 }
 
 static int Ovr226_800aa5ac_WriteQuad4x4RenderedClippedRecordAtOtEntry(struct PushBuffer *pb, const struct QuadBlock *block,
@@ -7354,7 +7376,7 @@ static int Ovr226_800a9fa0_Quad4x4RenderedSelectorNearGate(struct PushBuffer *pb
 	struct TextureLayout *texture = Ovr226_800aa18c_SelectQuad4x4RenderedTexture(block, projected, maxDepth);
 	if (texture != NULL)
 	{
-		Ovr226_800aa1d0_WriteQuad4x4RenderedUv(projected, indices, texture, tableWord);
+		Ovr226_800aa1d0_WriteQuad4x4RenderedUv(projected, indices, block, texture, tableWord);
 	}
 
 	return Ovr226_800aa23c_Quad4x4RenderedNearOrDirect(pb, primMem, block, projected, indices, faceIndex, texture, 0, 0x24, inheritedOtEntry);
@@ -7457,9 +7479,11 @@ static struct TextureLayout *Ovr226_800a1058_PrepareFullDynamicLowUv(struct Quad
 	// choosing either the direct low quad or the near/transition helper table.
 	DrawLevelOvr1P_Scratch()->selected4x1TableWord = 0;
 
-	u32 uv0 = DrawLevelOvr1P_ReadWord(texture, 0);
-	u32 uv1 = DrawLevelOvr1P_ReadWord(texture, 4);
-	u32 uv2 = DrawLevelOvr1P_ReadWord(texture, 8);
+	u16 uv[4];
+	DrawLevelOvr1P_GetTextureUv(block, texture, uv);
+	u32 uv0 = uv[0] | ((u32)texture->clut << 16);
+	u32 uv1 = uv[1] | ((u32)texture->tpage << 16);
+	u32 uv2 = uv[2] | ((u32)uv[3] << 16);
 	DrawLevelOvr1P_Scratch()->uv.uv0 = uv0;
 	DrawLevelOvr1P_Scratch()->uv.uv1 = uv1;
 	DrawLevelOvr1P_Scratch()->uv.uv2 = uv2;
@@ -7669,7 +7693,7 @@ static int Ovr226_800a19a8_SelectFullDynamicDirectSlot(struct QuadBlock *block, 
 
 	if (*texture != NULL)
 	{
-		DrawLevelOvr1P_WriteProjectedUv(projected, indices, *texture, tableWord);
+		DrawLevelOvr1P_WriteProjectedUv(projected, indices, block, *texture, tableWord);
 	}
 
 	return 1;

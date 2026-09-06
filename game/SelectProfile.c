@@ -506,7 +506,9 @@ void SelectProfile_ToggleMode(u32 mode)
 	*SelectProfile_Mode() = mode & SELECT_PROFILE_SCREEN_MASK;
 	if (*SelectProfile_Mode() == SELECT_PROFILE_SCREEN_GHOST)
 	{
-		u16 trackID = ((mode & SELECT_PROFILE_ACTION_MASK) == SELECT_PROFILE_ACTION_SAVE) ? sdata->gGT->levelID : sdata->gGT->currLEV;
+		u16 trackID = ((mode & SELECT_PROFILE_ACTION_MASK) == SELECT_PROFILE_ACTION_SAVE)
+		                  ? NativeReverseTrack_GetCurrentLogicalTrackId()
+		                  : sdata->gGT->currLEV;
 		RefreshCard_ActivateGhostProfilesForLEV(trackID);
 	}
 	sdata->selectProfileState.exitToPrevious = 0;
@@ -737,7 +739,7 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 		sdata->GhostRecording.ptrGhost->timeElapsedInRace = time;
 	}
 
-	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], gGT->levelID, time, gGT->prevNameEntered);
+	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], NativeReverseTrack_GetCurrentLogicalTrackId(), time, gGT->prevNameEntered);
 
 	sdata->ghostProfile_indexSave = menu->rowSelected;
 	sdata->ghostProfile_rowSelect = -1;
@@ -1047,6 +1049,8 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 		}
 
 		int ghostMode = RefreshCard_GetGhostProfileMode(menu->rowSelected);
+		NativeReverseTrack_SelectLogical(profile->trackID);
+		sdata->gGT->currLEV = profile->trackID;
 		sdata->gGT->gameMode1 &= ~(TIME_TRIAL | RELIC_RACE);
 		if (ghostMode == NATIVE_GHOST_MODE_RELIC_RACE)
 		{

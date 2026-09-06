@@ -63,12 +63,12 @@ static const char *MM_HighScore_OnlineSwapCategoryText(void)
 }
 static int MM_HighScore_OnlineGetTrack(u16 trackIndex, struct NativeLeaderboardTrack *track)
 {
-    if (trackIndex > MM_HIGHSCORE_LAST_ARCADE_TRACK)
+    if (trackIndex > MM_HIGHSCORE_LAST_TRACK)
     {
         return 0;
     }
 
-    return NativeLeaderboard_CopyTrack(D230.arcadeTracks[trackIndex].levID, track);
+    return NativeLeaderboard_CopyTrack(MM_HighScore_GetLogicalTrackId(trackIndex), track);
 }
 
 static int MM_HighScore_OnlineRecordCount(const struct NativeLeaderboardTrack *track)
@@ -107,12 +107,15 @@ static void MM_HighScore_OnlineClampSelection(void)
 static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
 {
     struct GameTracker *gGT = sdata->gGT;
-    s16 levelID = D230.arcadeTracks[trackIndex].levID;
+    s16 logicalTrackId = MM_HighScore_GetLogicalTrackId(trackIndex);
+    int arcadeTrackIndex = MM_HighScore_GetArcadeIndexForLogical(logicalTrackId);
+    char trackName[64];
+    NativeReverseTrack_FormatName(logicalTrackId, trackName, sizeof(trackName));
     struct NativeLeaderboardTrack track;
     memset(&track, 0, sizeof(track));
     MM_HighScore_OnlineGetTrack(trackIndex, &track);
 
-    s16 lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], FONT_BIG) >> 1;
+    s16 lineWidth = DecalFont_GetLineWidth(trackName, FONT_BIG) >> 1;
     s16 numColor = ((FPS_HALF(sdata->frameCounter) & MM_HIGHSCORE_FLASH_TIMER_BIT) == 0) ? RED : ORANGE;
     u32 *colorPtr = data.ptrColor[numColor];
     struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[MM_HIGHSCORE_ARROW_ICON_GROUP]);
@@ -129,7 +132,7 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
                      titleMeta->currY + MM_HIGHSCORE_ARROW_Y_OFFSET, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
                      colorPtr[0], colorPtr[1], colorPtr[2], colorPtr[3], 0, MM_HIGHSCORE_ARROW_SCALE, 0);
 
-    DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], titleMeta->currX + offsetX + MM_HIGHSCORE_TITLE_X_OFFSET,
+    DecalFont_DrawLine(trackName, titleMeta->currX + offsetX + MM_HIGHSCORE_TITLE_X_OFFSET,
                        titleMeta->currY + MM_HIGHSCORE_TITLE_Y_OFFSET, FONT_BIG, JUSTIFY_CENTER);
     MM_HighScore_Text3D(sdata->lngStrings[(s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? LNG_RELIC_RACE : LNG_BEST_TRACK_TIMES],
                         bestTrackMeta->currX + offsetX + MM_HIGHSCORE_BEST_TRACK_LABEL_X_OFFSET,
@@ -192,7 +195,7 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
     videoBox.h = MM_HIGHSCORE_VIDEO_BOX_H;
     videoBox.x = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currX + offsetX + MM_HIGHSCORE_VIDEO_BOX_X_OFFSET;
     videoBox.y = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currY + MM_HIGHSCORE_VIDEO_BOX_Y_OFFSET;
-    MM_TrackSelect_Video_Draw(&videoBox, &D230.arcadeTracks[0], trackIndex, (D230.highScoreTransition.state == EXITING_MENU), 0);
+    MM_TrackSelect_Video_Draw(&videoBox, &D230.arcadeTracks[0], arcadeTrackIndex, (D230.highScoreTransition.state == EXITING_MENU), 0);
 }
 
 static void MM_HighScore_OnlineStartGhostReplay(void)
@@ -213,6 +216,7 @@ static void MM_HighScore_OnlineStartGhostReplay(void)
     struct GameTracker *gGT = sdata->gGT;
     gNativeGhostReplayMode = 1;
     gNativeOnlineLeaderboardMode = 0;
+    NativeReverseTrack_SelectLogical(s_onlineGhostTrackId);
     data.characterIDs[0] = s_onlineGhostCharacterId;
     gGT->numPlyrNextGame = 1;
     gGT->gameMode1 &= ~(BATTLE_MODE | TIME_TRIAL | RELIC_RACE | ADVENTURE_MODE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
@@ -280,7 +284,7 @@ static void MM_HighScore_OnlineHandleBrowsingInput(void)
         OtherFX_Play(0, 1);
         D230.highScoreTransition.pendingHorizontalMove = -1;
         D230.highScoreSelection.targetTrack = D230.highScoreSelection.currentTrack - 1;
-        if (D230.highScoreSelection.targetTrack < 0) D230.highScoreSelection.targetTrack = MM_HIGHSCORE_LAST_ARCADE_TRACK;
+        if (D230.highScoreSelection.targetTrack < 0) D230.highScoreSelection.targetTrack = MM_HIGHSCORE_LAST_TRACK;
         return;
     }
     if ((buttons & BTN_RIGHT) != 0)
@@ -288,7 +292,7 @@ static void MM_HighScore_OnlineHandleBrowsingInput(void)
         OtherFX_Play(0, 1);
         D230.highScoreTransition.pendingHorizontalMove = 1;
         D230.highScoreSelection.targetTrack = D230.highScoreSelection.currentTrack + 1;
-        if (D230.highScoreSelection.targetTrack > MM_HIGHSCORE_LAST_ARCADE_TRACK) D230.highScoreSelection.targetTrack = 0;
+        if (D230.highScoreSelection.targetTrack > MM_HIGHSCORE_LAST_TRACK) D230.highScoreSelection.targetTrack = 0;
         return;
     }
 
@@ -373,7 +377,7 @@ static void MM_HighScore_OnlineHandleGhostMenuInput(void)
     }
 
     OtherFX_Play(1, 1);
-    s_onlineGhostTrackId = D230.arcadeTracks[D230.highScoreSelection.currentTrack].levID;
+    s_onlineGhostTrackId = MM_HighScore_GetLogicalTrackId(D230.highScoreSelection.currentTrack);
     s_onlineGhostCharacterId = entry->characterId;
     s_onlineGhostMode = (s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? NATIVE_GHOST_MODE_RELIC_RACE : NATIVE_GHOST_MODE_TIME_TRIAL;
     s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_DOWNLOADING;

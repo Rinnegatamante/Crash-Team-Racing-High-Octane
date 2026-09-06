@@ -365,7 +365,7 @@ int GTE_operator(int op)
 		s64 nclip = (s64)(C2_SX0 * C2_SY1) + (C2_SX1 * C2_SY2) + (C2_SX2 * C2_SY0) -
 		            (C2_SX0 * C2_SY2) - (C2_SX1 * C2_SY0) - (C2_SX2 * C2_SY1);
 #if defined(CTR_NATIVE)
-			if (gNativeMirrorModeRenderActive && !gNativeMirrorModeDoubleFlipActive)
+			if ((gNativeMirrorModeRenderActive != 0) != (gNativeMirrorModeDoubleFlipActive != 0))
 			{
 				nclip = -nclip;
 			}

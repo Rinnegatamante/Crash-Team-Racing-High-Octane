@@ -117,6 +117,24 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"VER FANTASMA",
 		"SPOOK BEKIJKEN",
 	};
+	static const char *trackNormal[6] =
+	{
+		"NORMAL",
+		"NORMAL",
+		"NORMAL",
+		"NORMALE",
+		"NORMAL",
+		"NORMAAL",
+	};
+	static const char *trackReverse[6] =
+	{
+		"REVERSE",
+		"INVERSE",
+		"RUECKWAERTS",
+		"INVERSA",
+		"INVERSA",
+		"OMGEKEERD",
+	};
 
 	int languageRow = 0;
 	if ((cfg_language >= 2) && (cfg_language <= 7))
@@ -154,6 +172,10 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)onlineLeaderboard[languageRow];
 	case NATIVE_MENU_STRING_WATCH_GHOST:
 		return (char *)watchGhost[languageRow];
+	case NATIVE_MENU_STRING_TRACK_NORMAL:
+		return (char *)trackNormal[languageRow];
+	case NATIVE_MENU_STRING_TRACK_REVERSE:
+		return (char *)trackReverse[languageRow];
 	default:
 		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
 	}

@@ -348,9 +348,13 @@ void GhostReplay_Init1(void)
 
 	// ALWAYS initialize ghost threads, even if gh == 0,
 	// or else the "Ghost Too Big" text will never play.
-	// Relic Race only uses the human ghost; N. Tropy/Oxide are TT-only.
-	s32 ghostCount = relicRaceGameplay ? 1 : 2;
-	if (relicRaceGameplay)
+	// Relic Race and Reverse variants only use the human ghost; retail N. Tropy/Oxide tapes are forward-track recordings.
+	b32 humanGhostOnly = relicRaceGameplay;
+#if defined(CTR_NATIVE)
+	humanGhostOnly |= gNativeReverseTrackEnabled != 0;
+#endif
+	s32 ghostCount = humanGhostOnly ? 1 : 2;
+	if (humanGhostOnly)
 	{
 		sdata->ptrGhostTape[1] = NULL;
 	}

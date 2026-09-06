@@ -1,11 +1,12 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
-#define NATIVE_SUPER_TURBO_VISUAL_QUAD_LIMIT 8192
+#define NATIVE_TURBO_VISUAL_QUAD_LIMIT 8192
 
-static const struct QuadBlock *s_nativeSuperTurboQuadBase;
-static int s_nativeSuperTurboQuadCount;
-static u32 s_nativeSuperTurboVisualBits[(NATIVE_SUPER_TURBO_VISUAL_QUAD_LIMIT + 31) / 32];
+static const struct QuadBlock *s_nativeTurboQuadBase;
+static int s_nativeTurboQuadCount;
+static u32 s_nativeTurboVisualBits[(NATIVE_TURBO_VISUAL_QUAD_LIMIT + 31) / 32];
+static u32 s_nativeSuperTurboVisualBits[(NATIVE_TURBO_VISUAL_QUAD_LIMIT + 31) / 32];
 
 static int LevInstDef_AbsInt(int value)
 {
@@ -18,7 +19,7 @@ static b32 LevInstDef_QuadHasTexture(const struct QuadBlock *quad)
 	       quad->ptr_texture_mid[2] != NULL || quad->ptr_texture_mid[3] != NULL;
 }
 
-static b32 LevInstDef_QuadSharesSuperTurboTexture(const struct QuadBlock *quad, const struct QuadBlock *seed)
+static b32 LevInstDef_QuadSharesTurboTexture(const struct QuadBlock *quad, const struct QuadBlock *seed)
 {
 	if ((quad == NULL) || (seed == NULL))
 	{
@@ -121,47 +122,64 @@ static void LevInstDef_TintSuperTurboGlow(struct mesh_info *mesh, const struct Q
 
 }
 
-static void LevInstDef_MarkSuperTurboVisualQuad(int quadIndex)
+static void LevInstDef_MarkTurboVisualQuad(int quadIndex, b32 superTurbo)
 {
-	if ((quadIndex < 0) || (quadIndex >= NATIVE_SUPER_TURBO_VISUAL_QUAD_LIMIT))
+	if ((quadIndex < 0) || (quadIndex >= NATIVE_TURBO_VISUAL_QUAD_LIMIT))
 	{
 		return;
 	}
 
-	s_nativeSuperTurboVisualBits[quadIndex >> 5] |= 1u << (quadIndex & 31);
+	s_nativeTurboVisualBits[quadIndex >> 5] |= 1u << (quadIndex & 31);
+	if (superTurbo)
+	{
+		s_nativeSuperTurboVisualBits[quadIndex >> 5] |= 1u << (quadIndex & 31);
+	}
+}
+
+static b32 LevInstDef_IsMarkedTurboVisualQuad(const struct QuadBlock *quad, const u32 *bits)
+{
+	if ((quad == NULL) || (s_nativeTurboQuadBase == NULL))
+	{
+		return false;
+	}
+
+	const ptrdiff_t quadIndex = quad - s_nativeTurboQuadBase;
+	if ((quadIndex < 0) || (quadIndex >= s_nativeTurboQuadCount) || (quadIndex >= NATIVE_TURBO_VISUAL_QUAD_LIMIT))
+	{
+		return false;
+	}
+
+	return (bits[quadIndex >> 5] & (1u << (quadIndex & 31))) != 0;
+}
+
+b32 LevInstDef_IsTurboVisualQuad(const struct QuadBlock *quad)
+{
+	return LevInstDef_IsMarkedTurboVisualQuad(quad, s_nativeTurboVisualBits);
 }
 
 b32 LevInstDef_IsSuperTurboVisualQuad(const struct QuadBlock *quad)
 {
-	if ((quad == NULL) || (s_nativeSuperTurboQuadBase == NULL))
-	{
-		return false;
-	}
-
-	const ptrdiff_t quadIndex = quad - s_nativeSuperTurboQuadBase;
-	if ((quadIndex < 0) || (quadIndex >= s_nativeSuperTurboQuadCount) || (quadIndex >= NATIVE_SUPER_TURBO_VISUAL_QUAD_LIMIT))
-	{
-		return false;
-	}
-
-	return (s_nativeSuperTurboVisualBits[quadIndex >> 5] & (1u << (quadIndex & 31))) != 0;
+	return LevInstDef_IsMarkedTurboVisualQuad(quad, s_nativeSuperTurboVisualBits);
 }
 
-static void LevInstDef_FindSuperTurboVisualQuads(struct mesh_info *mesh)
+static void LevInstDef_FindTurboVisualQuads(struct mesh_info *mesh)
 {
 	const struct QuadBlock *quadBlocks = mesh->ptrQuadBlockArray;
 	const int numQuadBlocks = mesh->numQuadBlock;
+	SDL_memset(s_nativeTurboVisualBits, 0, sizeof(s_nativeTurboVisualBits));
 	SDL_memset(s_nativeSuperTurboVisualBits, 0, sizeof(s_nativeSuperTurboVisualBits));
-	s_nativeSuperTurboQuadBase = quadBlocks;
-	s_nativeSuperTurboQuadCount = numQuadBlocks;
+	s_nativeTurboQuadBase = quadBlocks;
+	s_nativeTurboQuadCount = numQuadBlocks;
 
 	for (int triggerIndex = 0; triggerIndex < numQuadBlocks; triggerIndex++)
 	{
 		const struct QuadBlock *trigger = &quadBlocks[triggerIndex];
-		if (((trigger->quadFlags & QUADBLOCK_FLAG_TRIGGER) == 0) || ((trigger->terrain_type & COLL_STEP_TRIGGER_SUPER_TURBO_PAD) == 0))
+		if (((trigger->quadFlags & QUADBLOCK_FLAG_TRIGGER) == 0) || ((trigger->terrain_type & COLL_STEP_TRIGGER_TURBO_PAD_MASK) == 0))
 		{
 			continue;
 		}
+
+		const b32 superTurbo = (trigger->terrain_type & COLL_STEP_TRIGGER_SUPER_TURBO_PAD) != 0;
 
 		const int triggerSpanX = trigger->bbox.max.x - trigger->bbox.min.x;
 		const int triggerSpanZ = trigger->bbox.max.z - trigger->bbox.min.z;
@@ -239,7 +257,7 @@ static void LevInstDef_FindSuperTurboVisualQuads(struct mesh_info *mesh)
 			if (bestIndex >= 0)
 			{
 				const struct QuadBlock *candidate = &quadBlocks[bestIndex];
-				if ((sdata != NULL) && (sdata->gGT != NULL) && (sdata->gGT->levelID == CORTEX_CASTLE))
+				if (superTurbo && (sdata != NULL) && (sdata->gGT != NULL) && (sdata->gGT->levelID == CORTEX_CASTLE))
 				{
 					const int textureUseCount = LevInstDef_CountTextureSignatureUses(quadBlocks, numQuadBlocks, candidate);
 					// Cortex Castle intentionally tags a few ordinary wooden floor tiles as USF.
@@ -249,7 +267,7 @@ static void LevInstDef_FindSuperTurboVisualQuads(struct mesh_info *mesh)
 					}
 				}
 
-				LevInstDef_MarkSuperTurboVisualQuad(bestIndex);
+				LevInstDef_MarkTurboVisualQuad(bestIndex, superTurbo);
 
 				int partCount = 0;
 				for (int partIndex = 0; partIndex < numQuadBlocks && partCount < 6; partIndex++)
@@ -261,7 +279,7 @@ static void LevInstDef_FindSuperTurboVisualQuads(struct mesh_info *mesh)
 
 					const struct QuadBlock *part = &quadBlocks[partIndex];
 					if (((part->quadFlags & QUADBLOCK_FLAG_TRIGGER) != 0) ||
-					    !LevInstDef_QuadSharesSuperTurboTexture(part, candidate))
+					    !LevInstDef_QuadSharesTurboTexture(part, candidate))
 					{
 						continue;
 					}
@@ -297,13 +315,13 @@ static void LevInstDef_FindSuperTurboVisualQuads(struct mesh_info *mesh)
 						continue;
 					}
 
-					LevInstDef_MarkSuperTurboVisualQuad(partIndex);
+					LevInstDef_MarkTurboVisualQuad(partIndex, superTurbo);
 					partCount++;
 				}
 			}
 
 
-			if ((sdata != NULL) && (sdata->gGT != NULL) &&
+			if (superTurbo && (sdata != NULL) && (sdata->gGT != NULL) &&
 			    ((sdata->gGT->levelID == OXIDE_STATION) || (sdata->gGT->levelID == HOT_AIR_SKYWAY)))
 			{
 				LevInstDef_TintSuperTurboGlow(mesh, trigger);
@@ -327,7 +345,7 @@ void LevInstDef_UnPack(struct mesh_info *ptr_mesh_info)
 	ptrQuadBlockArray = ptr_mesh_info->ptrQuadBlockArray;
 
 #if defined(CTR_NATIVE)
-	LevInstDef_FindSuperTurboVisualQuads(ptr_mesh_info);
+	LevInstDef_FindTurboVisualQuads(ptr_mesh_info);
 #endif
 
 	// loop through all quadblocks

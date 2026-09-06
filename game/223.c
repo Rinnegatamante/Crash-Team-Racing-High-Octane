@@ -562,7 +562,12 @@ void RR_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	u16 rowOffsetY = 0;
 
 	// 12 entries per track, 6 for Time Trial and 6 for Relic Race
+#if defined(CTR_NATIVE)
+	struct HighScoreTrack *highScoreTrack = NativeReverseTrack_GetHighScoreTrack(NativeReverseTrack_GetCurrentLogicalTrackId());
+	struct HighScoreEntry *scoreEntries = &highScoreTrack->scoreEntry[RR_HIGH_SCORE_ENTRIES_PER_MODE * scoreMode];
+#else
 	struct HighScoreEntry *scoreEntries = &sdata->gameProgress.highScoreTracks[gGT->levelID].scoreEntry[RR_HIGH_SCORE_ENTRIES_PER_MODE * scoreMode];
+#endif
 
 	// === Naughty Dog Bug ===
 	// Start and End are the same

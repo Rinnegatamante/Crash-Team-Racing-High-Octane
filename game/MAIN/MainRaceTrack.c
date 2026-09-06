@@ -17,6 +17,9 @@ void MainRaceTrack_StartLoad(s16 levelID)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003cfc0-0x8003d024.
 void MainRaceTrack_RequestLoad(s16 levelID)
 {
+#if defined(CTR_NATIVE)
+	levelID = NativeReverseTrack_ResolveLoadLevel(levelID);
+#endif
 	// Turn off HUD
 	sdata->gGT->hudFlags &= HUD_FLAG_CLEAR_RACE_HUD_MASK;
 

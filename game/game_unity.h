@@ -61,6 +61,10 @@
 
 #include "FLARE.c"
 
+#if defined(CTR_NATIVE)
+#include "NativeReverseTrack.c"
+#endif
+
 #include "NativeGhostInput.c"
 
 #include "GAMEPAD.c"

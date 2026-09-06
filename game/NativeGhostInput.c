@@ -220,7 +220,7 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputFrameCount = 0;
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputTotalTimeMS = 0;
-    s_nativeGhostInputTrackID = gGT->levelID;
+    s_nativeGhostInputTrackID = NativeReverseTrack_GetCurrentLogicalTrackId();
     s_nativeGhostInputCharacterID = data.characterIDs[driver->driverID];
     s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA;
     if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
@@ -528,7 +528,7 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     if (s_nativeGhostInputExternalLoaded)
     {
-        if ((s_nativeGhostInputTrackID != sdata->gGT->levelID) ||
+        if ((s_nativeGhostInputTrackID != NativeReverseTrack_GetCurrentLogicalTrackId()) ||
             (s_nativeGhostInputCharacterID != data.characterIDs[0]) ||
             !NativeGhostInput_ModeMatchesCurrentGame(
                 (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_RELIC_RACE) != 0
@@ -558,7 +558,7 @@ b32 NativeGhostInput_BeginPlayback(void)
     }
 
     if (!NativeGhostInput_ValidateHeader(&header) ||
-        (header.trackID != sdata->gGT->levelID) ||
+        (header.trackID != NativeReverseTrack_GetCurrentLogicalTrackId()) ||
         (header.characterID != data.characterIDs[0]) ||
         !NativeGhostInput_ModeMatchesCurrentGame(NativeGhostInput_HeaderMode(&header)))
     {

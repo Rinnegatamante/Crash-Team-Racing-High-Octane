@@ -226,9 +226,18 @@ static const char *NativeDiscord_GetModeName(const struct GameTracker *gGT)
 
 static const char *NativeDiscord_GetTrackName(const struct GameTracker *gGT)
 {
+    static char reverseTrackName[64];
+
     if ((gGT->levelID < DINGO_CANYON) || (gGT->levelID > ROCKY_ROAD) || (sdata->lngStrings == NULL))
     {
         return NULL;
+    }
+
+    s16 logicalTrackId = NativeReverseTrack_GetCurrentLogicalTrackId();
+    if (NativeReverseTrack_IsLogicalReverse(logicalTrackId))
+    {
+        NativeReverseTrack_FormatName(logicalTrackId, reverseTrackName, sizeof(reverseTrackName));
+        return reverseTrackName;
     }
 
     int nameIndex = data.metaDataLEV[gGT->levelID].name_LNG;

@@ -310,6 +310,14 @@ void GAMEPROG_GetPtrHighScoreTrack(void)
 	struct GameTracker *gGT = sdata->gGT;
 	s32 gameMode1 = gGT->gameMode1;
 
+#if defined(CTR_NATIVE)
+	struct HighScoreTrack *nativeTrack = NativeReverseTrack_GetHighScoreTrack(NativeReverseTrack_GetCurrentLogicalTrackId());
+	if (nativeTrack != NULL)
+	{
+		sdata->ptrActiveHighScoreEntry = &nativeTrack->scoreEntry[MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE * ((gameMode1 & RELIC_RACE) != 0)];
+		return;
+	}
+#endif
 	sdata->ptrActiveHighScoreEntry =
 	    &sdata->gameProgress.highScoreTracks[gGT->levelID].scoreEntry[MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE * ((gameMode1 & RELIC_RACE) != 0)];
 }
