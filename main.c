@@ -187,6 +187,7 @@ extern s32 s_nativeLanguageChosen; // Flag if language has been selected on firs
 extern int gNativeMirrorModeEnabled;
 int gNative60FpsEnabled = 0;
 int gNativeForce30Fps = 0;
+int gNativeDefaultCameraFar = 0;
 #ifndef __vita__
 int gNativeAntiAliasingEnabled = 1;
 int gNativeBorderlessEnabled = 0;
@@ -224,6 +225,10 @@ void load_config(void)
 			{
 				gNative60FpsEnabled = (value != 0);
 			}
+			else if (strcmp("default_camera_far", buffer) == 0)
+			{
+				gNativeDefaultCameraFar = (value != 0);
+			}
 #ifndef __vita__
 			else if (strcmp("anti_aliasing", buffer) == 0)
 			{
@@ -247,6 +252,7 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "language", cfg_language);
 		fprintf(config, "%s=%d\n", "mirror_mode", gNativeMirrorModeEnabled != 0);
 		fprintf(config, "%s=%d\n", "60fps", gNative60FpsEnabled != 0);
+		fprintf(config, "%s=%d\n", "default_camera_far", gNativeDefaultCameraFar != 0);
 #ifndef __vita__
 		fprintf(config, "%s=%d\n", "anti_aliasing", gNativeAntiAliasingEnabled != 0);
 		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);

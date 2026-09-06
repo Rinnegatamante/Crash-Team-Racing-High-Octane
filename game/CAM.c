@@ -1,6 +1,10 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+extern int gNativeDefaultCameraFar;
+#endif
+
+#if defined(CTR_NATIVE)
 #include "platform/native_adhoc.h"
 #endif
 
@@ -396,6 +400,11 @@ void CAM_Init(struct CameraDC *cDC, s32 cameraID, struct Driver *d, struct PushB
 
 	memset(cDC, 0, sizeof(struct CameraDC));
 
+#if defined(CTR_NATIVE)
+	cDC->nearOrFar = gNativeDefaultCameraFar != 0;
+	cDC->zoomToggleState = (s16)cDC->nearOrFar;
+#endif
+
 	// needed or L2 breaks
 	cDC->cameraID = cameraID;
 
@@ -516,9 +525,14 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 		cDC->transitionBlend = 0;
 
 		cDC->transitionFrameCount = FPS_DOUBLE(0x1E);
+#if defined(CTR_NATIVE)
+		cDC->nearOrFar = gNativeDefaultCameraFar != 0;
+		cDC->zoomToggleState = (s16)cDC->nearOrFar;
+#else
 		cDC->nearOrFar = 0;
+#endif
 
-		// when camera reaches player, be zoomed in
+		// when camera reaches player, use the configured default distance
 		cDC->cameraMode = 0;
 		cDC->trackPathNode = (struct CheckpointNode *)(flyInData + 0x18);
 

@@ -211,15 +211,17 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 2, 1, 0, 0},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_FRAME_RATE, 1, 0, 2, 2},
-#else
-	{LNG_LANGUAGE, 4, 1, 0, 0},
+	{LNG_LANGUAGE, 3, 1, 0, 0},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_ANTI_ALIASING, 2, 4, 3, 3},
-	{NATIVE_MENU_STRING_BORDERLESS, 3, 0, 4, 4},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 0, 3, 3},
+#else
+	{LNG_LANGUAGE, 5, 1, 0, 0},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_ANTI_ALIASING, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_BORDERLESS, 4, 0, 5, 5},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -305,6 +307,7 @@ static s16 s_nativeLanguageRow;
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
+extern int gNativeDefaultCameraFar;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeBorderlessEnabled;
@@ -759,6 +762,13 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	if (choose == NATIVE_MENU_STRING_FRAME_RATE)
 	{
 		gNative60FpsEnabled ^= 1;
+		save_config();
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_DEFAULT_CAMERA)
+	{
+		gNativeDefaultCameraFar ^= 1;
 		save_config();
 		return;
 	}

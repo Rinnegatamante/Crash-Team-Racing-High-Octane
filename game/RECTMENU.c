@@ -3,6 +3,7 @@
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
+extern int gNativeDefaultCameraFar;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeBorderlessEnabled;
@@ -32,6 +33,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 	{
 		"FPS: 30",
 		"FPS: 60",
+	};
+	static const char *defaultCamera[6][2] =
+	{
+		{"CAMERA: NEAR", "CAMERA: FAR"},
+		{"CAMERA: PROCHE", "CAMERA: LOIN"},
+		{"KAMERA: NAH", "KAMERA: WEIT"},
+		{"CAMERA: VICINA", "CAMERA: LONTANA"},
+		{"CAMARA: CERCA", "CAMARA: LEJOS"},
+		{"CAMERA: DICHTBIJ", "CAMERA: VER"},
 	};
 #ifndef __vita__
 	static const char *antiAliasing[2] =
@@ -150,6 +160,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)mirrorMode[languageRow][gNativeMirrorModeEnabled != 0];
 	case NATIVE_MENU_STRING_FRAME_RATE:
 		return (char *)frameRate[gNative60FpsEnabled != 0];
+	case NATIVE_MENU_STRING_DEFAULT_CAMERA:
+		return (char *)defaultCamera[languageRow][gNativeDefaultCameraFar != 0];
 #ifndef __vita__
 	case NATIVE_MENU_STRING_ANTI_ALIASING:
 		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];
