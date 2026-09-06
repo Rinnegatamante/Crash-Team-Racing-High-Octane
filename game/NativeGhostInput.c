@@ -9,7 +9,10 @@ enum
     NATIVE_GHOST_INPUT_META_BUTTONS = BTN_START | BTN_SELECT,
     NATIVE_GHOST_INPUT_FLAG_60FPS = 1 << 0,
     NATIVE_GHOST_INPUT_FLAG_RELIC_RACE = 1 << 1,
+    NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y = 1 << 2,
     NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA = 1 << 15,
+    NATIVE_GHOST_INPUT_BUTTON_MASK = 0x0007ffff,
+    NATIVE_GHOST_INPUT_STICK_RY_SHIFT = 24,
     NATIVE_GHOST_INPUT_TIMER_PHASE_MASK = 7,
 };
 
@@ -178,7 +181,7 @@ b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld)
 
     if (buttonsHeld != NULL)
     {
-        *buttonsHeld = s_nativeGhostInputDisplayFrame.buttonsHeld;
+        *buttonsHeld = s_nativeGhostInputDisplayFrame.buttonsHeld & NATIVE_GHOST_INPUT_BUTTON_MASK;
     }
     return true;
 }
@@ -222,7 +225,7 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputTotalTimeMS = 0;
     s_nativeGhostInputTrackID = NativeReverseTrack_GetCurrentLogicalTrackId();
     s_nativeGhostInputCharacterID = data.characterIDs[driver->driverID];
-    s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA;
+    s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA | NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y;
     if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
     {
         s_nativeGhostInputRecordingFlags |= NATIVE_GHOST_INPUT_FLAG_RELIC_RACE;
@@ -258,19 +261,24 @@ static void NativeGhostInput_SetReplayPad(struct GamepadSystem *gGamepads)
     u32 replayPrev = 0;
     u8 stickLX = 0x80;
     u8 stickLY = 0x80;
+    u8 stickRY = 0x80;
 
     if (s_nativeGhostInputPlaybackActive && (s_nativeGhostInputPlaybackIndex < s_nativeGhostInputFrameCount))
     {
         struct NativeGhostInputFrame *frame = &s_nativeGhostInputFrames[s_nativeGhostInputPlaybackIndex];
-        replayHeld = frame->buttonsHeld;
+        replayHeld = frame->buttonsHeld & NATIVE_GHOST_INPUT_BUTTON_MASK;
         stickLX = frame->stickLX;
         stickLY = frame->stickLY;
+        if ((s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y) != 0)
+        {
+            stickRY = (u8)(frame->buttonsHeld >> NATIVE_GHOST_INPUT_STICK_RY_SHIFT);
+        }
         s_nativeGhostInputDisplayFrame = *frame;
         s_nativeGhostInputDisplayValid = true;
 
         if (s_nativeGhostInputPlaybackIndex != 0)
         {
-            replayPrev = s_nativeGhostInputFrames[s_nativeGhostInputPlaybackIndex - 1].buttonsHeld;
+            replayPrev = s_nativeGhostInputFrames[s_nativeGhostInputPlaybackIndex - 1].buttonsHeld & NATIVE_GHOST_INPUT_BUTTON_MASK;
         }
     }
 
@@ -283,7 +291,7 @@ static void NativeGhostInput_SetReplayPad(struct GamepadSystem *gGamepads)
     pad->stickLX_dontUse1 = stickLX;
     pad->stickLY_dontUse1 = stickLY;
     pad->stickRX = 0x80;
-    pad->stickRY = 0x80;
+    pad->stickRY = stickRY;
 
     gGamepads->anyoneHeldCurr = pad->buttonsHeldCurrFrame;
     gGamepads->anyoneTapped = pad->buttonsTapped;
@@ -317,7 +325,9 @@ void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads)
     }
 
     struct GamepadBuffer *pad = &gGamepads->gamepad[0];
-    s_nativeGhostInputPending.buttonsHeld = pad->buttonsHeldCurrFrame & ~NATIVE_GHOST_INPUT_META_BUTTONS;
+    s_nativeGhostInputPending.buttonsHeld =
+        ((u32)pad->buttonsHeldCurrFrame & ~NATIVE_GHOST_INPUT_META_BUTTONS & NATIVE_GHOST_INPUT_BUTTON_MASK) |
+        ((u32)(u8)pad->stickRY << NATIVE_GHOST_INPUT_STICK_RY_SHIFT);
     s_nativeGhostInputPending.stickLX = (u8)pad->stickLX;
     s_nativeGhostInputPending.stickLY = (u8)pad->stickLY;
     s_nativeGhostInputPending.elapsedTimeMS = 0;
@@ -580,6 +590,7 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     s_nativeGhostInputFrameCount = header.frameCount;
     s_nativeGhostInputTotalTimeMS = header.totalTimeMS;
+    s_nativeGhostInputRecordingFlags = header.flags;
     b32 use60Fps = NativeGhostInput_HeaderUses60Fps(&header);
     gNativeGhostReplayFpsOverride = use60Fps ? 1 : 0;
     if (use60Fps && ((header.flags & NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA) != 0))
