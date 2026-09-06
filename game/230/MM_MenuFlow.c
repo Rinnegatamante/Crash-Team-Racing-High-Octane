@@ -211,17 +211,19 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 3, 1, 0, 0},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 0, 3, 3},
-#else
-	{LNG_LANGUAGE, 5, 1, 0, 0},
+	{LNG_LANGUAGE, 4, 1, 0, 0},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
-	{NATIVE_MENU_STRING_ANTI_ALIASING, 3, 5, 4, 4},
-	{NATIVE_MENU_STRING_BORDERLESS, 4, 0, 5, 5},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 0, 4, 4},
+#else
+	{LNG_LANGUAGE, 6, 1, 0, 0},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_ANTI_ALIASING, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_BORDERLESS, 5, 0, 6, 6},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -286,7 +288,7 @@ static struct RectMenu s_nativeTimeTrialMenu =
 static struct RectMenu s_nativeOptionsMenu =
 {
 	.stringIndexTitle = LNG_OPTIONS,
-	.state = CENTER_ON_X,
+	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
 	.rows = s_nativeOptionsRows,
 	.funcPtr = MM_NativeOptionsMenuProc,
 };
@@ -308,6 +310,7 @@ extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
+extern int gNativeDefaultHudSpeedometer;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeBorderlessEnabled;
@@ -772,6 +775,13 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		save_config();
 		return;
 	}
+
+	if (choose == NATIVE_MENU_STRING_DEFAULT_HUD)
+	{
+		gNativeDefaultHudSpeedometer ^= 1;
+		save_config();
+		return;
+	}
 #ifndef __vita__
 	if (choose == NATIVE_MENU_STRING_ANTI_ALIASING)
 	{
@@ -1179,7 +1189,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	if (choose == LNG_OPTIONS)
 	{
 		s_nativeOptionsMenu.rowSelected = 0;
-		s_nativeOptionsMenu.state = CENTER_ON_X;
+		s_nativeOptionsMenu.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE;
 		s_nativeOptionsMenu.ptrNextBox_InHierarchy = NULL;
 		s_nativeOptionsMenu.ptrPrevBox_InHierarchy = mainMenu;
 

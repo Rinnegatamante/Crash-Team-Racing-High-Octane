@@ -4,6 +4,7 @@ extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
+extern int gNativeDefaultHudSpeedometer;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeBorderlessEnabled;
@@ -42,6 +43,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"CAMERA: VICINA", "CAMERA: LONTANA"},
 		{"CAMARA: CERCA", "CAMARA: LEJOS"},
 		{"CAMERA: DICHTBIJ", "CAMERA: VER"},
+	};
+	static const char *defaultHud[6][2] =
+	{
+		{"HUD: MINIMAP", "HUD: SPEEDOMETER"},
+		{"HUD: MINI-CARTE", "HUD: COMPTEUR"},
+		{"HUD: MINIKARTE", "HUD: TACHO"},
+		{"HUD: MINIMAPPA", "HUD: TACHIMETRO"},
+		{"HUD: MINIMAPA", "HUD: VELOCIMETRO"},
+		{"HUD: MINIKAART", "HUD: SNELHEID"},
 	};
 #ifndef __vita__
 	static const char *antiAliasing[2] =
@@ -162,6 +172,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)frameRate[gNative60FpsEnabled != 0];
 	case NATIVE_MENU_STRING_DEFAULT_CAMERA:
 		return (char *)defaultCamera[languageRow][gNativeDefaultCameraFar != 0];
+	case NATIVE_MENU_STRING_DEFAULT_HUD:
+		return (char *)defaultHud[languageRow][gNativeDefaultHudSpeedometer != 0];
 #ifndef __vita__
 	case NATIVE_MENU_STRING_ANTI_ALIASING:
 		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];

@@ -1,6 +1,9 @@
 #include <common.h>
 
 extern int gNativeGhostReplayMode;
+#if defined(CTR_NATIVE)
+extern int gNativeDefaultHudSpeedometer;
+#endif
 
 static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_info *mesh)
 {
@@ -380,6 +383,19 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	u8 numPlyrCurrGame = gGT->numPlyrCurrGame;
 	u8 numDrivers;
 	int gameMode = gGT->gameMode1;
+
+#if defined(CTR_NATIVE)
+	// Triangle can still toggle this at runtime; this only establishes the
+	// preferred HUD when a fresh race starts. Adventure Hub owns this bit.
+	if ((gameMode & (MAIN_MENU | GAME_CUTSCENE | ADVENTURE_ARENA)) == 0)
+	{
+		sdata->HudAndDebugFlags &= ~8u;
+		if (gNativeDefaultHudSpeedometer != 0)
+		{
+			sdata->HudAndDebugFlags |= 8u;
+		}
+	}
+#endif
 
 	for (int i = 0; i < 8; i++)
 	{
