@@ -392,7 +392,7 @@ void UI_INSTANCE_InitAll(void)
 	sdata->ptrPushBufferUI = (int)NULL;
 	if (gGT->numPlyrCurrGame >= 2)
 	{
-#if defined(CTR_NATIVE) && defined(__vita__)
+#if defined(CTR_NATIVE)
 		if ((gameMode1 & MAIN_MENU) != 0)
 #endif
 		{

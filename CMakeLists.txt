@@ -84,6 +84,9 @@ add_subdirectory(externals/SDL)
 
 # CTR Native
 add_executable(ctr_native main.c)
+if(WIN32)
+    target_sources(ctr_native PRIVATE platform/windows/ctr_native.rc)
+endif()
 set_target_properties(ctr_native PROPERTIES
     C_STANDARD 17
     C_STANDARD_REQUIRED ON
@@ -129,6 +132,10 @@ else()
     endif()
 endif()
 target_link_libraries(ctr_native SDL3::SDL3)
+if(WIN32)
+    target_sources(ctr_native PRIVATE platform/native_http_win32.c)
+    target_link_libraries(ctr_native winhttp bcrypt)
+endif()
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_link_options(ctr_native PRIVATE -static-libgcc)
 endif()

@@ -423,7 +423,7 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 	// scale Y axis (3)
 	pb->matrix_ViewProj.m[1][2] = pb->matrix_ViewProj.m[1][2] * r360 / r600;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	pb->matrix_ViewProj.t[0] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.t[0]);
 	pb->matrix_ViewProj.m[0][0] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][0]);
 	pb->matrix_ViewProj.m[0][1] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][1]);
@@ -617,7 +617,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 	val_X = pb->rect.w;
 	val_X = val_X / 2;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	// Match visibility culling to the wider projection.
 	val_X = CTR_WIDESCREEN_EXPAND_X(val_X);
 #endif
@@ -661,7 +661,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 
 		// The wider corner rays need a longer conservative endpoint so the
 		// frustum AABB does not reject geometry visible at the side edges.
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 		posX = tx * 0x200 + cameraPosX;
 		posY = ty * 0x200 + cameraPosY;
 		posZ = tz * 0x200 + cameraPosZ;

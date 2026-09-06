@@ -44,6 +44,17 @@ typedef double f64;
 #define HOUR                       (MINUTE * 60)
 
 #if defined(CTR_NATIVE) && defined(__vita__)
+#define CTR_NATIVE_HAS_ADHOC       1
+#define CTR_NATIVE_HAS_LEADERBOARD 1
+#elif defined(CTR_NATIVE) && defined(_WIN32)
+#define CTR_NATIVE_HAS_ADHOC       0
+#define CTR_NATIVE_HAS_LEADERBOARD 1
+#else
+#define CTR_NATIVE_HAS_ADHOC       0
+#define CTR_NATIVE_HAS_LEADERBOARD 0
+#endif
+
+#if defined(CTR_NATIVE)
 #define CTR_NATIVE_60FPS 1
 extern int gNative60FpsEnabled;
 extern int gNativeForce30Fps;
@@ -72,12 +83,12 @@ extern int gNativeGhostReplayFpsOverride;
 #define MINUTES(x)                 ((s32)(((f32)(x)) * MINUTE))
 #define HOURS(x)                   ((s32)(((f32)(x)) * HOUR))
 
-#if defined(CTR_NATIVE) && defined(__vita__)
-#define CTR_VITA_WIDESCREEN             1
+#if defined(CTR_NATIVE)
+#define CTR_NATIVE_WIDESCREEN             1
 #define CTR_WIDESCREEN_SCALE_X(value)   ((s32)(((s64)(value) * 34) / 45))
 #define CTR_WIDESCREEN_EXPAND_X(value)  ((s32)(((s64)(value) * 45) / 34))
 #else
-#define CTR_VITA_WIDESCREEN             0
+#define CTR_NATIVE_WIDESCREEN             0
 #define CTR_WIDESCREEN_SCALE_X(value)   (value)
 #define CTR_WIDESCREEN_EXPAND_X(value)  (value)
 #endif

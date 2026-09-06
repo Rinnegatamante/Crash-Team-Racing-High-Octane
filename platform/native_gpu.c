@@ -96,6 +96,7 @@ typedef struct
 	bool psxTexturedSemiTrans;
 	bool psxTextureOutputSTP;
 	bool psxDrawMaskSet;
+	bool superTurboTint;
 #ifdef __vita__
 	bool psxTextureFullyOpaque;
 	bool p4CacheEligible;
@@ -722,6 +723,7 @@ void ClearSplits(void)
 	s_gpu.splits[0].psxTexturedSemiTrans = false;
 	s_gpu.splits[0].psxTextureOutputSTP = false;
 	s_gpu.splits[0].psxDrawMaskSet = false;
+	s_gpu.splits[0].superTurboTint = false;
 #ifdef __vita__
 	s_gpu.splits[0].psxTextureFullyOpaque = false;
 	s_gpu.splits[0].p4CacheEligible = false;
@@ -1514,6 +1516,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 	// textured draws unless E6 forces it. Recursive screen-copy effects depend
 	// on this bit surviving after the blended textured pass.
 	bool psxTextureOutputSTP = textured && s_gpu.overrideTexture == 0;
+	const bool superTurboTint = textured && (((u32)tpage & NATIVE_GPU_TPAGE_SUPER_TURBO_TINT) != 0);
 
 	if (textured && s_gpu.overrideTexture != 0)
 	{
@@ -1525,8 +1528,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 
 #ifdef __vita__
 	const bool p4CacheEligible = textured && s_gpu.overrideTexture == 0 && texFormat == TF_4_BIT && !framebufferFeedback;
-	const bool superTurboTintRequested = (((u32)tpage & NATIVE_GPU_TPAGE_SUPER_TURBO_TINT) != 0);
-	const bool p4SuperTurboTint = p4CacheEligible && superTurboTintRequested;
+	const bool p4SuperTurboTint = p4CacheEligible && superTurboTint;
 	const s16 p4Page = p4CacheEligible ? GetTPageBase(tpage) : -1;
 	const u16 p4Clut = p4CacheEligible ? (u16)clut : 0;
 #endif
@@ -1535,6 +1537,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 	if (!psxTexturedSemiTrans && curSplit->blendMode == blendMode && curSplit->texFormat == texFormat && curSplit->textureId == textureId &&
 	    curSplit->drawPrimMode == s_gpu.drawPrimMode && curSplit->psxTexturedSemiTrans == psxTexturedSemiTrans &&
 	    curSplit->psxTextureOutputSTP == psxTextureOutputSTP && curSplit->psxDrawMaskSet == s_gpu.psxDrawMaskSet &&
+	    curSplit->superTurboTint == superTurboTint &&
 #ifdef __vita__
 	    curSplit->p4CacheEligible == p4CacheEligible &&
 	    (!p4CacheEligible || (curSplit->p4Page == p4Page && curSplit->p4Clut == p4Clut && curSplit->p4SuperTurboTint == p4SuperTurboTint)) &&
@@ -1562,6 +1565,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 	split->psxTexturedSemiTrans = psxTexturedSemiTrans;
 	split->psxTextureOutputSTP = psxTextureOutputSTP;
 	split->psxDrawMaskSet = s_gpu.psxDrawMaskSet;
+	split->superTurboTint = superTurboTint;
 #ifdef __vita__
 	split->psxTextureFullyOpaque = false;
 	split->p4CacheEligible = p4CacheEligible;
@@ -1605,7 +1609,7 @@ internal void NativeGpu_SetSplitShaderState(const GPUDrawSplit *split, int semiT
 		NativeRenderer_SetBlendMode(blendMode);
 	}
 	NativeRenderer_SetTexture(texture, split->texFormat, semiTransPass, blendMode,
-	                          texture != NativeRenderer_GetWhiteTexture(),
+	                          texture != NativeRenderer_GetWhiteTexture(), split->superTurboTint,
 #ifdef __vita__
 	                          split->psxTextureFullyOpaque,
 #else

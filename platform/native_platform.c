@@ -33,6 +33,9 @@ extern int g_dbg_texturelessMode;
 extern int g_dbg_wireframeMode;
 extern int g_windowHeight;
 extern int g_windowWidth;
+#ifndef __vita__
+extern int gNativeBorderlessEnabled;
+#endif
 
 #define HOST_ALT_LEFT  (1 << 0)
 #define HOST_ALT_RIGHT (1 << 1)
@@ -146,6 +149,12 @@ internal void Platform_GetWindowName(const char *appName, char *buffer, size_t b
 
 internal void Platform_HandleWindowResize(int width, int height)
 {
+#ifndef __vita__
+	if ((g_window != NULL) && SDL_GetWindowSizeInPixels(g_window, &width, &height))
+	{
+		// Use actual framebuffer pixels, not DPI-scaled logical window units.
+	}
+#endif
 	g_windowWidth = width;
 	g_windowHeight = height;
 #ifdef __vita__
@@ -171,17 +180,48 @@ internal void Platform_UpdateCursorVisibility(void)
 	}
 }
 
+#ifndef __vita__
+void Platform_SetBorderless(int enabled)
+{
+	enabled = (enabled != 0);
+
+	if (g_window == NULL)
+	{
+		gNativeBorderlessEnabled = enabled;
+		return;
+	}
+
+	if (enabled && !SDL_SetWindowFullscreenMode(g_window, NULL))
+	{
+		Platform_LogWarn("[CTR Native] Failed to select desktop fullscreen mode: %s\n", SDL_GetError());
+		return;
+	}
+	if (!SDL_SetWindowFullscreen(g_window, enabled != 0))
+	{
+		Platform_LogWarn("[CTR Native] Failed to change borderless mode: %s\n", SDL_GetError());
+		return;
+	}
+
+	SDL_SyncWindow(g_window);
+	gNativeBorderlessEnabled = enabled;
+	SDL_GetWindowSizeInPixels(g_window, &g_windowWidth, &g_windowHeight);
+	Platform_UpdateCursorVisibility();
+	NativeRenderer_ResetDevice();
+}
+#endif
+
 internal void Platform_HandleFullscreenToggle(void)
 {
+#ifdef __vita__
 	int fullscreen = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0;
-
 	SDL_SetWindowFullscreen(g_window, fullscreen == 0);
 	SDL_GetWindowSize(g_window, &g_windowWidth, &g_windowHeight);
 	Platform_UpdateCursorVisibility();
-#ifdef __vita__
 	NativeGpu_SyncBackend();
-#endif
 	NativeRenderer_ResetDevice();
+#else
+	Platform_SetBorderless(!gNativeBorderlessEnabled);
+#endif
 }
 
 internal void Platform_UpdateHostAltKeyState(const s32 key, const s8 down)
@@ -325,6 +365,17 @@ void Platform_Init(const char *title, int width, int height)
 
 	s_platformInitialized = 1;
 
+#ifndef __vita__
+	if (!NativeNetwork_Init())
+	{
+		Platform_LogWarn("[CTR Native] Internet networking unavailable\n");
+	}
+	if (!NativeLeaderboard_Init())
+	{
+		Platform_LogWarn("[CTR Native] Online leaderboard unavailable\n");
+	}
+#endif
+
 #ifdef __vita__
 	if (!NativeNetwork_Init())
 	{
@@ -360,6 +411,9 @@ void Platform_Init(const char *title, int width, int height)
 		Platform_Shutdown();
 		return;
 	}
+#endif
+#ifndef __vita__
+	Platform_SetBorderless(gNativeBorderlessEnabled);
 #endif
 	atexit(Platform_Shutdown);
 	Platform_UpdateCursorVisibility();
@@ -490,12 +544,8 @@ void Platform_EndScene(void)
 	// NOTE(aalhendi): Keep the displayed VRAM region current for screen-copy
 	// effects without forcing a CPU readback.
 	NativeRenderer_StoreFrameBuffer(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
-#ifdef __vita__
 	NativeRenderer_PresentMainRenderTarget();
 	NativeRenderer_DrawGhostReplayOverlay();
-#else
-	NativeRenderer_PresentVRAMRect(NativeGpu_GetRenderDispEnv()->disp.x, NativeGpu_GetRenderDispEnv()->disp.y, NativeGpu_GetRenderDispEnv()->disp.w, NativeGpu_GetRenderDispEnv()->disp.h);
-#endif
 	NativeRenderer_EndGpuFrame();
 	NativeRenderer_SwapWindow();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
@@ -600,6 +650,9 @@ void Platform_PollHostEvents(void)
 			exit(0);
 			break;
 		case SDL_EVENT_WINDOW_RESIZED:
+#ifndef __vita__
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+#endif
 			Platform_HandleWindowResize(event.window.data1, event.window.data2);
 			break;
 		case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:

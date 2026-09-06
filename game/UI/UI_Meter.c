@@ -175,7 +175,7 @@ void UI_JumpMeter_Draw(s16 posX, s16 posY, struct Driver *driver)
 	                      posXInt + CTR_WIDESCREEN_SCALE_X(UI_JUMP_METER_HUNDREDTHS_X_OFFSET), numbersY);
 
 	numberBoxX = posX + UI_JUMP_METER_NUMBER_BOX_X_OFFSET;
-	box.w = CTR_VITA_WIDESCREEN ? 29 : UI_JUMP_METER_NUMBER_BOX_W;
+	box.w = CTR_NATIVE_WIDESCREEN ? 29 : UI_JUMP_METER_NUMBER_BOX_W;
 	box.h = UI_JUMP_METER_NUMBER_BOX_H;
 	box.x = numberBoxX;
 	box.y = posY + UI_JUMP_METER_NUMBER_Y_OFFSET;

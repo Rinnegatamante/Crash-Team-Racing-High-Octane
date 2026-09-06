@@ -6,7 +6,11 @@ enum
 	MAINDB_NATIVE_PRIMMEM_CAPACITY = 0x40000,
 };
 
+#if defined(_MSC_VER)
+__declspec(align(64)) static u32 s_mainDbNativePrimMem[2][MAINDB_NATIVE_PRIMMEM_CAPACITY / sizeof(u32)];
+#else
 static u32 s_mainDbNativePrimMem[2][MAINDB_NATIVE_PRIMMEM_CAPACITY / sizeof(u32)] __attribute__((aligned(64)));
+#endif
 
 static int MainDB_NativePrimMemIndex(const struct PrimMem *primMem)
 {

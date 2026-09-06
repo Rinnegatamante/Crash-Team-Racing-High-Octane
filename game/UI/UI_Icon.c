@@ -27,7 +27,7 @@ enum
 	UI_DRIVER_ICON_FT4_CODE = 0x2c,
 };
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 static s16 UI_IconWidescreenX(int x, int centerX)
 {
 	return (s16)(centerX + CTR_WIDESCREEN_SCALE_X(x - centerX));
@@ -121,7 +121,7 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 	angleY = angleY >> UI_ICON_FIXED_SHIFT;
 	topY = bottomY - angleY;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	const int shineAltX = (posX + widthOffset * 2) - angleX;
 	const int shineCenterX = UI_IconQuadCenterX(posX, rightX, shineAltX, leftX);
 #endif
@@ -192,7 +192,7 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 			break;
 		}
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 		p->x0 = UI_IconWidescreenX(p->x0, shineCenterX);
 		p->x1 = UI_IconWidescreenX(p->x1, shineCenterX);
 		p->x2 = UI_IconWidescreenX(p->x2, shineCenterX);
@@ -247,7 +247,7 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 	int altX = (centerX + (widthOffset * 2)) - angleX;
 	int altY = (centerY + (heightOffset * 2)) - angleY;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	const int trackerCenterX = UI_IconQuadCenterX(centerX, rightX, altX, leftX);
 #endif
 
@@ -304,7 +304,7 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 		p->x3 = p->x1;
 		p->y3 = p->y2;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 		p->x0 = UI_IconWidescreenX(p->x0, trackerCenterX);
 		p->x1 = UI_IconWidescreenX(p->x1, trackerCenterX);
 		p->x2 = UI_IconWidescreenX(p->x2, trackerCenterX);
@@ -330,7 +330,7 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 	int scaledHeight = FP_Mult(height, scale);
 	int topX = posX;
 	int bottomX = topX + scaledWidth;
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	const int centerX = (topX + bottomX) / 2;
 	topX = UI_IconWidescreenX(topX, centerX);
 	bottomX = UI_IconWidescreenX(bottomX, centerX);

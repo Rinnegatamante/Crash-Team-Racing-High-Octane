@@ -1,6 +1,6 @@
 #include <common.h>
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 #include "OxideMenuModel.h"
 #endif
 
@@ -13,7 +13,7 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
 	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 0x10,
 	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
@@ -332,7 +332,7 @@ static void MM_Characters_NativeDrawStats(void)
 	RECTMENU_DrawInnerRect(&box, 4, gGT->backBuffer->otMem.uiOT);
 }
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 static struct CharacterSelectMeta s_oxideCharacterSelectMeta1P2P[0x10] =
 {
 	{128, 96, {0, 4, 8, 1}, 0, 0xFFFF},
@@ -629,7 +629,7 @@ struct Model *MM_Characters_GetModelByName(const char *name)
 		}
 	}
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	if ((ModelName_ReadWord(name, 0) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 0)) &&
 	    (ModelName_ReadWord(name, 1) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 1)) &&
 	    (ModelName_ReadWord(name, 2) == ModelName_ReadWord(data.MetaDataCharacters[NITROS_OXIDE].name_Debug, 2)) &&
@@ -750,7 +750,7 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 
 		s16 *currCharacterID = &D230.characterSelectPlayerState.currentCharacterID[playerIndex];
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 		gGT->drivers[playerIndex]->wheelSize = (*currCharacterID == NITROS_OXIDE) ? 0 : MM_CHARACTER_SELECT_WHEEL_SIZE;
 #endif
 
@@ -844,7 +844,7 @@ void MM_Characters_SetMenuLayout(void)
 
 	// Loop through bottom characters,
 	// if any are unlocked, use expanded
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	expandRoster = true;
 #else
 	for (s32 iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
@@ -891,7 +891,7 @@ void MM_Characters_SetMenuLayout(void)
 		D230.characterSelectWindowWidth = MM_CHARACTER_SELECT_1P_WINDOW_W;
 	}
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	D230.activeCharacterSelectMeta = MM_Characters_GetOxideMetaForLayout(layoutIndex);
 #else
 	D230.activeCharacterSelectMeta = D230.characterSelectMetaByLayout[layoutIndex];
@@ -899,7 +899,7 @@ void MM_Characters_SetMenuLayout(void)
 
 	D230.characterSelectNameTextY = D230.characterSelectLayout.textY[layoutIndex];
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	D230.characterSelectTransitionMeta = MM_Characters_GetOxideTransitionsForPlayerCount(numPlyrNextGame);
 #else
 	D230.characterSelectTransitionMeta = D230.characterSelectTransitionByPlayerCount[numPlyrNextGame - 1];

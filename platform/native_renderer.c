@@ -8,6 +8,7 @@
 #include "platform/native_renderer_types.h"
 #include <SDL3/SDL.h>
 
+#include "platform/native_assets.h"
 #include "platform/native_gpu.h"
 #include "platform/native_adhoc.h"
 #include "platform/native_glad.h"
@@ -20,6 +21,14 @@
 
 #ifdef __vita__
 #include <png.h>
+#else
+#define STB_IMAGE_STATIC
+#define STBI_ONLY_PNG
+#define STBI_NO_HDR
+#define STBI_NO_LINEAR
+#define STBI_NO_STDIO
+#define STB_IMAGE_IMPLEMENTATION
+#include "../externals/SDL/src/video/stb_image.h"
 #endif
 
 #ifdef _WIN32
@@ -274,14 +283,12 @@ global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 global_variable TextureID s_whiteTexture = (TextureID)-1;
 global_variable TextureID s_lastBoundTexture = (TextureID)-1;
 
-#ifdef __vita__
 global_variable TextureID s_ghostReplayVitaTexture;
 global_variable TextureID s_ghostReplayHighlightTexture;
 global_variable TextureID s_ghostReplayShoulderTexture[2];
 global_variable int s_ghostReplayVitaWidth;
 global_variable int s_ghostReplayVitaHeight;
 global_variable b32 s_ghostReplayOverlayLoadAttempted;
-#endif
 
 TextureID NativeRenderer_GetVRAMTexture(void)
 {
@@ -343,6 +350,9 @@ void NativeRenderer_DestroyStreamingTexture(TextureID texture)
 
 int g_windowWidth = 0;
 int g_windowHeight = 0;
+#ifndef __vita__
+extern int gNativeAntiAliasingEnabled;
+#endif
 
 global_variable int s_presentAspectW = 4;
 global_variable int s_presentAspectH = 3;
@@ -361,6 +371,10 @@ global_variable GLuint s_presentVramShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
 global_variable GLuint s_presentRgbaShader = 0;
 global_variable GLint s_presentRgbaFlipYLoc = -1;
+#ifndef __vita__
+global_variable GLint s_presentRgbaTexelSizeLoc = -1;
+global_variable GLint s_presentRgbaFxaaLoc = -1;
+#endif
 global_variable GLuint s_vramQuadVAO = 0;
 global_variable GLuint s_vramQuadVBO = 0;
 
@@ -396,6 +410,9 @@ global_variable GLuint s_glVramFramebuffer;
 internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen)
 {
 	SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+#ifndef __vita__
+	windowFlags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
 
 	if (fullscreen)
 	{
@@ -459,7 +476,6 @@ internal int NativeRenderer_InitialiseGLExt(void)
 
 	const char *glslVersionStr = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
 	NATIVE_RENDERER_LOG("*GLSL version: %s\n", glslVersionStr);
-
 	return 1;
 }
 
@@ -480,6 +496,9 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 		NATIVE_RENDERER_ERROR("%s\n", "Failed to Initialise GL Context!");
 		return 0;
 	}
+#ifndef __vita__
+	SDL_GetWindowSizeInPixels(g_window, &g_windowWidth, &g_windowHeight);
+#endif
 
 	if (!NativeRenderer_InitialiseGLExt())
 	{
@@ -503,11 +522,11 @@ void NativeRenderer_Shutdown(void)
 
 	NativeRenderer_DestroyTexture(s_whiteTexture);
 	NativeRenderer_DestroyTexture(s_rgLutTexture);
-#ifdef __vita__
 	NativeRenderer_DestroyTexture(s_ghostReplayVitaTexture);
 	NativeRenderer_DestroyTexture(s_ghostReplayHighlightTexture);
 	NativeRenderer_DestroyTexture(s_ghostReplayShoulderTexture[0]);
 	NativeRenderer_DestroyTexture(s_ghostReplayShoulderTexture[1]);
+#ifdef __vita__
 	for (int cacheIndex = 0; cacheIndex < NATIVE_P4_CACHE_CAPACITY; cacheIndex++)
 	{
 		for (int bufferIndex = 0; bufferIndex < 2; bufferIndex++)
@@ -843,11 +862,11 @@ internal void NativeRenderer_BindMainRenderTarget(void)
 
 	int physicalWidth = logicalWidth;
 	int physicalHeight = logicalHeight;
-#ifdef __vita__
+#if CTR_NATIVE_WIDESCREEN
 	if ((g_windowWidth > 0) && (g_windowHeight > 0))
 	{
-		physicalWidth = g_windowWidth;
-		physicalHeight = g_windowHeight;
+		physicalWidth = (s_presentViewport.w > 0) ? s_presentViewport.w : g_windowWidth;
+		physicalHeight = (s_presentViewport.h > 0) ? s_presentViewport.h : g_windowHeight;
 	}
 #endif
 
@@ -1040,6 +1059,9 @@ global_variable GTEShader s_gteUntexturedShaderVariants[3];
 global_variable GTEShader s_gteShader4;
 global_variable GTEShader s_gteShader8;
 global_variable GTEShader s_gteShader16;
+global_variable GTEShader s_gteShader4SuperTurbo;
+global_variable GTEShader s_gteShader8SuperTurbo;
+global_variable GTEShader s_gteShader16SuperTurbo;
 global_variable GTEShader s_gteShader32Rgba;
 #endif
 
@@ -1087,6 +1109,9 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	glDeleteProgram(s_gteShader4.shader);
 	glDeleteProgram(s_gteShader8.shader);
 	glDeleteProgram(s_gteShader16.shader);
+	glDeleteProgram(s_gteShader4SuperTurbo.shader);
+	glDeleteProgram(s_gteShader8SuperTurbo.shader);
+	glDeleteProgram(s_gteShader16SuperTurbo.shader);
 	glDeleteProgram(s_gteShader32Rgba.shader);
 #endif
 }
@@ -1223,6 +1248,12 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"	const vec2 c_LUTTexel = vec2(1.0 / 256.0, 1.0 / 256.0);\n"                                      \
 	"	vec4 decodePSX(vec2 rg) { return texture2D(s_rgLut, rg - c_LUTTexel * 0.0001); }\n"
 #define GPU_PSX_FRAGMENT_OUTPUT                                                                                \
+	"#ifdef SUPER_TURBO_TINT\n"                                                                        \
+	"		vec3 stpColor5 = floor(color.rgb * (255.0 / 8.0) + vec3(0.001));\n"                        \
+	"		float stpLum5 = max(stpColor5.r, max(stpColor5.g, stpColor5.b));\n"                           \
+	"		float stpBoost5 = min(31.0, floor((stpLum5 * 5.0 + 3.0) * 0.25));\n"                      \
+	"		color.rgb = vec3(floor(stpLum5 * 0.3), stpBoost5, min(31.0, stpBoost5 + 2.0)) * (8.0 / 255.0);\n" \
+	"#endif\n"                                                                                         \
 	"		gl_FragColor = dither(color * v_color);\n"                                                   \
 	"		gl_FragColor.a = max(psxDrawMaskSet, psxTextureOutputStp * sampledStp);\n"
 #endif
@@ -1703,6 +1734,9 @@ internal void NativeRenderer_InitialisePSXShaders(void)
 	NativeRenderer_CompilePSXShader(&s_gteShader4, gte_shader_4, NULL);
 	NativeRenderer_CompilePSXShader(&s_gteShader8, gte_shader_8, NULL);
 	NativeRenderer_CompilePSXShader(&s_gteShader16, gte_shader_16, NULL);
+	NativeRenderer_CompilePSXShader(&s_gteShader4SuperTurbo, gte_shader_4, "#define SUPER_TURBO_TINT\n");
+	NativeRenderer_CompilePSXShader(&s_gteShader8SuperTurbo, gte_shader_8, "#define SUPER_TURBO_TINT\n");
+	NativeRenderer_CompilePSXShader(&s_gteShader16SuperTurbo, gte_shader_16, "#define SUPER_TURBO_TINT\n");
 	NativeRenderer_CompilePSXShader(&s_gteShader32Rgba, gte_shader_32_rgba, NULL);
 #endif
 }
@@ -1802,6 +1836,7 @@ global_variable const char *ctr_present_vram_shader = "#ifdef VERTEX\n"
                                                       "#endif\n";
 #endif
 
+#ifdef __vita__
 global_variable const char *ctr_present_rgba_shader = "#ifdef VERTEX\n"
                                                        "attribute vec2 a_position;\n"
                                                        "varying vec2 v_uv;\n"
@@ -1818,6 +1853,46 @@ global_variable const char *ctr_present_rgba_shader = "#ifdef VERTEX\n"
 	                                                   "    gl_FragColor = texture2D(s_src, vec2(v_uv.x, mix(v_uv.y, 1.0 - v_uv.y, flipY)));\n"
                                                        "}\n"
                                                        "#endif\n";
+#else
+global_variable const char *ctr_present_rgba_shader = "#ifdef VERTEX\n"
+                                                       "attribute vec2 a_position;\n"
+                                                       "varying vec2 v_uv;\n"
+                                                       "void main() {\n"
+                                                       "    v_uv = a_position * 0.5 + 0.5;\n"
+                                                       "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+                                                       "}\n"
+                                                       "#endif\n"
+                                                       "#ifdef FRAGMENT\n"
+                                                       "varying vec2 v_uv;\n"
+                                                       "uniform sampler2D s_src;\n"
+                                                       "uniform float flipY;\n"
+                                                       "uniform vec2 texelSize;\n"
+                                                       "uniform int fxaaEnabled;\n"
+                                                       "float fxaaLuma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }\n"
+                                                       "vec4 fxaaSample(vec2 uv) {\n"
+                                                       "    vec4 center = texture2D(s_src, uv);\n"
+                                                       "    vec3 nw = texture2D(s_src, uv + texelSize * vec2(-1.0, -1.0)).rgb;\n"
+                                                       "    vec3 ne = texture2D(s_src, uv + texelSize * vec2( 1.0, -1.0)).rgb;\n"
+                                                       "    vec3 sw = texture2D(s_src, uv + texelSize * vec2(-1.0,  1.0)).rgb;\n"
+                                                       "    vec3 se = texture2D(s_src, uv + texelSize * vec2( 1.0,  1.0)).rgb;\n"
+                                                       "    float lNW = fxaaLuma(nw), lNE = fxaaLuma(ne), lSW = fxaaLuma(sw), lSE = fxaaLuma(se), lM = fxaaLuma(center.rgb);\n"
+                                                       "    float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));\n"
+                                                       "    float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));\n"
+                                                       "    vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));\n"
+                                                       "    float reduce = max((lNW + lNE + lSW + lSE) * 0.0078125, 0.0009765625);\n"
+                                                       "    float invMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);\n"
+                                                       "    dir = clamp(dir * invMin, vec2(-8.0), vec2(8.0)) * texelSize;\n"
+                                                       "    vec3 a = 0.5 * (texture2D(s_src, uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(s_src, uv + dir * (2.0 / 3.0 - 0.5)).rgb);\n"
+                                                       "    vec3 b = a * 0.5 + 0.25 * (texture2D(s_src, uv + dir * -0.5).rgb + texture2D(s_src, uv + dir * 0.5).rgb);\n"
+                                                       "    float lB = fxaaLuma(b);\n"
+                                                       "    return vec4((lB < lMin || lB > lMax) ? a : b, center.a);\n"
+                                                       "}\n"
+                                                       "void main() {\n"
+                                                       "    vec2 uv = vec2(v_uv.x, mix(v_uv.y, 1.0 - v_uv.y, flipY));\n"
+                                                       "    gl_FragColor = (fxaaEnabled != 0) ? fxaaSample(uv) : texture2D(s_src, uv);\n"
+                                                       "}\n"
+                                                       "#endif\n";
+#endif
 
 internal void NativeRenderer_InitVRAMPipelines(void)
 {
@@ -1837,6 +1912,10 @@ internal void NativeRenderer_InitVRAMPipelines(void)
 	glUseProgram(s_presentRgbaShader);
 	const GLint presentRgbaSrcLoc = glGetUniformLocation(s_presentRgbaShader, "s_src");
 	s_presentRgbaFlipYLoc = glGetUniformLocation(s_presentRgbaShader, "flipY");
+#ifndef __vita__
+	s_presentRgbaTexelSizeLoc = glGetUniformLocation(s_presentRgbaShader, "texelSize");
+	s_presentRgbaFxaaLoc = glGetUniformLocation(s_presentRgbaShader, "fxaaEnabled");
+#endif
 	glUniform1i(presentRgbaSrcLoc, 0);
 	glUniform1f(s_presentRgbaFlipYLoc, 0.0f);
 	glUseProgram(0);
@@ -2093,10 +2172,11 @@ internal void NativeRenderer_SetShader(const ShaderID shader)
 }
 
 
-void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode, int textured,
+void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiTransPass, BlendMode blendMode, int textured, int superTurboTint,
                                int textureFullyOpaque, int cachedP4)
 {
 #ifdef __vita__
+	(void)superTurboTint;
 	int variant;
 	if (semiTransPass == 1)
 	{
@@ -2158,13 +2238,13 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiT
 	switch (texFormat)
 	{
 	case TF_4_BIT:
-		shader = &s_gteShader4;
+		shader = superTurboTint ? &s_gteShader4SuperTurbo : &s_gteShader4;
 		break;
 	case TF_8_BIT:
-		shader = &s_gteShader8;
+		shader = superTurboTint ? &s_gteShader8SuperTurbo : &s_gteShader8;
 		break;
 	case TF_16_BIT:
-		shader = &s_gteShader16;
+		shader = superTurboTint ? &s_gteShader16SuperTurbo : &s_gteShader16;
 		break;
 	case TF_32_BIT_RGBA:
 		shader = &s_gteShader32Rgba;
@@ -3370,10 +3450,29 @@ void NativeRenderer_PresentMainRenderTarget(void)
 
 	glUseProgram(s_presentRgbaShader);
 	glUniform1f(s_presentRgbaFlipYLoc, 0.0f);
+#ifndef __vita__
+	if (s_presentRgbaTexelSizeLoc >= 0)
+	{
+		glUniform2f(s_presentRgbaTexelSizeLoc, 1.0f / (float)s_mainRenderTarget.width, 1.0f / (float)s_mainRenderTarget.height);
+	}
+	if (s_presentRgbaFxaaLoc >= 0)
+	{
+		glUniform1i(s_presentRgbaFxaaLoc, gNativeAntiAliasingEnabled != 0);
+	}
+#endif
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, s_mainRenderTarget.texture);
+#ifndef __vita__
+	// FXAA uses subpixel samples from the final native-resolution render target.
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+#endif
 	glBindVertexArray(s_vramQuadVAO);
 	NativeRenderer_DrawTriangles(0, 2);
+#ifndef __vita__
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+#endif
 
 	if (previousStencilEnabled)
 	{
@@ -3385,7 +3484,6 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	s_lastBoundTexture = (TextureID)-1;
 }
 
-#ifdef __vita__
 internal TextureID NativeRenderer_CreateGhostReplayTexture(int width, int height, const u8 *pixels)
 {
 	TextureID texture = 0;
@@ -3403,7 +3501,6 @@ internal TextureID NativeRenderer_CreateGhostReplayTexture(int width, int height
 
 internal b32 NativeRenderer_LoadGhostReplayOverlay(void)
 {
-	png_image image;
 	u8 *pixels = NULL;
 	u8 highlight[32 * 32 * 4];
 	u8 shoulder[2][48 * 16 * 4];
@@ -3415,6 +3512,8 @@ internal b32 NativeRenderer_LoadGhostReplayOverlay(void)
 	}
 	s_ghostReplayOverlayLoadAttempted = true;
 
+#ifdef __vita__
+	png_image image;
 	memset(&image, 0, sizeof(image));
 	image.version = PNG_IMAGE_VERSION;
 	if (!png_image_begin_read_from_file(&image, "app0:/vita.png"))
@@ -3432,9 +3531,28 @@ internal b32 NativeRenderer_LoadGhostReplayOverlay(void)
 		NATIVE_RENDERER_ERROR("%s\n", "Failed to decode app0:/vita.png for Ghost Replay overlay");
 		return false;
 	}
-
 	s_ghostReplayVitaWidth = (int)image.width;
 	s_ghostReplayVitaHeight = (int)image.height;
+#else
+	struct NativeAssetsByteBuffer overlayBytes = {0};
+	int imageWidth = 0;
+	int imageHeight = 0;
+	int imageChannels = 0;
+	if (!NativeAssets_ReadBytes("vita.png", NATIVE_ASSET_READ_DATA_FILE, &overlayBytes))
+	{
+		NATIVE_RENDERER_ERROR("%s\n", "Failed to load assets/vita.png for Ghost Replay overlay");
+		return false;
+	}
+	pixels = (u8 *)stbi_load_from_memory(overlayBytes.data, overlayBytes.size, &imageWidth, &imageHeight, &imageChannels, 4);
+	NativeAssets_FreeBytes(&overlayBytes);
+	if (pixels == NULL)
+	{
+		NATIVE_RENDERER_ERROR("%s\n", "Failed to decode assets/vita.png for Ghost Replay overlay");
+		return false;
+	}
+	s_ghostReplayVitaWidth = imageWidth;
+	s_ghostReplayVitaHeight = imageHeight;
+#endif
 	s_ghostReplayVitaTexture = NativeRenderer_CreateGhostReplayTexture(s_ghostReplayVitaWidth, s_ghostReplayVitaHeight, pixels);
 
 	for (int y = 0; y < 32; y++)
@@ -3476,8 +3594,12 @@ internal b32 NativeRenderer_LoadGhostReplayOverlay(void)
 		s_ghostReplayShoulderTexture[side] = NativeRenderer_CreateGhostReplayTexture(48, 16, shoulder[side]);
 	}
 
+#ifdef __vita__
 	free(pixels);
 	png_image_free(&image);
+#else
+	stbi_image_free(pixels);
+#endif
 
 	return (s_ghostReplayVitaTexture != 0) && (s_ghostReplayHighlightTexture != 0) &&
 	       (s_ghostReplayShoulderTexture[0] != 0) && (s_ghostReplayShoulderTexture[1] != 0);
@@ -3493,6 +3615,12 @@ internal void NativeRenderer_DrawGhostReplayQuad(TextureID texture, int x, int y
 	NativeRenderer_SetViewPort(x, y, width, height);
 	glUseProgram(s_presentRgbaShader);
 	glUniform1f(s_presentRgbaFlipYLoc, 1.0f);
+#ifndef __vita__
+	if (s_presentRgbaFxaaLoc >= 0)
+	{
+		glUniform1i(s_presentRgbaFxaaLoc, 0);
+	}
+#endif
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glBindVertexArray(s_vramQuadVAO);
@@ -3536,8 +3664,20 @@ void NativeRenderer_DrawGhostReplayOverlay(void)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	NativeRenderer_SetScissorState(0);
+#ifdef __vita__
 	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_AVERAGE);
+#else
+	// Ghost Replay is modern RGBA UI, not a PS1 semi-transparency primitive.
+	// BM_AVERAGE on desktop deliberately uses a constant 0.5 alpha to emulate
+	// the PS1 ABR mode, which darkens/tints the entire Vita overlay. Keep the
+	// renderer state cache at BM_NONE and use ordinary source-alpha blending.
+	NativeRenderer_SetBlendMode(BM_NONE);
+	NativeRenderer_EnableDepth(0);
+	glEnable(GL_BLEND);
+	glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+#endif
 	glDisable(GL_STENCIL_TEST);
 
 	NativeRenderer_DrawGhostReplayQuad(s_ghostReplayVitaTexture, overlayX, overlayY, overlayW, overlayH);
@@ -3557,17 +3697,17 @@ void NativeRenderer_DrawGhostReplayOverlay(void)
 	{
 		glEnable(GL_STENCIL_TEST);
 	}
+#ifdef __vita__
 	NativeRenderer_SetBlendMode(BM_NONE);
+#else
+	glDisable(GL_BLEND);
+	NativeRenderer_EnableDepth(1);
+#endif
 	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
 	glBindVertexArray(0);
 	s_previousShader = (ShaderID)-1;
 	s_lastBoundTexture = (TextureID)-1;
 }
-#else
-void NativeRenderer_DrawGhostReplayOverlay(void)
-{
-}
-#endif
 
 void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight, int displayHeight)
 {

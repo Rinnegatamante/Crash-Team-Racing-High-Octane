@@ -193,19 +193,34 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 
 static struct MenuRow s_nativeTimeTrialRows[] =
 {
+#if CTR_NATIVE_HAS_LEADERBOARD
 	{LNG_TIME_TRIAL, 4, 1, 0, 0},
 	{LNG_RELIC_RACE, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_GHOST_REPLAY, 1, 3, 2, 2},
 	{LNG_HIGH_SCORE, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_ONLINE_LEADERBOARD, 3, 0, 4, 4},
+#else
+	{LNG_TIME_TRIAL, 3, 1, 0, 0},
+	{LNG_RELIC_RACE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_GHOST_REPLAY, 1, 3, 2, 2},
+	{LNG_HIGH_SCORE, 2, 0, 3, 3},
+#endif
 	{RECTMENU_STRING_NONE},
 };
 
 static struct MenuRow s_nativeOptionsRows[] =
 {
+#ifdef __vita__
 	{LNG_LANGUAGE, 2, 1, 0, 0},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_FRAME_RATE, 1, 0, 2, 2},
+#else
+	{LNG_LANGUAGE, 4, 1, 0, 0},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_ANTI_ALIASING, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_BORDERLESS, 3, 0, 4, 4},
+#endif
 	{RECTMENU_STRING_NONE},
 };
 
@@ -234,7 +249,7 @@ static struct RectMenu s_nativeLanguageBootMenu =
 	.state = RECTMENU_STATE_EXEC_CENTERED,
 	.rows = s_nativeLanguageRows,
 	.funcPtr = MM_NativeLanguageBootMenuProc,
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	.drawStyle = MM_NATIVE_LANGUAGE_DRAWSTYLE_WIDESCREEN,
 #endif
 };
@@ -249,12 +264,14 @@ static struct RectMenu s_nativeLanguageMainMenu =
 
 static void MM_NativeTimeTrialRefreshOnlineRow(void)
 {
+#if CTR_NATIVE_HAS_LEADERBOARD
 	s16 onlineString = NATIVE_MENU_STRING_ONLINE_LEADERBOARD;
 	if (!NativeLeaderboard_IsInternetConnected())
 	{
 		onlineString |= MENU_ROW_LOCKED;
 	}
 	s_nativeTimeTrialRows[4].stringIndex = onlineString;
+#endif
 }
 static struct RectMenu s_nativeTimeTrialMenu =
 {
@@ -288,6 +305,10 @@ static s16 s_nativeLanguageRow;
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
+#ifndef __vita__
+extern int gNativeAntiAliasingEnabled;
+extern int gNativeBorderlessEnabled;
+#endif
 extern int gNativeGhostReplayMode;
 extern void save_config();
 
@@ -681,6 +702,7 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 		return;
 	}
 
+#if CTR_NATIVE_HAS_LEADERBOARD
 	if (choose == NATIVE_MENU_STRING_ONLINE_LEADERBOARD)
 	{
 		gNativeOnlineLeaderboardMode = 1;
@@ -688,6 +710,7 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 		D230.desiredMenuIndex = MM_EXIT_ROUTE_HIGH_SCORE;
 		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
 	}
+#endif
 }
 
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
@@ -736,7 +759,22 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	{
 		gNative60FpsEnabled ^= 1;
 		save_config();
+		return;
 	}
+#ifndef __vita__
+	if (choose == NATIVE_MENU_STRING_ANTI_ALIASING)
+	{
+		gNativeAntiAliasingEnabled ^= 1;
+		save_config();
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_BORDERLESS)
+	{
+		Platform_SetBorderless(!gNativeBorderlessEnabled);
+		save_config();
+	}
+#endif
 }
 
 static void MM_NativeBossFightPrepareMenu(void)

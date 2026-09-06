@@ -3,6 +3,10 @@
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
+#ifndef __vita__
+extern int gNativeAntiAliasingEnabled;
+extern int gNativeBorderlessEnabled;
+#endif
 
 static char *RECTMENU_GetString(s16 stringIndex)
 {
@@ -29,6 +33,18 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"FPS: 30",
 		"FPS: 60",
 	};
+#ifndef __vita__
+	static const char *antiAliasing[2] =
+	{
+		"AA: OFF",
+		"AA: FXAA",
+	};
+	static const char *displayMode[2] =
+	{
+		"DISPLAY: WINDOWED",
+		"DISPLAY: BORDERLESS",
+	};
+#endif
 	static const char *superHard[6] =
 	{
 		"SUPER HARD",
@@ -116,6 +132,12 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)mirrorMode[languageRow][gNativeMirrorModeEnabled != 0];
 	case NATIVE_MENU_STRING_FRAME_RATE:
 		return (char *)frameRate[gNative60FpsEnabled != 0];
+#ifndef __vita__
+	case NATIVE_MENU_STRING_ANTI_ALIASING:
+		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];
+	case NATIVE_MENU_STRING_BORDERLESS:
+		return (char *)displayMode[gNativeBorderlessEnabled != 0];
+#endif
 	case NATIVE_MENU_STRING_SUPER_HARD:
 		return (char *)superHard[languageRow];
 	case NATIVE_MENU_STRING_ULTRA_HARD:
@@ -614,7 +636,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 		}
 	}
 
-#if defined(CTR_NATIVE) && CTR_VITA_WIDESCREEN
+#if defined(CTR_NATIVE) && CTR_NATIVE_WIDESCREEN
 	if ((m->drawStyle & 0x200) != 0)
 	{
 		*width = (s16)CTR_WIDESCREEN_EXPAND_X(*width + 8);

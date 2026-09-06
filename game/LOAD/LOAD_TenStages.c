@@ -589,7 +589,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		{
 			int danceModelIndex = ptrIndexArr[0] - STATIC_CRASHDANCE;
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 			// Oxide has no usable first-place dance model in the retail BIGFILE.
 			// Use the losing one just to prevent it from being completely absent.
 			if (ptrIndexArr[0] == STATIC_OXIDEDANCE)

@@ -822,8 +822,10 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 		}
 
 #ifdef CTR_NATIVE
-		int nativeWide2PSplitPvs =
-		    CTR_VITA_WIDESCREEN && (gGT->numPlyrCurrGame == 2) && !NativeAdhoc_IsSingleViewRenderActive();
+		int nativeWide2PSplitPvs = CTR_NATIVE_WIDESCREEN && (gGT->numPlyrCurrGame == 2);
+#if CTR_NATIVE_HAS_ADHOC
+		nativeWide2PSplitPvs = nativeWide2PSplitPvs && !NativeAdhoc_IsSingleViewRenderActive();
+#endif
 
 		if (nativeWide2PSplitPvs)
 		{

@@ -17,7 +17,7 @@ enum
 	DECAL_HUD_TPAGE_TRANSPARENCY_STEP = 0x00200000u,
 };
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 static s16 DecalHUD_WidescreenX(int x, int centerX)
 {
 	return (s16)(centerX + CTR_WIDESCREEN_SCALE_X(x - centerX));
@@ -82,7 +82,7 @@ void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 rightX = posX + FP_Mult(width, scale);
 
 	setXY4CompilerHack(p, posX, posY, rightX, posY, posX, bottomY, rightX, bottomY);
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	DecalHUD_WidescreenPolyFT4(p);
 #endif
 	setIconUV(p, icon);
@@ -147,7 +147,7 @@ void DecalHUD_DrawWeapon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *
 		}
 	}
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	DecalHUD_WidescreenPolyFT4(p);
 #endif
 
@@ -187,7 +187,7 @@ void DecalHUD_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 bottomY = posY + FP_Mult(height, scale);
 	u32 rightX = (u16)posX + FP_Mult(width, scale);
 	setXY4CompilerHack(p, (u16)posX, posY, rightX, posY, (u16)posX, bottomY, rightX, bottomY);
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	DecalHUD_WidescreenPolyGT4(p);
 #endif
 	setIconUV(p, icon);
@@ -313,7 +313,7 @@ LAB_800232d8:
 	CtrGpu_WritePackedXY(&p->x3, ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar7) & 0xffff) |
 	                                 ((u32)(posY - ((bitshiftTopRightCorner + 1) * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	DecalHUD_WidescreenPolyGT4(p);
 #endif
 

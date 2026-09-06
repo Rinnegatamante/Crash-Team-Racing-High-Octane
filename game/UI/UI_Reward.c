@@ -79,7 +79,7 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 
 	MatrixRotate(mat, &obj->m, mat);
 
-#if defined(CTR_NATIVE) && defined(__vita__)
+#if defined(CTR_NATIVE)
 	if (!isTimeCrate && (inst->model->id == STATIC_FRUITDISP) &&
 	    (gGT->numPlyrCurrGame >= 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
 	{
@@ -100,6 +100,7 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 			                       ? 0
 			                       : ((s16)sdata->wumpaShineResult - UI_REWARD_WUMPA_SHINE_CENTER) << UI_REWARD_WUMPA_SHINE_SHIFT;
 
+#if CTR_NATIVE_HAS_ADHOC
 			if (NativeAdhoc_IsConnected() && (gGT->numPlyrCurrGame == 2) &&
 			    (owner == NativeAdhoc_GetLocalPlayerIndex()))
 			{
@@ -111,6 +112,7 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 				inst->scale.y = hud->scale;
 				inst->scale.z = hud->scale;
 			}
+#endif
 		}
 	}
 #endif

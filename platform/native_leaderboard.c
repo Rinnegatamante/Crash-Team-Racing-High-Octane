@@ -1,13 +1,19 @@
 #include <common.h>
 #include "platform/native_leaderboard.h"
+
+#if CTR_NATIVE_HAS_LEADERBOARD
 #include "platform/native_log.h"
 #include "platform/native_network.h"
 #include "platform/native_user_id.h"
+#include "platform/native_pc_account.h"
+#if defined(_WIN32) && !defined(__vita__)
+#include "platform/native_http_win32.h"
+#endif
 
 #include <SDL3/SDL.h>
+#if defined(__vita__)
 #include <curl/curl.h>
 #include <openssl/sha.h>
-#if defined(__vita__)
 #include <psp2/io/fcntl.h>
 #endif
 #include <ctype.h>
@@ -18,11 +24,21 @@
 #define CTR_NATIVE_LEADERBOARD_GET_URL "https://www.rinnegatamante.eu/ctr/get_leaderboard.php"
 #endif
 #ifndef CTR_NATIVE_LEADERBOARD_UPLOAD_URL
+#if defined(__vita__)
 #define CTR_NATIVE_LEADERBOARD_UPLOAD_URL "https://www.rinnegatamante.eu/ctr/upload_record.php"
+#else
+#define CTR_NATIVE_LEADERBOARD_UPLOAD_URL "https://www.rinnegatamante.eu/ctr/api/upload_record.php"
+#endif
+#endif
+#ifndef CTR_NATIVE_LEADERBOARD_ME_URL
+#define CTR_NATIVE_LEADERBOARD_ME_URL "https://www.rinnegatamante.eu/ctr/api/me.php"
+#endif
+#ifndef CTR_NATIVE_LEADERBOARD_LINK_VITA_URL
+#define CTR_NATIVE_LEADERBOARD_LINK_VITA_URL "https://www.rinnegatamante.eu/ctr/api/link_vita.php"
 #endif
 
-enum { NATIVE_LEADERBOARD_JOB_QUEUE_SIZE = 8, NATIVE_LEADERBOARD_HTTP_MAX_JSON = 512 * 1024, NATIVE_LEADERBOARD_HTTP_MAX_GHOST = 300 * 1024, NATIVE_LEADERBOARD_CLIENT_VERSION_SIZE = SHA256_DIGEST_LENGTH * 2 + 1 };
-enum NativeLeaderboardJobType { NATIVE_LEADERBOARD_JOB_NONE = 0, NATIVE_LEADERBOARD_JOB_REFRESH, NATIVE_LEADERBOARD_JOB_UPLOAD, NATIVE_LEADERBOARD_JOB_GHOST };
+enum { NATIVE_LEADERBOARD_JOB_QUEUE_SIZE = 8, NATIVE_LEADERBOARD_HTTP_MAX_JSON = 512 * 1024, NATIVE_LEADERBOARD_HTTP_MAX_GHOST = 300 * 1024, NATIVE_LEADERBOARD_CLIENT_VERSION_SIZE = 96 };
+enum NativeLeaderboardJobType { NATIVE_LEADERBOARD_JOB_NONE = 0, NATIVE_LEADERBOARD_JOB_REFRESH, NATIVE_LEADERBOARD_JOB_UPLOAD, NATIVE_LEADERBOARD_JOB_GHOST, NATIVE_LEADERBOARD_JOB_VERIFY_ACCOUNT, NATIVE_LEADERBOARD_JOB_LINK_VITA };
 
 struct NativeLeaderboardUpload
 {
@@ -58,6 +74,7 @@ struct NativeLeaderboardContext
     b32 hasCache;
     u64 cacheTimestampMs;
     b32 refreshInFlight;
+    b32 vitaLinkInFlight;
     int ghostState;
     void *ghostData;
     int ghostSize;
@@ -125,7 +142,7 @@ static b32 NativeLeaderboard_InitClientVersion(void)
     s_nativeLeaderboard.clientVersion[sizeof(s_nativeLeaderboard.clientVersion) - 1] = '\0';
     return true;
 #else
-    snprintf(s_nativeLeaderboard.clientVersion, sizeof(s_nativeLeaderboard.clientVersion), "%s", CTR_NATIVE_VERSION);
+    snprintf(s_nativeLeaderboard.clientVersion, sizeof(s_nativeLeaderboard.clientVersion), "PC:%s:%s", CTR_NATIVE_VERSION, CTR_NATIVE_BUILD_ID);
     return true;
 #endif
 }
@@ -187,6 +204,7 @@ static size_t NativeLeaderboard_HeaderCallback(char *data, size_t size, size_t c
     return bytes;
 }
 
+#if defined(__vita__)
 static void NativeLeaderboard_SetCommonCurlOptions(CURL *curl)
 {
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
@@ -194,11 +212,9 @@ static void NativeLeaderboard_SetCommonCurlOptions(CURL *curl)
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 8L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "CTR-Native/" CTR_NATIVE_VERSION);
-#if defined(__vita__)
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
-#endif
 }
 
 static b32 NativeLeaderboard_HttpGet(const char *url, struct NativeLeaderboardHttpBuffer *buffer, struct NativeLeaderboardGhostHeaders *headers)
@@ -217,10 +233,59 @@ static b32 NativeLeaderboard_HttpGet(const char *url, struct NativeLeaderboardHt
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-
     curl_easy_cleanup(curl);
     return (result == CURLE_OK) && (status == 200);
 }
+
+static b32 NativeLeaderboard_HashSha256(const void *data, size_t size, u8 digest[32])
+{
+    return SHA256(data, size, digest) != NULL;
+}
+#else
+static b32 NativeLeaderboard_BufferAppend(struct NativeLeaderboardHttpBuffer *buffer, const void *data, size_t size)
+{
+    if ((buffer == NULL) || (data == NULL) || (size == 0)) return size == 0;
+    if ((buffer->size + size) > buffer->limit) return false;
+    size_t needed = buffer->size + size + 1;
+    if (needed > buffer->capacity)
+    {
+        size_t capacity = buffer->capacity != 0 ? buffer->capacity : 4096;
+        while (capacity < needed) capacity *= 2;
+        if (capacity > buffer->limit + 1) capacity = buffer->limit + 1;
+        u8 *newData = (u8 *)realloc(buffer->data, capacity);
+        if (newData == NULL) return false;
+        buffer->data = newData;
+        buffer->capacity = capacity;
+    }
+    memcpy(buffer->data + buffer->size, data, size);
+    buffer->size += size;
+    buffer->data[buffer->size] = 0;
+    return true;
+}
+
+static b32 NativeLeaderboard_HttpGet(const char *url, struct NativeLeaderboardHttpBuffer *buffer, struct NativeLeaderboardGhostHeaders *headers)
+{
+    NativeWinHttpResponse response;
+    if (!NativeWinHttp_Request("GET", url, NULL, NULL, NULL, 0, buffer->limit, &response))
+    {
+        NativeWinHttp_FreeResponse(&response);
+        return false;
+    }
+    free(buffer->data);
+    buffer->data = response.data;
+    buffer->size = response.size;
+    buffer->capacity = response.size + 1;
+    response.data = NULL;
+    if (headers != NULL) snprintf(headers->sha256, sizeof(headers->sha256), "%s", response.ghostSha256);
+    NativeWinHttp_FreeResponse(&response);
+    return true;
+}
+
+static b32 NativeLeaderboard_HashSha256(const void *data, size_t size, u8 digest[32])
+{
+    return NativeWinHttp_Sha256(data, size, digest) != 0;
+}
+#endif
 
 static void NativeLeaderboard_JsonWhitespace(struct NativeLeaderboardJson *json)
 {
@@ -488,6 +553,228 @@ static b32 NativeLeaderboard_ParseJson(const char *data, size_t size, struct Nat
     }
 }
 
+
+static b32 NativeLeaderboard_ParseAccountJson(const char *data, size_t size, char *username, int usernameSize, char *publicId, int publicIdSize)
+{
+    struct NativeLeaderboardJson json = {data, data + size};
+    b32 ok = false;
+    b32 sawUsername = false;
+    b32 sawPublicId = false;
+    if (!NativeLeaderboard_JsonChar(&json, '{')) return false;
+    for (;;)
+    {
+        NativeLeaderboard_JsonWhitespace(&json);
+        if ((json.p < json.end) && (*json.p == '}')) return ok && sawUsername && sawPublicId;
+        char key[32];
+        if (!NativeLeaderboard_JsonString(&json, key, sizeof(key)) || !NativeLeaderboard_JsonChar(&json, ':')) return false;
+        if (strcmp(key, "ok") == 0)
+        {
+            if (NativeLeaderboard_JsonLiteral(&json, "true")) ok = true;
+            else if (NativeLeaderboard_JsonLiteral(&json, "false")) ok = false;
+            else return false;
+        }
+        else if (strcmp(key, "username") == 0)
+        {
+            if (!NativeLeaderboard_JsonString(&json, username, usernameSize)) return false;
+            sawUsername = true;
+        }
+        else if (strcmp(key, "public_id") == 0)
+        {
+            if (!NativeLeaderboard_JsonString(&json, publicId, publicIdSize)) return false;
+            sawPublicId = true;
+        }
+        else if (!NativeLeaderboard_JsonSkipValue(&json)) return false;
+        NativeLeaderboard_JsonWhitespace(&json);
+        if ((json.p < json.end) && (*json.p == '}')) continue;
+        if (!NativeLeaderboard_JsonChar(&json, ',')) return false;
+    }
+}
+
+#if defined(_WIN32) && !defined(__vita__)
+static void NativeLeaderboard_ProcessAccountVerify(void)
+{
+    const char *token = NativePcAccount_GetToken();
+    if (token == NULL) return;
+    char verifyBody[128];
+    int verifyBodySize = snprintf(verifyBody, sizeof(verifyBody), "account_key=%s", token);
+    if ((verifyBodySize <= 0) || ((size_t)verifyBodySize >= sizeof(verifyBody))) return;
+
+    NativeWinHttpResponse response;
+    memset(&response, 0, sizeof(response));
+    if (!NativeWinHttp_Request("POST", CTR_NATIVE_LEADERBOARD_ME_URL, token,
+                               "application/x-www-form-urlencoded", verifyBody, (size_t)verifyBodySize,
+                               16 * 1024, &response))
+    {
+        Platform_Log("[CTR Account] Account key verification failed http=%ld\n", response.status);
+        NativeWinHttp_FreeResponse(&response);
+        return;
+    }
+    char username[18] = {0};
+    char publicId[24] = {0};
+    if (NativeLeaderboard_ParseAccountJson((const char *)response.data, response.size, username, sizeof(username), publicId, sizeof(publicId)))
+    {
+        NativePcAccount_SetVerifiedIdentity(username, publicId);
+        Platform_Log("[CTR Account] Verified PC account %s (%s)\n", username, publicId);
+    }
+    else
+    {
+        Platform_Log("[CTR Account] Invalid /api/me response\n");
+    }
+    NativeWinHttp_FreeResponse(&response);
+}
+#endif
+
+#if defined(__vita__)
+#define NATIVE_LEADERBOARD_VITA_LINK_KEY_PATH "ux0:data/ctr/highoctane.key"
+#define NATIVE_LEADERBOARD_KEY_HEADER "CTR-HIGH-OCTANE-PC-KEY-V1"
+
+static b32 NativeLeaderboard_IsAccountTokenValid(const char *token)
+{
+    if ((token == NULL) || (strlen(token) != 43)) return false;
+    for (const char *p = token; *p != '\0'; p++)
+    {
+        if (!(isalnum((unsigned char)*p) || (*p == '-') || (*p == '_'))) return false;
+    }
+    return true;
+}
+
+static b32 NativeLeaderboard_VitaLinkKeyExists(void)
+{
+    SceUID fd = sceIoOpen(NATIVE_LEADERBOARD_VITA_LINK_KEY_PATH, SCE_O_RDONLY, 0);
+    if (fd < 0) return false;
+    sceIoClose(fd);
+    return true;
+}
+
+static b32 NativeLeaderboard_LoadVitaLinkKey(char token[96])
+{
+    token[0] = '\0';
+    SceUID fd = sceIoOpen(NATIVE_LEADERBOARD_VITA_LINK_KEY_PATH, SCE_O_RDONLY, 0);
+    if (fd < 0) return false;
+
+    char contents[1024];
+    int bytesRead = sceIoRead(fd, contents, sizeof(contents) - 1);
+    sceIoClose(fd);
+    if ((bytesRead <= 0) || (bytesRead >= (int)sizeof(contents))) return false;
+    contents[bytesRead] = '\0';
+
+    char *cursor = contents;
+    char *lineEnd = cursor;
+    while ((*lineEnd != '\0') && (*lineEnd != '\r') && (*lineEnd != '\n')) lineEnd++;
+    char saved = *lineEnd;
+    *lineEnd = '\0';
+    b32 headerOk = strcmp(cursor, NATIVE_LEADERBOARD_KEY_HEADER) == 0;
+    *lineEnd = saved;
+    if (!headerOk) return false;
+
+    cursor = lineEnd;
+    while ((*cursor == '\r') || (*cursor == '\n')) cursor++;
+    while (*cursor != '\0')
+    {
+        lineEnd = cursor;
+        while ((*lineEnd != '\0') && (*lineEnd != '\r') && (*lineEnd != '\n')) lineEnd++;
+        saved = *lineEnd;
+        *lineEnd = '\0';
+        if (strncmp(cursor, "token=", 6) == 0)
+        {
+            snprintf(token, 96, "%s", cursor + 6);
+            *lineEnd = saved;
+            break;
+        }
+        *lineEnd = saved;
+        cursor = lineEnd;
+        while ((*cursor == '\r') || (*cursor == '\n')) cursor++;
+    }
+
+    if (!NativeLeaderboard_IsAccountTokenValid(token))
+    {
+        memset(token, 0, 96);
+        return false;
+    }
+    return true;
+}
+
+static void NativeLeaderboard_ProcessVitaLink(void)
+{
+    if (!NativeNetwork_IsInternetConnected())
+    {
+        Platform_Log("[CTR Account] Vita account link deferred: internet unavailable\n");
+        return;
+    }
+
+    char token[96];
+    if (!NativeLeaderboard_LoadVitaLinkKey(token))
+    {
+        Platform_LogWarn("[CTR Account] Invalid %s\n", NATIVE_LEADERBOARD_VITA_LINK_KEY_PATH);
+        return;
+    }
+
+    u8 hash[NATIVE_USER_ID_HASH_SIZE];
+    if (!NativeUserId_CopyHash(hash))
+    {
+        memset(token, 0, sizeof(token));
+        Platform_LogWarn("[CTR Account] Cannot read Vita user identity\n");
+        return;
+    }
+
+    static const char hex[] = "0123456789ABCDEF";
+    char hashHex[NATIVE_USER_ID_HASH_SIZE * 2 + 1];
+    for (int i = 0; i < NATIVE_USER_ID_HASH_SIZE; i++)
+    {
+        hashHex[i * 2] = hex[hash[i] >> 4];
+        hashHex[i * 2 + 1] = hex[hash[i] & 0xf];
+    }
+    hashHex[sizeof(hashHex) - 1] = '\0';
+    memset(hash, 0, sizeof(hash));
+
+    struct curl_httppost *form = NULL;
+    struct curl_httppost *last = NULL;
+    curl_formadd(&form, &last, CURLFORM_COPYNAME, "account_key", CURLFORM_COPYCONTENTS, token, CURLFORM_END);
+    curl_formadd(&form, &last, CURLFORM_COPYNAME, "vita_user_hash", CURLFORM_COPYCONTENTS, hashHex, CURLFORM_END);
+    curl_formadd(&form, &last, CURLFORM_COPYNAME, "client_version", CURLFORM_COPYCONTENTS, s_nativeLeaderboard.clientVersion, CURLFORM_END);
+
+    CURL *curl = curl_easy_init();
+    if (curl == NULL)
+    {
+        curl_formfree(form);
+        memset(token, 0, sizeof(token));
+        return;
+    }
+
+    struct NativeLeaderboardHttpBuffer response;
+    memset(&response, 0, sizeof(response));
+    response.limit = 16 * 1024;
+    NativeLeaderboard_SetCommonCurlOptions(curl);
+    curl_easy_setopt(curl, CURLOPT_URL, CTR_NATIVE_LEADERBOARD_LINK_VITA_URL);
+    curl_easy_setopt(curl, CURLOPT_HTTPPOST, form);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NativeLeaderboard_WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    CURLcode result = curl_easy_perform(curl);
+    long status = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+
+    char username[18] = {0};
+    char publicId[24] = {0};
+    b32 linked = (result == CURLE_OK) && (status >= 200) && (status < 300) &&
+                 NativeLeaderboard_ParseAccountJson((const char *)response.data, response.size,
+                                                    username, sizeof(username), publicId, sizeof(publicId));
+    if (linked)
+    {
+        sceIoRemove(NATIVE_LEADERBOARD_VITA_LINK_KEY_PATH);
+        Platform_Log("[CTR Account] Vita linked to %s (%s)\n", username, publicId);
+    }
+    else
+    {
+        Platform_Log("[CTR Account] Vita account link failed curl=%d http=%ld\n", (int)result, status);
+    }
+
+    free(response.data);
+    curl_easy_cleanup(curl);
+    curl_formfree(form);
+    memset(token, 0, sizeof(token));
+}
+#endif
+
 static b32 NativeLeaderboard_Enqueue(struct NativeLeaderboardJob *job)
 {
     if (!s_nativeLeaderboard.initialized || (job == NULL)) return false;
@@ -504,6 +791,32 @@ static b32 NativeLeaderboard_Enqueue(struct NativeLeaderboardJob *job)
     SDL_UnlockMutex(s_nativeLeaderboard.mutex);
     return true;
 }
+
+#if defined(__vita__)
+static void NativeLeaderboard_RequestVitaLinkIfPresent(void)
+{
+    if (!s_nativeLeaderboard.initialized || !NativeLeaderboard_VitaLinkKeyExists()) return;
+
+    SDL_LockMutex(s_nativeLeaderboard.mutex);
+    if (s_nativeLeaderboard.vitaLinkInFlight)
+    {
+        SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+        return;
+    }
+    s_nativeLeaderboard.vitaLinkInFlight = true;
+    SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+
+    struct NativeLeaderboardJob linkJob;
+    memset(&linkJob, 0, sizeof(linkJob));
+    linkJob.type = NATIVE_LEADERBOARD_JOB_LINK_VITA;
+    if (!NativeLeaderboard_Enqueue(&linkJob))
+    {
+        SDL_LockMutex(s_nativeLeaderboard.mutex);
+        s_nativeLeaderboard.vitaLinkInFlight = false;
+        SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+    }
+}
+#endif
 
 static void NativeLeaderboard_ProcessRefresh(void)
 {
@@ -526,15 +839,49 @@ static void NativeLeaderboard_ProcessRefresh(void)
     free(buffer.data);
 }
 
+#if defined(__vita__)
 static void NativeLeaderboard_AddFormText(struct curl_httppost **first, struct curl_httppost **last, const char *name, const char *value)
 {
     curl_formadd(first, last, CURLFORM_COPYNAME, name, CURLFORM_COPYCONTENTS, value, CURLFORM_END);
 }
+#endif
+
+#if defined(_WIN32) && !defined(__vita__)
+static b32 NativeLeaderboard_MultipartAppendText(struct NativeLeaderboardHttpBuffer *body, const char *boundary,
+                                                 const char *name, const char *value)
+{
+    char header[512];
+    int count = snprintf(header, sizeof(header), "--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n",
+                         boundary, name, value != NULL ? value : "");
+    return (count > 0) && ((size_t)count < sizeof(header)) && NativeLeaderboard_BufferAppend(body, header, (size_t)count);
+}
+
+static b32 NativeLeaderboard_MultipartAppendFile(struct NativeLeaderboardHttpBuffer *body, const char *boundary,
+                                                 const char *name, const char *filename, const void *data, size_t size)
+{
+    char header[512];
+    int count = snprintf(header, sizeof(header),
+                         "--%s\r\nContent-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\n"
+                         "Content-Type: application/octet-stream\r\n\r\n",
+                         boundary, name, filename);
+    if ((count <= 0) || ((size_t)count >= sizeof(header))) return false;
+    return NativeLeaderboard_BufferAppend(body, header, (size_t)count) &&
+           NativeLeaderboard_BufferAppend(body, data, size) &&
+           NativeLeaderboard_BufferAppend(body, "\r\n", 2);
+}
+#endif
 
 static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *upload)
 {
     if (!NativeNetwork_IsInternetConnected()) { NativeLeaderboard_FreeUpload(upload); return; }
 
+    char trackText[16], characterText[16], raceText[16], lapText[16];
+    snprintf(trackText, sizeof(trackText), "%u", upload->trackId);
+    snprintf(characterText, sizeof(characterText), "%u", upload->characterId);
+    snprintf(raceText, sizeof(raceText), "%u", upload->raceTimeMs);
+    snprintf(lapText, sizeof(lapText), "%u", upload->lapTimeMs);
+
+#if defined(__vita__)
     u8 hash[NATIVE_USER_ID_HASH_SIZE];
     if (!NativeUserId_CopyHash(hash)) { NativeLeaderboard_FreeUpload(upload); return; }
     static const char hex[] = "0123456789ABCDEF";
@@ -546,12 +893,6 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
     }
     hashHex[sizeof(hashHex) - 1] = '\0';
     memset(hash, 0, sizeof(hash));
-
-    char trackText[16], characterText[16], raceText[16], lapText[16];
-    snprintf(trackText, sizeof(trackText), "%u", upload->trackId);
-    snprintf(characterText, sizeof(characterText), "%u", upload->characterId);
-    snprintf(raceText, sizeof(raceText), "%u", upload->raceTimeMs);
-    snprintf(lapText, sizeof(lapText), "%u", upload->lapTimeMs);
 
     struct curl_httppost *form = NULL;
     struct curl_httppost *last = NULL;
@@ -593,6 +934,52 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
         curl_easy_cleanup(curl);
     }
     curl_formfree(form);
+#else
+    const char *token = NativePcAccount_GetToken();
+    if (token == NULL)
+    {
+        Platform_Log("[CTR Leaderboard] PC record not uploaded: highoctane.key is missing or invalid\n");
+        NativeLeaderboard_FreeUpload(upload);
+        return;
+    }
+
+    static const char boundary[] = "----------------CTRHighOctanePC926";
+    struct NativeLeaderboardHttpBuffer body;
+    memset(&body, 0, sizeof(body));
+    body.limit = NATIVE_LEADERBOARD_HTTP_MAX_GHOST + 16 * 1024;
+    b32 ok = NativeLeaderboard_MultipartAppendText(&body, boundary, "account_key", token) &&
+             NativeLeaderboard_MultipartAppendText(&body, boundary, "platform", "pc") &&
+             NativeLeaderboard_MultipartAppendText(&body, boundary, "nickname", upload->nickname) &&
+             NativeLeaderboard_MultipartAppendText(&body, boundary, "track_id", trackText) &&
+             NativeLeaderboard_MultipartAppendText(&body, boundary, "character_id", characterText) &&
+             NativeLeaderboard_MultipartAppendText(&body, boundary, "client_version", s_nativeLeaderboard.clientVersion);
+    if (ok && upload->raceBest)
+        ok = NativeLeaderboard_MultipartAppendText(&body, boundary, "race_time_ms", raceText) &&
+             NativeLeaderboard_MultipartAppendFile(&body, boundary, "ghost", "record.ngr", upload->ghostData, (size_t)upload->ghostSize);
+    if (ok && upload->lapBest)
+        ok = NativeLeaderboard_MultipartAppendText(&body, boundary, "lap_time_ms", lapText);
+    if (ok)
+    {
+        char footer[128];
+        int footerSize = snprintf(footer, sizeof(footer), "--%s--\r\n", boundary);
+        ok = (footerSize > 0) && NativeLeaderboard_BufferAppend(&body, footer, (size_t)footerSize);
+    }
+
+    if (ok)
+    {
+        char contentType[128];
+        snprintf(contentType, sizeof(contentType), "multipart/form-data; boundary=%s", boundary);
+        NativeWinHttpResponse response;
+        memset(&response, 0, sizeof(response));
+        if (!NativeWinHttp_Request("POST", CTR_NATIVE_LEADERBOARD_UPLOAD_URL, token,
+                                   contentType, body.data, body.size, 64 * 1024, &response))
+        {
+            Platform_Log("[CTR Leaderboard] PC upload failed http=%ld\n", response.status);
+        }
+        NativeWinHttp_FreeResponse(&response);
+    }
+    free(body.data);
+#endif
     NativeLeaderboard_FreeUpload(upload);
 }
 
@@ -609,11 +996,11 @@ static void NativeLeaderboard_ProcessGhost(u64 recordId)
 
     if (success && (headers.sha256[0] != '\0'))
     {
-        u8 digest[SHA256_DIGEST_LENGTH];
-        char digestHex[SHA256_DIGEST_LENGTH * 2 + 1];
+        u8 digest[32];
+        char digestHex[65];
         static const char hex[] = "0123456789ABCDEF";
-        SHA256(buffer.data, buffer.size, digest);
-        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        if (!NativeLeaderboard_HashSha256(buffer.data, buffer.size, digest)) success = false;
+        for (int i = 0; success && (i < 32); i++)
         {
             digestHex[i * 2] = hex[digest[i] >> 4];
             digestHex[i * 2 + 1] = hex[digest[i] & 0xf];
@@ -658,10 +1045,19 @@ static int NativeLeaderboard_Worker(void *unused)
         if (job.type == NATIVE_LEADERBOARD_JOB_REFRESH) NativeLeaderboard_ProcessRefresh();
         else if (job.type == NATIVE_LEADERBOARD_JOB_UPLOAD) NativeLeaderboard_ProcessUpload(&job.upload);
         else if (job.type == NATIVE_LEADERBOARD_JOB_GHOST) NativeLeaderboard_ProcessGhost(job.recordId);
+#if defined(_WIN32) && !defined(__vita__)
+        else if (job.type == NATIVE_LEADERBOARD_JOB_VERIFY_ACCOUNT) NativeLeaderboard_ProcessAccountVerify();
+#endif
+#if defined(__vita__)
+        else if (job.type == NATIVE_LEADERBOARD_JOB_LINK_VITA) NativeLeaderboard_ProcessVitaLink();
+#endif
         else NativeLeaderboard_FreeUpload(&job.upload);
 
         SDL_LockMutex(s_nativeLeaderboard.mutex);
         s_nativeLeaderboard.workerBusy = false;
+#if defined(__vita__)
+        if (job.type == NATIVE_LEADERBOARD_JOB_LINK_VITA) s_nativeLeaderboard.vitaLinkInFlight = false;
+#endif
         SDL_UnlockMutex(s_nativeLeaderboard.mutex);
     }
     return 0;
@@ -672,7 +1068,11 @@ int NativeLeaderboard_Init(void)
     if (s_nativeLeaderboard.initialized) return 1;
     memset(&s_nativeLeaderboard, 0, sizeof(s_nativeLeaderboard));
     if (!NativeLeaderboard_InitClientVersion()) return 0;
+#if defined(__vita__)
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return 0;
+#else
+    NativePcAccount_Init();
+#endif
     s_nativeLeaderboard.mutex = SDL_CreateMutex();
     s_nativeLeaderboard.condition = SDL_CreateCondition();
     if ((s_nativeLeaderboard.mutex == NULL) || (s_nativeLeaderboard.condition == NULL))
@@ -687,12 +1087,26 @@ int NativeLeaderboard_Init(void)
         NativeLeaderboard_Shutdown();
         return 0;
     }
+#if defined(_WIN32) && !defined(__vita__)
+    if (NativePcAccount_IsAvailable())
+    {
+        struct NativeLeaderboardJob verifyJob;
+        memset(&verifyJob, 0, sizeof(verifyJob));
+        verifyJob.type = NATIVE_LEADERBOARD_JOB_VERIFY_ACCOUNT;
+        NativeLeaderboard_Enqueue(&verifyJob);
+    }
+#endif
+#if defined(__vita__)
+    NativeLeaderboard_RequestVitaLinkIfPresent();
+#endif
     return 1;
 }
 
 void NativeLeaderboard_Shutdown(void)
 {
+#if defined(__vita__)
     b32 curlWasInitialized = s_nativeLeaderboard.initialized || (s_nativeLeaderboard.mutex != NULL) || (s_nativeLeaderboard.condition != NULL);
+#endif
     if (s_nativeLeaderboard.mutex != NULL)
     {
         SDL_LockMutex(s_nativeLeaderboard.mutex);
@@ -706,7 +1120,9 @@ void NativeLeaderboard_Shutdown(void)
     free(s_nativeLeaderboard.ghostData);
     if (s_nativeLeaderboard.condition != NULL) SDL_DestroyCondition(s_nativeLeaderboard.condition);
     if (s_nativeLeaderboard.mutex != NULL) SDL_DestroyMutex(s_nativeLeaderboard.mutex);
+#if defined(__vita__)
     if (curlWasInitialized) curl_global_cleanup();
+#endif
     memset(&s_nativeLeaderboard, 0, sizeof(s_nativeLeaderboard));
 }
 
@@ -752,6 +1168,9 @@ int NativeLeaderboard_RequestNetworkRestoreProbe(void)
 int NativeLeaderboard_RequestRefresh(void)
 {
     if (!s_nativeLeaderboard.initialized || !NativeNetwork_IsInternetConnected()) return 0;
+#if defined(__vita__)
+    NativeLeaderboard_RequestVitaLinkIfPresent();
+#endif
     SDL_LockMutex(s_nativeLeaderboard.mutex);
     u64 now = SDL_GetTicks();
     b32 cacheFresh = s_nativeLeaderboard.hasCache && ((now - s_nativeLeaderboard.cacheTimestampMs) < NATIVE_LEADERBOARD_CACHE_TTL_MS);
@@ -910,3 +1329,46 @@ void NativeLeaderboard_CommitPendingUpload(void)
     s_nativeLeaderboard.pendingUploadValid = false;
     if (!NativeLeaderboard_Enqueue(&job)) NativeLeaderboard_FreeUpload(&job.upload);
 }
+
+#else
+
+int NativeLeaderboard_Init(void) { return 1; }
+void NativeLeaderboard_Shutdown(void) {}
+int NativeLeaderboard_IsNetworkIdle(void) { return 1; }
+int NativeLeaderboard_IsInternetConnected(void) { return 0; }
+int NativeLeaderboard_RequestNetworkRestoreProbe(void) { return 0; }
+int NativeLeaderboard_RequestRefresh(void) { return 0; }
+int NativeLeaderboard_HasCache(void) { return 0; }
+int NativeLeaderboard_IsRefreshing(void) { return 0; }
+int NativeLeaderboard_CopyTrack(int trackId, struct NativeLeaderboardTrack *outTrack)
+{
+    (void)trackId;
+    (void)outTrack;
+    return 0;
+}
+int NativeLeaderboard_RequestGhost(u64 recordId)
+{
+    (void)recordId;
+    return 0;
+}
+int NativeLeaderboard_GetGhostState(void) { return NATIVE_LEADERBOARD_TRANSFER_IDLE; }
+int NativeLeaderboard_TakeGhost(void **data, int *size)
+{
+    if (data != NULL) *data = NULL;
+    if (size != NULL) *size = 0;
+    return 0;
+}
+void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const char *nickname, u32 raceTimeMs, u32 lapTimeMs, b32 raceBest, b32 lapBest)
+{
+    (void)trackId;
+    (void)characterId;
+    (void)nickname;
+    (void)raceTimeMs;
+    (void)lapTimeMs;
+    (void)raceBest;
+    (void)lapBest;
+}
+void NativeLeaderboard_CommitPendingUpload(void) {}
+void NativeLeaderboard_ClearPendingUpload(void) {}
+
+#endif

@@ -531,7 +531,7 @@ static int DrawTiresSolid_EmitProjectedWheel(struct DrawTiresScratch *scratch, s
 	return 1;
 }
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 static int DrawTires_WheelFitsGteInput(const struct DrawTiresScratch *scratch, int wheelIndex)
 {
 	const struct DrawTiresWheelLocal *wheelLocal = &scratch->wheelLocal[wheelIndex];
@@ -566,7 +566,7 @@ static int DrawTiresSolid_ProjectWheelQuads(struct DrawTiresScratch *scratch, st
 	// depth-bias scratch updates, UV copy, and OT linking.
 	for (int wheelIndex = 3; wheelIndex >= 0; wheelIndex--)
 	{
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 		if (!DrawTires_WheelFitsGteInput(scratch, wheelIndex))
 		{
 			continue;
@@ -1157,7 +1157,7 @@ static int DrawTiresReflection_ProjectWheelQuads(struct DrawTiresScratch *scratc
 	// reflected SXY scratch order used by the later jump-table primitive path.
 	for (int wheelIndex = 3; wheelIndex >= 0; wheelIndex--)
 	{
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 		if (!DrawTires_WheelFitsGteInput(scratch, wheelIndex))
 		{
 			continue;

@@ -33,7 +33,7 @@ static const struct MMCupSelectCustomCupsText s_customCupsText[MM_CUSTOM_CUPS_LA
 	{"SELECT: AANGEPASTE BEKERS", "D-PAD: BANEN WIJZIGEN", "R1: WILLEKEURIGE BANEN"},
 };
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 extern int cfg_language;
 #endif
 
@@ -41,7 +41,7 @@ static const struct MMCupSelectCustomCupsText *MM_CupSelect_CustomCups_GetText(v
 {
 	int language = MM_CUSTOM_CUPS_LANGUAGE_ENGLISH;
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 	if ((cfg_language >= 2) && (cfg_language <= 7))
 	{
 		language = cfg_language - 2;

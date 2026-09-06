@@ -1,5 +1,6 @@
 #include <common.h>
 #include "platform/native_user_id.h"
+#include "platform/native_pc_account.h"
 
 #if defined(__vita__)
 #include <openssl/sha.h>
@@ -15,7 +16,7 @@ enum
 static b32 s_nativeUserIdInitialized;
 static b32 s_nativeUserIdAvailable;
 static u8 s_nativeUserIdHash[NATIVE_USER_ID_HASH_SIZE];
-static char s_nativeUserIdDisplay[NATIVE_USER_ID_DISPLAY_LENGTH + 1];
+static char s_nativeUserIdDisplay[24];
 
 static void NativeUserId_Initialize(void)
 {
@@ -57,13 +58,24 @@ static void NativeUserId_Initialize(void)
     }
     s_nativeUserIdDisplay[NATIVE_USER_ID_DISPLAY_LENGTH] = '\0';
     s_nativeUserIdAvailable = true;
+#elif defined(_WIN32)
+    const char *publicId = NativePcAccount_GetPublicId();
+    if (publicId != NULL)
+    {
+        snprintf(s_nativeUserIdDisplay, sizeof(s_nativeUserIdDisplay), "%s", publicId);
+        s_nativeUserIdAvailable = true;
+    }
 #endif
 }
 
 const char *NativeUserId_GetDisplayString(void)
 {
+#if defined(_WIN32) && !defined(__vita__)
+    return NativePcAccount_GetPublicId();
+#else
     NativeUserId_Initialize();
     return s_nativeUserIdAvailable ? s_nativeUserIdDisplay : NULL;
+#endif
 }
 
 int NativeUserId_CopyHash(unsigned char outHash[NATIVE_USER_ID_HASH_SIZE])

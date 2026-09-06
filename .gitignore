@@ -1,7 +1,8 @@
 build/
 build-*/
 dist/
-assets/
+assets/*
+!assets/vita.png
 debug/
 *.exe
 *.o
@@ -33,5 +34,5 @@ memcards/
 *.xa
 *.xnf
 .build-temp/*
-leaderboard/*
+website/*
 *.pyc

@@ -91,6 +91,7 @@ int gNativeRelicRaceResultTier = -1;
 #include "platform/native_glad.c"
 #include "platform/native_input.c"
 #include "platform/native_network.c"
+#include "platform/native_pc_account.c"
 #include "platform/native_user_id.c"
 #include "platform/native_leaderboard.c"
 #include "platform/native_adhoc.c"
@@ -181,11 +182,84 @@ static int NativeArg_IsVersion(const char *arg)
 	return (arg != NULL) && ((strcmp(arg, "--version") == 0) || (strcmp(arg, "-v") == 0));
 }
 
+extern s32 s_nativeLanguageChosen; // Flag if language has been selected on first boot
+extern int gNativeMirrorModeEnabled;
+int gNative60FpsEnabled = 0;
+int gNativeForce30Fps = 0;
+#ifndef __vita__
+int gNativeAntiAliasingEnabled = 1;
+int gNativeBorderlessEnabled = 0;
+#endif
+int cfg_language = 2; // Default: PAL UK language
+
+static const char *NativeConfig_GetPath(void)
+{
+#ifdef __vita__
+	return "ux0:data/ctr/config.ini";
+#else
+	return "config.ini";
+#endif
+}
+
+void load_config(void)
+{
+	char buffer[30];
+	int value;
+	FILE *config = fopen(NativeConfig_GetPath(), "r");
+	if (config)
+	{
+		while (EOF != fscanf(config, "%[^=]=%d\n", buffer, &value))
+		{
+			if (strcmp("language", buffer) == 0)
+			{
+				cfg_language = value;
+				s_nativeLanguageChosen = 1;
+			}
+			else if (strcmp("mirror_mode", buffer) == 0)
+			{
+				gNativeMirrorModeEnabled = (value != 0);
+			}
+			else if (strcmp("60fps", buffer) == 0)
+			{
+				gNative60FpsEnabled = (value != 0);
+			}
+#ifndef __vita__
+			else if (strcmp("anti_aliasing", buffer) == 0)
+			{
+				gNativeAntiAliasingEnabled = (value != 0);
+			}
+			else if (strcmp("borderless", buffer) == 0)
+			{
+				gNativeBorderlessEnabled = (value != 0);
+			}
+#endif
+		}
+		fclose(config);
+	}
+}
+
+void save_config(void)
+{
+	FILE *config = fopen(NativeConfig_GetPath(), "w+");
+	if (config != NULL)
+	{
+		fprintf(config, "%s=%d\n", "language", cfg_language);
+		fprintf(config, "%s=%d\n", "mirror_mode", gNativeMirrorModeEnabled != 0);
+		fprintf(config, "%s=%d\n", "60fps", gNative60FpsEnabled != 0);
+#ifndef __vita__
+		fprintf(config, "%s=%d\n", "anti_aliasing", gNativeAntiAliasingEnabled != 0);
+		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);
+#endif
+		fclose(config);
+	}
+}
+
 #ifdef __vita__
 #include <pthread.h>
 void *real_main(void *argv);
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	pthread_t t;
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
@@ -195,42 +269,8 @@ int main(int argc, char *argv[]) {
 	return sceKernelExitDeleteThread(0);
 }
 
-extern s32 s_nativeLanguageChosen; // Flag if language has been selected on first boot
-extern int gNativeMirrorModeEnabled;
-int gNative60FpsEnabled = 0;
-int gNativeForce30Fps = 0;
-int cfg_language = 2; // Default: PAL UK language
-
-void load_config() {
-	char buffer[30];
-	int value;
-	FILE *config = fopen("ux0:data/ctr/config.ini", "r");
-	if (config) {
-		while (EOF != fscanf(config, "%[^=]=%d\n", buffer, &value)) {
-			if (strcmp("language", buffer) == 0) {
-				cfg_language = value;
-				s_nativeLanguageChosen = 1;
-			} else if (strcmp("mirror_mode", buffer) == 0) {
-				gNativeMirrorModeEnabled = (value != 0);
-			} else if (strcmp("60fps", buffer) == 0) {
-				gNative60FpsEnabled = (value != 0);
-			}
-		}
-		fclose(config);
-	}
-}
-
-void save_config() {
-	FILE *config = fopen("ux0:data/ctr/config.ini", "w+");
-	if (config != NULL) {
-		fprintf(config, "%s=%d\n", "language", cfg_language);
-		fprintf(config, "%s=%d\n", "mirror_mode", gNativeMirrorModeEnabled != 0);
-		fprintf(config, "%s=%d\n", "60fps", gNative60FpsEnabled != 0);
-		fclose(config);
-	}
-}
-
-void *real_main(void *_argv) {
+void *real_main(void *_argv)
+{
 	scePowerSetArmClockFrequency(444);
 	scePowerSetBusClockFrequency(222);
 	scePowerSetGpuClockFrequency(222);
@@ -288,6 +328,10 @@ int main(int argc, char *argv[])
 		return NativeConsole_Return(1);
 	}
 
+#ifndef __vita__
+	load_config();
+#endif
+
 	if (!NativeAssets_Validate())
 	{
 		return NativeConsole_Return(1);
@@ -300,15 +344,18 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef USE_16BY9
+#if defined(__vita__)
+	printf("[CTR Native] High Octane widescreen 960x544\n");
+	Platform_Init("Crash Team Racing: High Octane", 960, 544);
+#elif CTR_NATIVE_WIDESCREEN
+	printf("[CTR Native] High Octane widescreen 1280x720\n");
+	Platform_Init("Crash Team Racing: High Octane", 1280, 720);
+#elif defined(USE_16BY9)
 	printf("[CTR Native] Widescreen\n");
-	Platform_Init("Crash Team Racing", 1280, 720);
-#elif defined(__vita__)
-	printf("[CTR Native] 16:10\n");
-	Platform_Init("Crash Team Racing", 960, 544);
+	Platform_Init("Crash Team Racing: High Octane", 1280, 720);
 #else
 	printf("[CTR Native] 4:3\n");
-	Platform_Init("Crash Team Racing", 800, 600);
+	Platform_Init("Crash Team Racing: High Octane", 800, 600);
 #endif
 
 #if defined(CTR_INTERNAL)

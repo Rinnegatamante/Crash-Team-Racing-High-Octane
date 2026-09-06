@@ -153,7 +153,7 @@ void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empt
 	// letftX is the left side
 	leftX = posX - sizeX;
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	int centerX = (leftX + posX) / 2;
 
 	// In-race map coordinates are projected around iconStartX.  Scale the
@@ -246,7 +246,7 @@ void UI_Map_GetIconPos(struct UIMap *map, int *posX, int *posY)
 		addY = -(*posX * map->iconSizeY * 2) / worldRangeX;
 	}
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	addX = CTR_WIDESCREEN_SCALE_X(addX);
 #endif
 

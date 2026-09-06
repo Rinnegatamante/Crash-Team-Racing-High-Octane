@@ -93,7 +93,7 @@ int NativeNetwork_Init(void)
     }
     return 1;
 #else
-    return 0;
+    return 1;
 #endif
 }
 
@@ -199,6 +199,7 @@ int NativeNetwork_IsInternetConnected(void)
 
     return state == SCE_NETCTL_STATE_CONNECTED;
 #else
-    return 0;
+    // Desktop networking is probed by the HTTP request itself.
+    return 1;
 #endif
 }

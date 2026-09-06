@@ -1778,7 +1778,7 @@ struct Thread *CS_Thread_Init(s16 modelID, const char *name, struct CsThreadInit
 			char *const *base;
 			int off = (modelID - STATIC_CRASHDANCE);
 
-#if defined(__vita__)
+#if defined(CTR_NATIVE)
 			if ((modelID == gGT->podium_modelIndex_First) && (modelID != STATIC_OXIDEDANCE))
 #else
 			if (modelID == gGT->podium_modelIndex_First)

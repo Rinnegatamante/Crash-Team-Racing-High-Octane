@@ -6,7 +6,7 @@ static void DecalFont_DrawGlyph(struct Icon *icon, s16 posX, s16 posY, struct Pr
 	POLY_GT4 *p = primMem->cursor;
 	DecalHUD_DrawPolyGT4(icon, posX, posY, primMem, ot, color0, color1, color2, color3, transparency, scale);
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	if ((icon != NULL) && (primMem->cursor == p + 1))
 	{
 		const int sourceWidth = FP_Mult(icon->texLayout.u1 - icon->texLayout.u0, scale);
@@ -134,7 +134,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 		posX -= alignX;
 	}
 
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 	const int widescreenLineStartX = posX;
 	int widescreenPenX = 0;
 #define DECAL_FONT_DRAW_X(extra) (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra)))
@@ -552,7 +552,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 #endif
 		}
-#if CTR_VITA_WIDESCREEN
+#if CTR_NATIVE_WIDESCREEN
 		widescreenPenX += charWidth;
 		posX = widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX);
 #else
