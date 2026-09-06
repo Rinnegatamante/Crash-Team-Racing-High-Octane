@@ -77,6 +77,13 @@ In order to be able to auto submit your new records in Time Trial and Relic Race
 
 ## Changelog
 
+### v.1.3.1
+
+- Fixed a bug causing ghosts generated from PC to get desynced if right analog was used.
+- Added a new option to change default camera between the close and far one.
+- Added a new option to change default attachment between minimap and speedometer.
+- Made so that analogs inputs are properly shown in the input viewer overlay.
+
 ### v.1.3
 
 - Added a Vita overlay when watching ghosts in Ghost Replay that will show the inputs the player used in realtime.
