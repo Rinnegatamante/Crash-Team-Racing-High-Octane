@@ -1,30 +1,35 @@
 # Crash Team Racing: High Octane
 <img src="screenshots/game1.jpg"></img><br>
-Crash Team Racing: High Octane is a sourceport for PSVita of Crash Team Racing based on the [ctr-native](https://github.com/CTR-tools/ctr-native) project.
+Crash Team Racing: High Octane is a sourceport for PSVita and PC (Windows) of Crash Team Racing based on the [ctr-native](https://github.com/CTR-tools/ctr-native) project.
 It focuses on new features, enhancements and optimization.
 
 ## Features
 
 - True widescreen with no stretching.
 - Internal resolution of the renderer bumped to 960x544.
-- MSAA 4x for anti-aliasing.
+- MSAA 4x (PSVita) / FXAA (PC) for anti-aliasing.
 - 60 FPS support.
 - Penta Penguin has its stats set to its PAL/NTSC-J counterpart (6/6/6).
 - Playable Nitrous Oxide (Unlockable via the original Spyro 2 Demo cheatcode). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/OxideFix))
 - Reserves Meter (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/ReservesMeter))
 - Customizable Cups (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/CustomCups))
-- Multilanguage support.
+- Multilanguage support with (optional) PAL voiceovers support (Check "How to use PAL voiceovers").
 - Super and Ultra Hard Difficulty modes for Arcade mode.
 - USF will show as blue fire (similar to CTR: Nitro Fueled). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/BlueFire))
+- Super turbopads are cyan to distinguish them from regular turbopads.
 - Mirror mode option: Play any track specular.
 - Boss Fight option: Challenge Adventure mode bossfights on any track.
-- AdHoc Netplay support for two PSVitas multiplayer without the need of a router.
+- [PSVITA Only] AdHoc Netplay support for two PSVitas multiplayer without the need of a router.
 - Several vanilla game bugfixes (eg: PVS related glitches and Penta-Penguin wrong mask powerup HUD icon).
-- Ghost Replay feature: Replay all your ghost datas as if you're seeing the run being played live.
+- Ghost Replay feature: Replay all your ghost datas as if you're seeing the run being played live with inputs viewer overlay.
 - Increased ghost data limits: No more 7 ghosts globally, now there are 7 ghosts data slot per track.
 - Stats viewer for characters in the character selection screen.
-- Online leaderboard for Time Trials results.
-- Splitscreen support for up to 4 players local multiplayer for PSTV users or PSVita users with MiniVitaTV.
+- Online leaderboard for Time Trials and Relic Race results.
+- Splitscreen support for up to 4 players local multiplayer for PC and PSTV users or PSVita users with MiniVitaTV.
+- [PC Only] Discord Rich Presence support when playing with Discord opened.
+- Reverse tracks mode for Crash Cove, Roo's Tubes, Tiger Temple, Coco Park, Dragon Mines, Tiny Arena, Slide Coliseum and Turbo Track available in Time Trial and Relic Race mode.
+- Relic Race mode available outside of Adventure mode and accessible with any character.
+- Relic Race mode now has ghosts support.
 
 ## Online leaderboard
 
@@ -36,14 +41,58 @@ The full online leaderboard for Time Trails is available at this link: <a href="
 
 ## Special controls bindings
 
-- L2 and R2 are also mapped on right analog left/right to let PSVita use those controls.
+- [PSVITA Only] L2 and R2 are also mapped on right analog left/right to let PSVita use those controls.
+- [PC Only] F11 is a shortcut to swap between Windowed and Fullscreen Borderless mode.
 
-## How to Install
+## How to Install (PSVita)
 
 - Install the .vpk.
-- Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in `ux0:data/ctr/assets/ctr-u.bin`.
+- Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in `ux0:data/ctr/assets` named as `ctr-u.bin`.
+
+# How to Install (PC)
+
+- Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in the `assets` folder named as `ctr-u.bin`.
+
+## How to use PAL voiceovers
+
+- Install Python 3.11 or higher ([https://www.python.org/downloads/](https://www.python.org/downloads/)).
+- Download [this script](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane/raw/refs/heads/vita/tools/extract_pal_voices.py) by right-clicking the link and selecting "Save link as..." or, if the script opens in the browser, "Save page as...".
+- Place your PAL Crash Team Racing `.bin` dump in the same folder as the script.
+- Open a command prompt in that folder by typing `cmd` in the File Explorer address bar and pressing Enter.
+- Run `python extract_pal_voices.py YOUR_DUMP_NAME.bin`.
+- When extraction is complete, place the generated `pal-voices` folder:
+  - on PSVita: in `ux0:data/ctr/mods/`.
+  - on PC: in the `mods` folder next to the CTR: High Octane executable, so that the final path is `mods/pal-voices`.
+
+## How to set up Online functionalities on PC
+
+In order to be able to auto submit your new records in Time Trial and Relic Race modes on PC, you need to set up an account first.
+- Navigate to https://www.rinnegatamante.eu/ctr/account/ and create an account.
+- Follow the instructions on screen to properly set up the connection on your PC setup.
+
+## How to link PSVita and PC online accounts
+
+- Navigate to https://www.rinnegatamante.eu/ctr/account/ and create an account.
+- Follow the instructions on screen to properly link your PC account and your PSVita one.
 
 ## Changelog
+
+### v.1.3
+
+- Added a Vita overlay when watching ghosts in Ghost Replay that will show the inputs the player used in realtime.
+- Fixed several animations playing at doubled speed when playing at 60 FPS.
+- Fixed several sounds playing on both clients when they should be local during AdHoc netplay.
+- Fixed "Final Lap" text not showing when playing in AdHoc.
+- Fixed the Uka-Uka/Aku-Aku powerup causing constant desyncs resulting in heavy stutter during AdHoc netplay.
+- Added "Vs" mode support to AdHoc netplay.
+- Added support for PAL voiceovers (English, Italian, Spanish, German and Dutch) (Check the "How to use PAL voiceovers" in the README in order to set it up).
+- Added possibility to play Relic Race gamemode outside of Adventure mode. (Available in the Time Trial submenu)
+- Added ghosts support to Relic Race gamemode, including Ghost Replay support.
+- Made so that super turbopads are now cyan to distinguish them from regular turbopads.
+- Integrated Relic Mode into the Online Leaderboard system.
+- Added Reverse variants for Crash Cove, Roo's Tubes, Tiger Temple, Coco Park, Dragon Mines, Tiny Arena, Slide Coliseum and Turbo Track. These are available in Time Trial and Relic Race.
+- Created a PC port (Windows) of CTR: High Octane. It features everything available on the PSVita variant except for AdHoc mode. Has FXAA, Borderless window mode and Discord Rich Presence support. (In order to be able to compete with the Online Leaderboard, check the "How to set up Online functionalities on PC" in the README).
+- Added possibility to link PSVita and PC online accounts for the Online Leaderboard (Check the "How to link PSVita and PC online accounts" section in the README).
 
 ### v.1.2
 
