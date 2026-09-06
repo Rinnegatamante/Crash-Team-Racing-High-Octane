@@ -33,7 +33,7 @@ It focuses on new features, enhancements and optimization.
 
 ## Online leaderboard
 
-The full online leaderboard for Time Trails is available at this link: <a href="https://www.rinnegatamante.eu/ctr/leaderboard/">Online Leaderboard</a>.
+The full online leaderboard for Time Trials and Relic Races is available at this link: <a href="https://www.rinnegatamante.eu/ctr/leaderboard/">Online Leaderboard</a>.
 
 ## Known Issues
 
