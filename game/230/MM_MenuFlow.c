@@ -656,6 +656,7 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 	struct GameTracker *gGT = sdata->gGT;
 	s16 choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
 
+	gGT->gameMode1 &= ~(TIME_TRIAL | RELIC_RACE);
 	gNativeGhostReplayMode = 0;
 	gNativeOnlineLeaderboardMode = 0;
 	gNativeRelicRaceMode = 0;
