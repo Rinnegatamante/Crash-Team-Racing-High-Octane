@@ -86,6 +86,7 @@ add_subdirectory(externals/SDL)
 add_executable(ctr_native main.c)
 if(WIN32)
     target_sources(ctr_native PRIVATE platform/windows/ctr_native.rc)
+    set_target_properties(ctr_native PROPERTIES OUTPUT_NAME "Crash Team Racing - High Octane")
 endif()
 set_target_properties(ctr_native PROPERTIES
     C_STANDARD 17
