@@ -3650,8 +3650,12 @@ internal void NativeRenderer_DrawGhostReplayImageRegion(TextureID texture, int o
 void NativeRenderer_DrawGhostReplayOverlay(void)
 {
 	u32 buttonsHeld;
+	u8 stickLX;
+	u8 stickLY;
+	u8 stickRX;
+	u8 stickRY;
 
-	if (!NativeGhostInput_GetReplayOverlayState(&buttonsHeld) || !NativeRenderer_LoadGhostReplayOverlay())
+	if (!NativeGhostInput_GetReplayOverlayState(&buttonsHeld, &stickLX, &stickLY, &stickRX, &stickRY) || !NativeRenderer_LoadGhostReplayOverlay())
 	{
 		return;
 	}
@@ -3692,6 +3696,14 @@ void NativeRenderer_DrawGhostReplayOverlay(void)
 	if ((buttonsHeld & BTN_SQUARE) != 0)   NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 260, 51, 14, 14);
 	if ((buttonsHeld & (BTN_L1 | BTN_L2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[0], overlayX, overlayY, overlayW, overlayH, 16, 0, 48, 16);
 	if ((buttonsHeld & (BTN_R1 | BTN_R2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[1], overlayX, overlayY, overlayW, overlayH, 237, 0, 48, 16);
+
+	const int stickTravel = 8;
+	const int leftStickX = 38 + (((int)stickLX - 128) * stickTravel) / 127;
+	const int leftStickY = 90 + (((int)stickLY - 128) * stickTravel) / 127;
+	const int rightStickX = 262 + (((int)stickRX - 128) * stickTravel) / 127;
+	const int rightStickY = 90 + (((int)stickRY - 128) * stickTravel) / 127;
+	NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, leftStickX, leftStickY, 8, 8);
+	NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, rightStickX, rightStickY, 8, 8);
 
 	if (previousStencilEnabled)
 	{

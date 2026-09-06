@@ -10,8 +10,16 @@ enum
     NATIVE_GHOST_INPUT_FLAG_60FPS = 1 << 0,
     NATIVE_GHOST_INPUT_FLAG_RELIC_RACE = 1 << 1,
     NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y = 1 << 2,
+    NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_X_5BIT = 1 << 3,
+    NATIVE_GHOST_INPUT_FLAG_STICK_OVERLAY_SOURCE = 1 << 4,
     NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA = 1 << 15,
     NATIVE_GHOST_INPUT_BUTTON_MASK = 0x0007ffff,
+    NATIVE_GHOST_INPUT_STICK_RX_SHIFT = 19,
+    NATIVE_GHOST_INPUT_STICK_RX_MASK = 0x1f,
+    NATIVE_GHOST_INPUT_STICK_LX_PHYSICAL_SHIFT = 19,
+    NATIVE_GHOST_INPUT_STICK_LY_PHYSICAL_SHIFT = 20,
+    NATIVE_GHOST_INPUT_STICK_RX_3BIT_SHIFT = 21,
+    NATIVE_GHOST_INPUT_STICK_RX_3BIT_MASK = 0x7,
     NATIVE_GHOST_INPUT_STICK_RY_SHIFT = 24,
     NATIVE_GHOST_INPUT_TIMER_PHASE_MASK = 7,
 };
@@ -169,7 +177,55 @@ void NativeGhostInput_ClearSelection(void)
     gNativeGhostReplayFpsOverride = -1;
 }
 
-b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld)
+static u8 NativeGhostInput_QuantizeRightStickX(u8 value)
+{
+    if (value < 0x80)
+    {
+        return (u8)(((u32)value * 15u + 63u) / 127u);
+    }
+    if (value == 0x80)
+    {
+        return 16;
+    }
+    return (u8)(16u + (((u32)value - 128u) * 15u + 63u) / 127u);
+}
+
+static u8 NativeGhostInput_DequantizeRightStickX(u8 value)
+{
+    value &= NATIVE_GHOST_INPUT_STICK_RX_MASK;
+    if (value < 16)
+    {
+        return (u8)(((u32)value * 128u + 8u) / 16u);
+    }
+    if (value == 16)
+    {
+        return 0x80;
+    }
+    return (u8)(128u + (((u32)value - 16u) * 127u + 7u) / 15u);
+}
+
+static u8 NativeGhostInput_QuantizeRightStickX3Bit(u8 value)
+{
+    return (u8)(((u32)value * 6u + 127u) / 255u);
+}
+
+static u8 NativeGhostInput_DequantizeRightStickX3Bit(u8 value)
+{
+    value &= NATIVE_GHOST_INPUT_STICK_RX_3BIT_MASK;
+    if (value > 6u)
+    {
+        value = 6u;
+    }
+    return (u8)(((u32)value * 255u + 3u) / 6u);
+}
+
+static b32 NativeGhostInput_PhysicalAxisActive(u8 value)
+{
+    int delta = (int)value - 0x80;
+    return (delta < -8) || (delta > 8);
+}
+
+b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *stickLY, u8 *stickRX, u8 *stickRY)
 {
     if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive || !s_nativeGhostInputDisplayValid ||
         (sdata->gGT == NULL) || (sdata->Loading.stage != LOAD_IDLE) ||
@@ -182,6 +238,42 @@ b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld)
     if (buttonsHeld != NULL)
     {
         *buttonsHeld = s_nativeGhostInputDisplayFrame.buttonsHeld & NATIVE_GHOST_INPUT_BUTTON_MASK;
+    }
+    b32 hasPhysicalStickSource =
+        (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_STICK_OVERLAY_SOURCE) != 0;
+    if (stickLX != NULL)
+    {
+        *stickLX = !hasPhysicalStickSource ||
+                   (((s_nativeGhostInputDisplayFrame.buttonsHeld >> NATIVE_GHOST_INPUT_STICK_LX_PHYSICAL_SHIFT) & 1u) != 0)
+            ? s_nativeGhostInputDisplayFrame.stickLX
+            : 0x80;
+    }
+    if (stickLY != NULL)
+    {
+        *stickLY = !hasPhysicalStickSource ||
+                   (((s_nativeGhostInputDisplayFrame.buttonsHeld >> NATIVE_GHOST_INPUT_STICK_LY_PHYSICAL_SHIFT) & 1u) != 0)
+            ? s_nativeGhostInputDisplayFrame.stickLY
+            : 0x80;
+    }
+    if (stickRX != NULL)
+    {
+        if (hasPhysicalStickSource)
+        {
+            *stickRX = NativeGhostInput_DequantizeRightStickX3Bit(
+                (u8)(s_nativeGhostInputDisplayFrame.buttonsHeld >> NATIVE_GHOST_INPUT_STICK_RX_3BIT_SHIFT));
+        }
+        else
+        {
+            *stickRX = (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_X_5BIT) != 0
+                ? NativeGhostInput_DequantizeRightStickX((u8)(s_nativeGhostInputDisplayFrame.buttonsHeld >> NATIVE_GHOST_INPUT_STICK_RX_SHIFT))
+                : 0x80;
+        }
+    }
+    if (stickRY != NULL)
+    {
+        *stickRY = (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y) != 0
+            ? (u8)(s_nativeGhostInputDisplayFrame.buttonsHeld >> NATIVE_GHOST_INPUT_STICK_RY_SHIFT)
+            : 0x80;
     }
     return true;
 }
@@ -225,7 +317,9 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputTotalTimeMS = 0;
     s_nativeGhostInputTrackID = NativeReverseTrack_GetCurrentLogicalTrackId();
     s_nativeGhostInputCharacterID = data.characterIDs[driver->driverID];
-    s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA | NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y;
+    s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA |
+                                       NATIVE_GHOST_INPUT_FLAG_RIGHT_STICK_Y |
+                                       NATIVE_GHOST_INPUT_FLAG_STICK_OVERLAY_SOURCE;
     if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
     {
         s_nativeGhostInputRecordingFlags |= NATIVE_GHOST_INPUT_FLAG_RELIC_RACE;
@@ -325,8 +419,31 @@ void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads)
     }
 
     struct GamepadBuffer *pad = &gGamepads->gamepad[0];
+    struct ControllerPacket *packet = pad->ptrControllerPacket;
+    u8 physicalLX = 0x80;
+    u8 physicalLY = 0x80;
+    u8 physicalRX = (u8)pad->stickRX;
+    if ((packet != NULL) && (packet->plugged == PLUGGED))
+    {
+        physicalLX = packet->analog.leftX;
+        physicalLY = packet->analog.leftY;
+        physicalRX = packet->analog.rightX;
+    }
+
+    u32 overlayStickBits =
+        ((u32)NativeGhostInput_QuantizeRightStickX3Bit(physicalRX) << NATIVE_GHOST_INPUT_STICK_RX_3BIT_SHIFT);
+    if (NativeGhostInput_PhysicalAxisActive(physicalLX))
+    {
+        overlayStickBits |= 1u << NATIVE_GHOST_INPUT_STICK_LX_PHYSICAL_SHIFT;
+    }
+    if (NativeGhostInput_PhysicalAxisActive(physicalLY))
+    {
+        overlayStickBits |= 1u << NATIVE_GHOST_INPUT_STICK_LY_PHYSICAL_SHIFT;
+    }
+
     s_nativeGhostInputPending.buttonsHeld =
         ((u32)pad->buttonsHeldCurrFrame & ~NATIVE_GHOST_INPUT_META_BUTTONS & NATIVE_GHOST_INPUT_BUTTON_MASK) |
+        overlayStickBits |
         ((u32)(u8)pad->stickRY << NATIVE_GHOST_INPUT_STICK_RY_SHIFT);
     s_nativeGhostInputPending.stickLX = (u8)pad->stickLX;
     s_nativeGhostInputPending.stickLY = (u8)pad->stickLY;
