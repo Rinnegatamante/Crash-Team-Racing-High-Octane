@@ -520,8 +520,9 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 				// if you are not in battle mode
 
-				// if you are in time trial mode
-				if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+				// Time Trial and native Relic Race can both load a human ghost.
+				if (((gGT->gameMode1 & TIME_TRIAL) != 0) ||
+				    ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0)))
 				{
 					// allocate room at the end of RAM for ghosts
 					sdata->ptrGhostTapePlaying = MEMPACK_AllocHighMem(MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE /*, R230.s_loaded_ghost_data*/);
@@ -858,11 +859,12 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 		if ((D230.trackSelect.trackChangeFrames == 0) && ((s16)rowIndex == MM_TRACK_SELECT_CENTER_ROW))
 		{
-			// if you are in time trial mode
-			if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+			// Human ghost data is available in Time Trial and native Relic Race.
+			if (((gGT->gameMode1 & TIME_TRIAL) != 0) ||
+			    ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0)))
 			{
-				// Check if this track has Ghost Data
-				s16 ghostProfileCount = RefreshCard_CountGhostProfilesForLEV(selectMenu[currTrack].levID);
+				// Only advertise ghost data that can actually be followed in this mode.
+				s16 ghostProfileCount = RefreshCard_CountCompatibleGhostProfilesForLEV(selectMenu[currTrack].levID);
 
 				// If this track has Ghost Data
 				if (ghostProfileCount != 0)

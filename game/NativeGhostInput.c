@@ -8,6 +8,7 @@ enum
     NATIVE_GHOST_INPUT_MAX_FRAMES = 32768,
     NATIVE_GHOST_INPUT_META_BUTTONS = BTN_START | BTN_SELECT,
     NATIVE_GHOST_INPUT_FLAG_60FPS = 1 << 0,
+    NATIVE_GHOST_INPUT_FLAG_RELIC_RACE = 1 << 1,
     NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA = 1 << 15,
     NATIVE_GHOST_INPUT_TIMER_PHASE_MASK = 7,
 };
@@ -59,6 +60,13 @@ static b32 s_nativeGhostInputExternalLoaded;
 static b32 s_nativeGhostInputDisplayValid;
 static struct NativeGhostInputFrame s_nativeGhostInputDisplayFrame;
 static char s_nativeGhostInputSelectedName[0x40];
+
+static int NativeGhostInput_HeaderMode(const struct NativeGhostInputHeader *header)
+{
+    return (header->flags & NATIVE_GHOST_INPUT_FLAG_RELIC_RACE) != 0
+        ? NATIVE_GHOST_MODE_RELIC_RACE
+        : NATIVE_GHOST_MODE_TIME_TRIAL;
+}
 
 static b32 NativeGhostInput_HeaderUses60Fps(const struct NativeGhostInputHeader *header)
 {
@@ -112,6 +120,34 @@ int NativeGhostInput_GetGhostFps(const char *ghostName)
     }
 
     return NativeGhostInput_HeaderUses60Fps(&header) ? 60 : 30;
+}
+
+int NativeGhostInput_GetGhostMode(const char *ghostName)
+{
+    struct NativeGhostInputHeader header;
+
+    if ((ghostName == NULL) || (ghostName[0] == '\0'))
+    {
+        return NATIVE_GHOST_MODE_INVALID;
+    }
+
+    if (NativeMemcard_ReadReplayData(0, ghostName, &header, sizeof(header), 0) != NATIVE_MEMCARD_OK)
+    {
+        return NATIVE_GHOST_MODE_INVALID;
+    }
+
+    if (!NativeGhostInput_ValidateHeader(&header))
+    {
+        return NATIVE_GHOST_MODE_INVALID;
+    }
+
+    int expectedSize = header.headerSize + (header.frameCount * header.frameSize);
+    if (NativeMemcard_ReplaySize(0, ghostName) < expectedSize)
+    {
+        return NATIVE_GHOST_MODE_INVALID;
+    }
+
+    return NativeGhostInput_HeaderMode(&header);
 }
 
 b32 NativeGhostInput_IsModernGhost(const char *ghostName)
@@ -187,6 +223,10 @@ void NativeGhostInput_StartRecording(void)
     s_nativeGhostInputTrackID = gGT->levelID;
     s_nativeGhostInputCharacterID = data.characterIDs[driver->driverID];
     s_nativeGhostInputRecordingFlags = NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA;
+    if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
+    {
+        s_nativeGhostInputRecordingFlags |= NATIVE_GHOST_INPUT_FLAG_RELIC_RACE;
+    }
     if (CTR_NATIVE_60FPS_ACTIVE)
     {
         s_nativeGhostInputRecordingFlags |= NATIVE_GHOST_INPUT_FLAG_60FPS;
@@ -320,8 +360,12 @@ void NativeGhostInput_ProcessFrameTiming(s32 *elapsedTimeMS)
         return;
     }
 
-    if (((sdata->gGT->gameMode1 & DEBUG_MENU) != 0) ||
-        ((sdata->gGT->gameMode1 & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) != TIME_TRIAL))
+    u32 gameMode = (u32)sdata->gGT->gameMode1;
+    b32 timeTrialGameplay = (gameMode & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) == TIME_TRIAL;
+    b32 relicRaceGameplay = (gNativeRelicRaceMode != 0) &&
+                            ((gameMode & RELIC_RACE) != 0) &&
+                            ((gameMode & (MAIN_MENU | GAME_CUTSCENE)) == 0);
+    if (((gameMode & DEBUG_MENU) != 0) || (!timeTrialGameplay && !relicRaceGameplay))
     {
         s_nativeGhostInputRecordingInvalid = true;
         s_nativeGhostInputPendingValid = false;
@@ -449,6 +493,29 @@ void NativeGhostInput_RemoveForGhost(const char *ghostName)
     NativeMemcard_RemoveReplay(0, ghostName);
 }
 
+static b32 NativeGhostInput_ModeMatchesCurrentGame(int ghostMode)
+{
+    if ((sdata == NULL) || (sdata->gGT == NULL))
+    {
+        return false;
+    }
+
+    u32 gameMode = (u32)sdata->gGT->gameMode1;
+    if (ghostMode == NATIVE_GHOST_MODE_RELIC_RACE)
+    {
+        return (gNativeRelicRaceMode != 0) &&
+               ((gameMode & RELIC_RACE) != 0) &&
+               ((gameMode & TIME_TRIAL) == 0);
+    }
+
+    if (ghostMode == NATIVE_GHOST_MODE_TIME_TRIAL)
+    {
+        return ((gameMode & TIME_TRIAL) != 0) && ((gameMode & RELIC_RACE) == 0);
+    }
+
+    return false;
+}
+
 b32 NativeGhostInput_BeginPlayback(void)
 {
     struct NativeGhostInputHeader header;
@@ -461,7 +528,12 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     if (s_nativeGhostInputExternalLoaded)
     {
-        if ((s_nativeGhostInputTrackID != sdata->gGT->levelID) || (s_nativeGhostInputCharacterID != data.characterIDs[0]))
+        if ((s_nativeGhostInputTrackID != sdata->gGT->levelID) ||
+            (s_nativeGhostInputCharacterID != data.characterIDs[0]) ||
+            !NativeGhostInput_ModeMatchesCurrentGame(
+                (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_RELIC_RACE) != 0
+                    ? NATIVE_GHOST_MODE_RELIC_RACE
+                    : NATIVE_GHOST_MODE_TIME_TRIAL))
         {
             return false;
         }
@@ -487,7 +559,8 @@ b32 NativeGhostInput_BeginPlayback(void)
 
     if (!NativeGhostInput_ValidateHeader(&header) ||
         (header.trackID != sdata->gGT->levelID) ||
-        (header.characterID != data.characterIDs[0]))
+        (header.characterID != data.characterIDs[0]) ||
+        !NativeGhostInput_ModeMatchesCurrentGame(NativeGhostInput_HeaderMode(&header)))
     {
         return false;
     }

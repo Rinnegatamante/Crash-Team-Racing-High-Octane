@@ -154,6 +154,7 @@ void MM_NativeBossFight_OpenBossSelect(void);
 void MM_NativeBossFight_JumpToBossSelect(void);
 #endif
 int NativeGhostInput_GetGhostFps(const char *ghostName);
+int NativeGhostInput_GetGhostMode(const char *ghostName);
 b32 NativeGhostInput_IsModernGhost(const char *ghostName);
 void NativeGhostInput_ClearSelection(void);
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID);
@@ -547,11 +548,14 @@ void RaceConfig_SaveGameOptions(void);
 
 void RefreshCard_Entry(void);
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID);
+s16 RefreshCard_CountCompatibleGhostProfilesForLEV(u16 trackID);
 void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID);
 void RefreshCard_InvalidateGhostProfileIndex(void);
 s16 RefreshCard_CountModernGhostProfilesForLEV(u16 trackID);
 b32 RefreshCard_IsGhostProfileModern(int row);
 int RefreshCard_GetGhostProfileFps(int row);
+int RefreshCard_GetGhostProfileMode(int row);
+b32 RefreshCard_IsGhostProfileCompatible(int row);
 void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID, int time, char *name);
 int RefreshCard_GhostDecodeByte(int value);
 void RefreshCard_GhostDecodeProfile(struct GhostProfile *profile, char *fileName);

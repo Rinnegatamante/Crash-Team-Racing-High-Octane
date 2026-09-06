@@ -552,6 +552,20 @@ static void MainGameEnd_CheckTimeTrialGhost(struct GameTracker *gGT, struct Driv
 					break;
 				}
 			}
+
+			if ((sdata->boolReplayHumanGhost != 0) &&
+			    ((sdata->boolGhostTooBigToSave != 0) || (sdata->ptrGhostTapePlaying == NULL) ||
+			     (raceTime >= sdata->ptrGhostTapePlaying->timeElapsedInRace)))
+			{
+				return;
+			}
+
+			GhostTape_End();
+			if (sdata->GhostRecording.ptrGhost != NULL)
+			{
+				sdata->GhostRecording.ptrGhost->timeElapsedInRace = raceTime;
+			}
+			gGT->gameModeEnd |= PLAYER_GHOST_BEAT;
 			return;
 		}
 #endif

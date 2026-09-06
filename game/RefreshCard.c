@@ -9,7 +9,9 @@
 static struct GhostProfile s_nativeGhostProfiles[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
 static u8 s_nativeGhostProfileCounts[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT];
 static u8 s_nativeGhostProfileModern[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
+static s8 s_nativeGhostProfileMode[REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT][SELECT_PROFILE_GHOST_SLOT_COUNT];
 static u8 s_nativeActiveGhostProfileModern[SELECT_PROFILE_GHOST_SLOT_COUNT];
+static s8 s_nativeActiveGhostProfileMode[SELECT_PROFILE_GHOST_SLOT_COUNT];
 static b32 s_nativeGhostProfileIndexValid;
 
 static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
@@ -23,6 +25,7 @@ static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
 
 	memset(s_nativeGhostProfileCounts, 0, sizeof(s_nativeGhostProfileCounts));
 	memset(s_nativeGhostProfileModern, 0, sizeof(s_nativeGhostProfileModern));
+	memset(s_nativeGhostProfileMode, 0xff, sizeof(s_nativeGhostProfileMode));
 	fileName = MEMCARD_FindFirstGhost(0, data.s_BASCUS_94426G_Star);
 
 	while (fileName != NULL)
@@ -37,6 +40,7 @@ static b32 RefreshCard_NativeRebuildGhostProfileIndex(void)
 			{
 				s_nativeGhostProfiles[profile.trackID][count] = profile;
 				s_nativeGhostProfileModern[profile.trackID][count] = (u8)NativeGhostInput_GetGhostFps(profile.profile_name);
+				s_nativeGhostProfileMode[profile.trackID][count] = (s8)NativeGhostInput_GetGhostMode(profile.profile_name);
 				s_nativeGhostProfileCounts[profile.trackID] = count + 1;
 			}
 		}
@@ -58,13 +62,44 @@ void RefreshCard_ActivateGhostProfilesForLEV(u16 trackID)
 
 	int count = s_nativeGhostProfileCounts[trackID];
 	memset(s_nativeActiveGhostProfileModern, 0, sizeof(s_nativeActiveGhostProfileModern));
+	memset(s_nativeActiveGhostProfileMode, 0xff, sizeof(s_nativeActiveGhostProfileMode));
 	if (count != 0)
 	{
 		memcpy(sdata->ghostProfile_memcard, s_nativeGhostProfiles[trackID], count * sizeof(struct GhostProfile));
 		memcpy(s_nativeActiveGhostProfileModern, s_nativeGhostProfileModern[trackID], count);
+		memcpy(s_nativeActiveGhostProfileMode, s_nativeGhostProfileMode[trackID], count);
 	}
 
 	sdata->numGhostProfilesSaved = count;
+}
+
+s16 RefreshCard_CountCompatibleGhostProfilesForLEV(u16 trackID)
+{
+	if ((trackID >= REFRESH_CARD_NATIVE_GHOST_TRACK_COUNT) ||
+	    ((!s_nativeGhostProfileIndexValid) && !RefreshCard_NativeRebuildGhostProfileIndex()))
+	{
+		return 0;
+	}
+
+	s16 count = 0;
+	for (int i = 0; i < s_nativeGhostProfileCounts[trackID]; i++)
+	{
+		int ghostFps = s_nativeGhostProfileModern[trackID][i];
+		int ghostMode = s_nativeGhostProfileMode[trackID][i];
+		if (gNativeGhostReplayMode != 0)
+		{
+			count += (ghostFps != 0) && (ghostMode != NATIVE_GHOST_MODE_INVALID);
+		}
+		else if (gNativeRelicRaceMode != 0)
+		{
+			count += (ghostFps != 0) && (ghostMode == NATIVE_GHOST_MODE_RELIC_RACE);
+		}
+		else
+		{
+			count += ghostMode != NATIVE_GHOST_MODE_RELIC_RACE;
+		}
+	}
+	return count;
 }
 
 s16 RefreshCard_CountModernGhostProfilesForLEV(u16 trackID)
@@ -96,6 +131,41 @@ int RefreshCard_GetGhostProfileFps(int row)
 	}
 
 	return s_nativeActiveGhostProfileModern[row];
+}
+
+int RefreshCard_GetGhostProfileMode(int row)
+{
+	if ((row < 0) || (row >= SELECT_PROFILE_GHOST_SLOT_COUNT))
+	{
+		return NATIVE_GHOST_MODE_INVALID;
+	}
+
+	return s_nativeActiveGhostProfileMode[row];
+}
+
+b32 RefreshCard_IsGhostProfileCompatible(int row)
+{
+	if ((row < 0) || (row >= SELECT_PROFILE_GHOST_SLOT_COUNT))
+	{
+		return false;
+	}
+
+	int ghostFps = RefreshCard_GetGhostProfileFps(row);
+	int ghostMode = RefreshCard_GetGhostProfileMode(row);
+
+	if (gNativeGhostReplayMode != 0)
+	{
+		return (ghostFps != 0) && (ghostMode != NATIVE_GHOST_MODE_INVALID);
+	}
+
+	// Main-menu Relic Race only accepts explicitly tagged modern Relic ghosts.
+	if (gNativeRelicRaceMode != 0)
+	{
+		return (ghostFps != 0) && (ghostMode == NATIVE_GHOST_MODE_RELIC_RACE);
+	}
+
+	// Legacy ghosts and old modern ghosts predate the mode tag and are Time Trial.
+	return ghostMode != NATIVE_GHOST_MODE_RELIC_RACE;
 }
 
 void RefreshCard_InvalidateGhostProfileIndex(void)

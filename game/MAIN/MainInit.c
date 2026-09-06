@@ -489,9 +489,13 @@ void MainInit_Drivers(struct GameTracker *gGT)
 		}
 	}
 
-	// if you're in time trial, not main menu, not cutscene.
-	// basically, if you're in time trial gameplay
-	if ((gameMode & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) == TIME_TRIAL)
+	// Human ghost recording/playback is supported in Time Trial and in the
+	// standalone native Relic Race mode.
+	b32 timeTrialGhostGameplay = (gameMode & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) == TIME_TRIAL;
+	b32 relicRaceGhostGameplay = (gNativeRelicRaceMode != 0) &&
+	                             ((gameMode & RELIC_RACE) != 0) &&
+	                             ((gameMode & (MAIN_MENU | GAME_CUTSCENE)) == 0);
+	if (timeTrialGhostGameplay || relicRaceGhostGameplay)
 	{
 		if (gNativeGhostReplayMode == 0)
 		{

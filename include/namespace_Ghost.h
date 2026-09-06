@@ -4,6 +4,13 @@
 // GhostTape is 0x268 large
 // GhostRecBuf is 0x3e00
 
+enum NativeGhostMode
+{
+	NATIVE_GHOST_MODE_INVALID = -1,
+	NATIVE_GHOST_MODE_TIME_TRIAL = 0,
+	NATIVE_GHOST_MODE_RELIC_RACE = 1,
+};
+
 enum
 {
 	GHOST_OP_POSITION = 0x80,

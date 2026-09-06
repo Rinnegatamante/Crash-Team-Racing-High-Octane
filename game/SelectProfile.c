@@ -2,17 +2,17 @@
 
 extern int gNativeGhostReplayMode;
 
-static char *SelectProfile_NativeGhostFormatText(int ghostFps)
+static char *SelectProfile_NativeGhostFormatText(int ghostFps, int ghostMode)
 {
 	if (ghostFps == 60)
 	{
-		return "MODERN - 60 FPS";
+		return ghostMode == NATIVE_GHOST_MODE_RELIC_RACE ? "RR - 60 FPS" : "TT - 60 FPS";
 	}
 	if (ghostFps == 30)
 	{
-		return "MODERN - 30 FPS";
+		return ghostMode == NATIVE_GHOST_MODE_RELIC_RACE ? "RR - 30 FPS" : "TT - 30 FPS";
 	}
-	return "LEGACY";
+	return "TT - LEGACY";
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80047da8-0x80047dfc.
@@ -440,8 +440,9 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 			modernRow = (int)(profile - &sdata->ghostProfile_memcard[0]);
 		}
 		int ghostFps = RefreshCard_GetGhostProfileFps(modernRow);
+		int ghostMode = RefreshCard_GetGhostProfileMode(modernRow);
 		b32 modern = ghostFps != 0;
-		DecalFont_DrawLine(SelectProfile_NativeGhostFormatText(ghostFps), posX + 0x64, posY + 0x1e, FONT_SMALL,
+		DecalFont_DrawLine(SelectProfile_NativeGhostFormatText(ghostFps, ghostMode), posX + 0x64, posY + 0x1e, FONT_SMALL,
 		                   modern ? 0xffff801d : 0xffff8016);
 #else
 		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
@@ -731,6 +732,11 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 		time = driver->timeElapsedInRace;
 	}
 
+	if (sdata->GhostRecording.ptrGhost != NULL)
+	{
+		sdata->GhostRecording.ptrGhost->timeElapsedInRace = time;
+	}
+
 	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], gGT->levelID, time, gGT->prevNameEntered);
 
 	sdata->ghostProfile_indexSave = menu->rowSelected;
@@ -898,7 +904,8 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 		{
 			isWrongTrack = sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE;
 		}
-		if ((gNativeGhostReplayMode != 0) && (profile != NULL) && !RefreshCard_IsGhostProfileModern(i))
+		if ((profile != NULL) && (sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE) &&
+		    !RefreshCard_IsGhostProfileCompatible(i))
 		{
 			isWrongTrack = true;
 		}
@@ -1026,7 +1033,7 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 	if (gNativeGhostReplayMode != 0)
 	{
 		if ((menu->rowSelected < 0) || (menu->rowSelected >= sdata->numGhostProfilesSaved) ||
-		    !RefreshCard_IsGhostProfileModern(menu->rowSelected))
+		    !RefreshCard_IsGhostProfileCompatible(menu->rowSelected))
 		{
 			OtherFX_Play(5, 1);
 			return;
@@ -1039,6 +1046,20 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 			return;
 		}
 
+		int ghostMode = RefreshCard_GetGhostProfileMode(menu->rowSelected);
+		sdata->gGT->gameMode1 &= ~(TIME_TRIAL | RELIC_RACE);
+		if (ghostMode == NATIVE_GHOST_MODE_RELIC_RACE)
+		{
+			gNativeRelicRaceMode = 1;
+			gNativeRelicRaceResultTier = -1;
+			sdata->gGT->gameMode1 |= RELIC_RACE;
+		}
+		else
+		{
+			gNativeRelicRaceMode = 0;
+			sdata->gGT->gameMode1 |= TIME_TRIAL;
+		}
+
 		sdata->ghostProfile_indexLoad = menu->rowSelected;
 		data.characterIDs[0] = profile->characterID;
 		*SelectProfile_AllProfiles_ActionActive() = 1;
@@ -1048,8 +1069,9 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 	}
 
 	// NOTE(aalhendi): Retail uses currLEV here; levelID is not updated to the
-	// selected Time Trial track until the queued load starts.
-	if (sdata->ghostProfile_memcard[menu->rowSelected].trackID == sdata->gGT->currLEV)
+	// selected track until the queued load starts.
+	if ((sdata->ghostProfile_memcard[menu->rowSelected].trackID == sdata->gGT->currLEV) &&
+	    RefreshCard_IsGhostProfileCompatible(menu->rowSelected))
 	{
 		sdata->ghostProfile_indexLoad = menu->rowSelected;
 		RefreshCard_StartMemcardAction(5);

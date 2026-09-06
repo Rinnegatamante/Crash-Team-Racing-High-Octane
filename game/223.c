@@ -2,6 +2,7 @@
 
 #if defined(CTR_NATIVE)
 extern struct RectMenu menu224NoSave;
+extern struct RectMenu menu224GhostReplay;
 #endif
 
 enum RelicRaceEndMenuConstants
@@ -522,7 +523,18 @@ skipRelicAwarded:
 		{
 			RECTMENU_ClearInput();
 #if defined(CTR_NATIVE)
-			RECTMENU_Show((gNativeRelicRaceMode != 0) ? &menu224NoSave : &data.menuRetryExit);
+			if (gNativeGhostReplayMode != 0)
+			{
+				RECTMENU_Show(&menu224GhostReplay);
+			}
+			else if (gNativeRelicRaceMode != 0)
+			{
+				RECTMENU_Show(sdata->boolGhostTooBigToSave ? &menu224NoSave : &menu224);
+			}
+			else
+			{
+				RECTMENU_Show(&data.menuRetryExit);
+			}
 #else
 			RECTMENU_Show(&data.menuRetryExit);
 #endif

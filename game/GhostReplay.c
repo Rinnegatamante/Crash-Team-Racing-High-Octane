@@ -330,8 +330,12 @@ void GhostReplay_Init1(void)
 	sdata->boolCanSaveGhost = 0;
 	sdata->boolGhostsDrawing = 0;
 
-	// only continue if you're in time trial, not main menu, and not cutscene
-	if ((gGT->gameMode1 & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) != TIME_TRIAL)
+	u32 gameMode = (u32)gGT->gameMode1;
+	b32 timeTrialGameplay = (gameMode & GAME_MODE_TIME_TRIAL_GAMEPLAY_MASK) == TIME_TRIAL;
+	b32 relicRaceGameplay = (gNativeRelicRaceMode != 0) &&
+	                        ((gameMode & RELIC_RACE) != 0) &&
+	                        ((gameMode & (MAIN_MENU | GAME_CUTSCENE)) == 0);
+	if (!timeTrialGameplay && !relicRaceGameplay)
 	{
 		return;
 	}
@@ -344,8 +348,13 @@ void GhostReplay_Init1(void)
 
 	// ALWAYS initialize ghost threads, even if gh == 0,
 	// or else the "Ghost Too Big" text will never play.
-	// 0: human ghost, 1: N Tropy / Oxide ghost
-	for (s32 i = 0; i < 2; i++)
+	// Relic Race only uses the human ghost; N. Tropy/Oxide are TT-only.
+	s32 ghostCount = relicRaceGameplay ? 1 : 2;
+	if (relicRaceGameplay)
+	{
+		sdata->ptrGhostTape[1] = NULL;
+	}
+	for (s32 i = 0; i < ghostCount; i++)
 	{
 		struct GhostTape *tape = MEMPACK_AllocMem(0x268);
 		sdata->ptrGhostTape[i] = tape;
@@ -376,7 +385,7 @@ void GhostReplay_Init1(void)
 		}
 	}
 
-	for (s32 i = 0; i < 2; i++)
+	for (s32 i = 0; i < ghostCount; i++)
 	{
 		struct Thread *t = PROC_BirthWithObject(SIZE_RELATIVE_POOL_BUCKET(4, NONE, LARGE, GHOST), GhostReplay_ThTick, sdata->s_ghost, 0);
 
