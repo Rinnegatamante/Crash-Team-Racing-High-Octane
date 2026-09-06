@@ -212,6 +212,7 @@ struct NativeAudioOutput
 {
 	SDL_AudioDeviceID device;
 	SDL_AudioStream *stream;
+	b32 backgroundMuted;
 	b32 deterministicRenderMode;
 	s16 scheduledPcm[NATIVE_AUDIO_SCHEDULED_QUEUE_FRAMES * NATIVE_AUDIO_CHANNELS];
 	int scheduledReadFrame;
@@ -3964,6 +3965,9 @@ internal int NativeAudio_OpenDevice(void)
 	}
 
 	s_audio.output.device = SDL_GetAudioStreamDevice(s_audio.output.stream);
+#if !defined(__vita__)
+	SDL_SetAudioStreamGain(s_audio.output.stream, s_audio.output.backgroundMuted ? 0.0f : 1.0f);
+#endif
 	if (!SDL_GetAudioDeviceFormat(s_audio.output.device, &deviceSpec, &deviceSampleFrames))
 	{
 		deviceSampleFrames = 0;
@@ -4026,6 +4030,25 @@ internal int NativeAudio_OpenDevice(void)
 		}
 
 	return 1;
+}
+
+void NativeAudio_SetBackgroundMuted(int muted)
+{
+#if !defined(__vita__)
+	b32 backgroundMuted = muted != 0;
+	if (s_audio.output.backgroundMuted == backgroundMuted)
+	{
+		return;
+	}
+
+	s_audio.output.backgroundMuted = backgroundMuted;
+	if (s_audio.output.stream != NULL)
+	{
+		SDL_SetAudioStreamGain(s_audio.output.stream, backgroundMuted ? 0.0f : 1.0f);
+	}
+#else
+	(void)muted;
+#endif
 }
 
 void NativeAudio_Shutdown(void)

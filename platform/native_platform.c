@@ -659,6 +659,14 @@ void Platform_PollHostEvents(void)
 		case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
 			Platform_UpdateCursorVisibility();
 			break;
+#ifndef __vita__
+		case SDL_EVENT_WINDOW_FOCUS_LOST:
+			NativeAudio_SetBackgroundMuted(1);
+			break;
+		case SDL_EVENT_WINDOW_FOCUS_GAINED:
+			NativeAudio_SetBackgroundMuted(0);
+			break;
+#endif
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			exit(0);
 			break;
