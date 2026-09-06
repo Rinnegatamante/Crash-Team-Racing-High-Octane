@@ -5,6 +5,7 @@
 #include "platform/native_audio.h"
 #include "platform/native_adhoc.h"
 #include "platform/native_cd.h"
+#include "platform/native_discord.h"
 #include "platform/native_glad.h"
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
@@ -374,6 +375,7 @@ void Platform_Init(const char *title, int width, int height)
 	{
 		Platform_LogWarn("[CTR Native] Online leaderboard unavailable\n");
 	}
+	NativeDiscord_Init();
 #endif
 
 #ifdef __vita__
@@ -433,6 +435,7 @@ void Platform_Shutdown(void)
 	NativeReplayScheduler_Shutdown();
 #endif
 	NativeAdhoc_ShutdownImmediate();
+	NativeDiscord_Shutdown();
 	NativeLeaderboard_Shutdown();
 	NativeNetwork_Shutdown();
 	Platform_InputShutdown();
@@ -738,6 +741,7 @@ void Platform_PollHostEvents(void)
 		}
 		}
 	}
+	NativeDiscord_Update();
 #endif
 }
 
