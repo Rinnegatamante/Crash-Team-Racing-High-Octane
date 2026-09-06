@@ -7,6 +7,7 @@ enum
 {
     NATIVE_LEADERBOARD_TRACK_COUNT = 18,
     NATIVE_LEADERBOARD_RACE_COUNT = 5,
+    NATIVE_LEADERBOARD_RELIC_COUNT = 5,
     NATIVE_LEADERBOARD_NICKNAME_SIZE = 18,
     NATIVE_LEADERBOARD_PUBLIC_USER_ID_SIZE = 24,
     NATIVE_LEADERBOARD_CACHE_TTL_MS = 120000,
@@ -36,6 +37,8 @@ struct NativeLeaderboardTrack
     int raceCount;
     struct NativeLeaderboardEntry lap;
     b32 hasLap;
+    struct NativeLeaderboardEntry relic[NATIVE_LEADERBOARD_RELIC_COUNT];
+    int relicCount;
 };
 
 int NativeLeaderboard_Init(void);
@@ -51,6 +54,7 @@ int NativeLeaderboard_RequestGhost(u64 recordId);
 int NativeLeaderboard_GetGhostState(void);
 int NativeLeaderboard_TakeGhost(void **data, int *size);
 void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const char *nickname, u32 raceTimeMs, u32 lapTimeMs, b32 raceBest, b32 lapBest);
+void NativeLeaderboard_StageRelicRaceRecord(u16 trackId, u16 characterId, const char *nickname, u32 relicTimeMs, b32 relicBest);
 void NativeLeaderboard_CommitPendingUpload(void);
 void NativeLeaderboard_ClearPendingUpload(void);
 

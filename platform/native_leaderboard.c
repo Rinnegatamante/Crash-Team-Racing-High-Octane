@@ -47,8 +47,10 @@ struct NativeLeaderboardUpload
     char nickname[NATIVE_LEADERBOARD_NICKNAME_SIZE];
     u32 raceTimeMs;
     u32 lapTimeMs;
+    u32 relicTimeMs;
     b32 raceBest;
     b32 lapBest;
+    b32 relicBest;
     void *ghostData;
     int ghostSize;
 };
@@ -501,6 +503,10 @@ static b32 NativeLeaderboard_ParseTrack(struct NativeLeaderboardJson *json, stru
             if (!NativeLeaderboard_ParseEntryArray(json, lap, 1, &count)) return false;
             if (count > 0) { track.lap = lap[0]; track.hasLap = true; }
         }
+        else if (strcmp(key, "relic") == 0)
+        {
+            if (!NativeLeaderboard_ParseEntryArray(json, track.relic, NATIVE_LEADERBOARD_RELIC_COUNT, &track.relicCount)) return false;
+        }
         else if (!NativeLeaderboard_JsonSkipValue(json)) return false;
         NativeLeaderboard_JsonWhitespace(json);
         if ((json->p < json->end) && (*json->p == '}')) continue;
@@ -875,11 +881,12 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
 {
     if (!NativeNetwork_IsInternetConnected()) { NativeLeaderboard_FreeUpload(upload); return; }
 
-    char trackText[16], characterText[16], raceText[16], lapText[16];
+    char trackText[16], characterText[16], raceText[16], lapText[16], relicText[16];
     snprintf(trackText, sizeof(trackText), "%u", upload->trackId);
     snprintf(characterText, sizeof(characterText), "%u", upload->characterId);
     snprintf(raceText, sizeof(raceText), "%u", upload->raceTimeMs);
     snprintf(lapText, sizeof(lapText), "%u", upload->lapTimeMs);
+    snprintf(relicText, sizeof(relicText), "%u", upload->relicTimeMs);
 
 #if defined(__vita__)
     u8 hash[NATIVE_USER_ID_HASH_SIZE];
@@ -913,6 +920,17 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
                      CURLFORM_END);
     }
     if (upload->lapBest) NativeLeaderboard_AddFormText(&form, &last, "lap_time_ms", lapText);
+    if (upload->relicBest)
+    {
+        NativeLeaderboard_AddFormText(&form, &last, "relic_time_ms", relicText);
+        curl_formadd(&form, &last,
+                     CURLFORM_COPYNAME, "ghost",
+                     CURLFORM_BUFFER, "record.ngr",
+                     CURLFORM_BUFFERPTR, upload->ghostData,
+                     CURLFORM_BUFFERLENGTH, (long)upload->ghostSize,
+                     CURLFORM_CONTENTTYPE, "application/octet-stream",
+                     CURLFORM_END);
+    }
 
     CURL *curl = curl_easy_init();
     if (curl != NULL)
@@ -958,6 +976,9 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
              NativeLeaderboard_MultipartAppendFile(&body, boundary, "ghost", "record.ngr", upload->ghostData, (size_t)upload->ghostSize);
     if (ok && upload->lapBest)
         ok = NativeLeaderboard_MultipartAppendText(&body, boundary, "lap_time_ms", lapText);
+    if (ok && upload->relicBest)
+        ok = NativeLeaderboard_MultipartAppendText(&body, boundary, "relic_time_ms", relicText) &&
+             NativeLeaderboard_MultipartAppendFile(&body, boundary, "ghost", "record.ngr", upload->ghostData, (size_t)upload->ghostSize);
     if (ok)
     {
         char footer[128];
@@ -1318,6 +1339,42 @@ void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const 
     s_nativeLeaderboard.pendingUploadValid = true;
 }
 
+void NativeLeaderboard_StageRelicRaceRecord(u16 trackId, u16 characterId, const char *nickname, u32 relicTimeMs, b32 relicBest)
+{
+    NativeLeaderboard_ClearPendingUpload();
+    if (!s_nativeLeaderboard.initialized || !relicBest || (trackId >= NATIVE_LEADERBOARD_TRACK_COUNT)) return;
+
+    struct NativeLeaderboardUpload *upload = &s_nativeLeaderboard.pendingUpload;
+    upload->trackId = trackId;
+    upload->characterId = characterId;
+    upload->relicTimeMs = relicTimeMs;
+    upload->relicBest = true;
+    snprintf(upload->nickname, sizeof(upload->nickname), "%s", nickname != NULL ? nickname : "");
+
+    int size = NativeGhostInput_GetSerializedRecordingSize();
+    if (size > 0)
+    {
+        upload->ghostData = malloc((size_t)size);
+        if ((upload->ghostData != NULL) && NativeGhostInput_SerializeRecording(upload->ghostData, size))
+        {
+            upload->ghostSize = size;
+        }
+        else
+        {
+            free(upload->ghostData);
+            upload->ghostData = NULL;
+        }
+    }
+
+    if (upload->ghostData == NULL)
+    {
+        NativeLeaderboard_ClearPendingUpload();
+        return;
+    }
+
+    s_nativeLeaderboard.pendingUploadValid = true;
+}
+
 void NativeLeaderboard_CommitPendingUpload(void)
 {
     if (!s_nativeLeaderboard.pendingUploadValid) return;
@@ -1367,6 +1424,14 @@ void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const 
     (void)lapTimeMs;
     (void)raceBest;
     (void)lapBest;
+}
+void NativeLeaderboard_StageRelicRaceRecord(u16 trackId, u16 characterId, const char *nickname, u32 relicTimeMs, b32 relicBest)
+{
+    (void)trackId;
+    (void)characterId;
+    (void)nickname;
+    (void)relicTimeMs;
+    (void)relicBest;
 }
 void NativeLeaderboard_CommitPendingUpload(void) {}
 void NativeLeaderboard_ClearPendingUpload(void) {}

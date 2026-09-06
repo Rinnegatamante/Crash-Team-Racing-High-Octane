@@ -147,6 +147,11 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 		NativeLeaderboard_StageTimeTrialRecord(gGT->levelID, data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
 		                                       player->timeElapsedInRace, gGT->bestLapTime, raceBest, lapBest);
 	}
+	else if ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0))
+	{
+		NativeLeaderboard_StageRelicRaceRecord(gGT->levelID, data.characterIDs[(u8)player->driverID], gGT->prevNameEntered,
+		                                      player->timeElapsedInRace, highScoreIndex == 0);
+	}
 #endif
 
 	if (highScoreIndex < 0)

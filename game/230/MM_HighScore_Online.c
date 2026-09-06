@@ -1,3 +1,11 @@
+extern int cfg_language;
+
+enum
+{
+    MM_HIGHSCORE_ONLINE_SWAP_HINT_X = 0x100,
+    MM_HIGHSCORE_ONLINE_SWAP_HINT_Y = 0x22,
+};
+
 enum NativeHighScoreOnlineState
 {
     MM_HIGHSCORE_ONLINE_BROWSING = 0,
@@ -22,10 +30,37 @@ static struct RectMenu s_onlineGhostMenu =
 };
 
 static int s_onlineHighScoreState;
-static int s_onlineSelectedRace;
+enum NativeHighScoreOnlineCategory
+{
+    MM_HIGHSCORE_ONLINE_COURSE = 0,
+    MM_HIGHSCORE_ONLINE_RELIC,
+};
+
+static int s_onlineSelectedRecord;
+static int s_onlineCategory;
+static int s_onlineGhostMode;
 static u16 s_onlineGhostTrackId;
 static u16 s_onlineGhostCharacterId;
 
+static const char *MM_HighScore_OnlineSwapCategoryText(void)
+{
+    static const char *text[6] =
+    {
+        "PRESS L / R: CHANGE CATEGORY",
+        "L / R : CHANGER DE CATEGORIE",
+        "L / R: KATEGORIE WECHSELN",
+        "PREMI L / R: CAMBIA CATEGORIA",
+        "PULSA L / R: CAMBIA CATEGORIA",
+        "DRUK L / R: WISSEL CATEGORIE",
+    };
+
+    int languageRow = 0;
+    if ((cfg_language >= 2) && (cfg_language <= 7))
+    {
+        languageRow = cfg_language - 2;
+    }
+    return text[languageRow];
+}
 static int MM_HighScore_OnlineGetTrack(u16 trackIndex, struct NativeLeaderboardTrack *track)
 {
     if (trackIndex > MM_HIGHSCORE_LAST_ARCADE_TRACK)
@@ -36,22 +71,36 @@ static int MM_HighScore_OnlineGetTrack(u16 trackIndex, struct NativeLeaderboardT
     return NativeLeaderboard_CopyTrack(D230.arcadeTracks[trackIndex].levID, track);
 }
 
+static int MM_HighScore_OnlineRecordCount(const struct NativeLeaderboardTrack *track)
+{
+    if (track == NULL) return 0;
+    return (s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? track->relicCount : track->raceCount;
+}
+
+static struct NativeLeaderboardEntry *MM_HighScore_OnlineRecordAt(struct NativeLeaderboardTrack *track, int row)
+{
+    if (track == NULL || row < 0 || row >= MM_HighScore_OnlineRecordCount(track)) return NULL;
+    return (s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? &track->relic[row] : &track->race[row];
+}
+
 static void MM_HighScore_OnlineClampSelection(void)
 {
     struct NativeLeaderboardTrack track;
-    if (!MM_HighScore_OnlineGetTrack(D230.highScoreSelection.currentTrack, &track) || (track.raceCount <= 0))
+    int count;
+    if (!MM_HighScore_OnlineGetTrack(D230.highScoreSelection.currentTrack, &track) ||
+        ((count = MM_HighScore_OnlineRecordCount(&track)) <= 0))
     {
-        s_onlineSelectedRace = -1;
+        s_onlineSelectedRecord = -1;
         return;
     }
 
-    if (s_onlineSelectedRace < 0)
+    if (s_onlineSelectedRecord < 0)
     {
-        s_onlineSelectedRace = 0;
+        s_onlineSelectedRecord = 0;
     }
-    if (s_onlineSelectedRace >= track.raceCount)
+    if (s_onlineSelectedRecord >= count)
     {
-        s_onlineSelectedRace = track.raceCount - 1;
+        s_onlineSelectedRecord = count - 1;
     }
 }
 
@@ -82,12 +131,16 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
 
     DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], titleMeta->currX + offsetX + MM_HIGHSCORE_TITLE_X_OFFSET,
                        titleMeta->currY + MM_HIGHSCORE_TITLE_Y_OFFSET, FONT_BIG, JUSTIFY_CENTER);
-    MM_HighScore_Text3D(sdata->lngStrings[LNG_BEST_TRACK_TIMES], bestTrackMeta->currX + offsetX + MM_HIGHSCORE_BEST_TRACK_LABEL_X_OFFSET,
+    MM_HighScore_Text3D(sdata->lngStrings[(s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? LNG_RELIC_RACE : LNG_BEST_TRACK_TIMES],
+                        bestTrackMeta->currX + offsetX + MM_HIGHSCORE_BEST_TRACK_LABEL_X_OFFSET,
                         bestTrackMeta->currY + MM_HIGHSCORE_BEST_TRACK_LABEL_Y_OFFSET, FONT_SMALL, 0);
-    MM_HighScore_Text3D(sdata->lngStrings[LNG_BEST_LAP_TIME], bestLapLabelMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_LABEL_X_OFFSET,
-                        bestLapLabelMeta->currY + MM_HIGHSCORE_BEST_LAP_LABEL_Y_OFFSET, FONT_SMALL, 0);
+    if (s_onlineCategory == MM_HIGHSCORE_ONLINE_COURSE)
+    {
+        MM_HighScore_Text3D(sdata->lngStrings[LNG_BEST_LAP_TIME], bestLapLabelMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_LABEL_X_OFFSET,
+                            bestLapLabelMeta->currY + MM_HIGHSCORE_BEST_LAP_LABEL_Y_OFFSET, FONT_SMALL, 0);
+    }
 
-    if (track.hasLap)
+    if ((s_onlineCategory == MM_HIGHSCORE_ONLINE_COURSE) && track.hasLap)
     {
         struct NativeLeaderboardEntry *lap = &track.lap;
         MM_HighScore_Text3D(lap->nickname, bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_TEXT_X_OFFSET,
@@ -102,9 +155,10 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
                              MM_HIGHSCORE_ICON_TRANSPARENCY, MM_HIGHSCORE_ICON_SCALE);
     }
 
-    for (int row = 0; row < track.raceCount && row < MM_HIGHSCORE_VISIBLE_SCORE_ROWS; row++)
+    int recordCount = MM_HighScore_OnlineRecordCount(&track);
+    for (int row = 0; row < recordCount && row < MM_HIGHSCORE_VISIBLE_SCORE_ROWS; row++)
     {
-        struct NativeLeaderboardEntry *entry = &track.race[row];
+        struct NativeLeaderboardEntry *entry = MM_HighScore_OnlineRecordAt(&track, row);
         int metaIndex = row + MM_HIGHSCORE_FIRST_VISIBLE_META_INDEX;
 
         RECTMENU_DrawPolyGT4(gGT->ptrIcons[data.MetaDataCharacters[entry->characterId].iconID],
@@ -122,7 +176,7 @@ static void MM_HighScore_OnlineDraw(u16 trackIndex, s16 offsetX)
 
         // The PS1 OT is LIFO: submit the highlight after the row content so it renders behind it.
         if ((trackIndex == D230.highScoreSelection.currentTrack) && (D230.highScoreTransition.trackFrame == 0) &&
-            (s_onlineHighScoreState == MM_HIGHSCORE_ONLINE_BROWSING) && (row == s_onlineSelectedRace))
+            (s_onlineHighScoreState == MM_HIGHSCORE_ONLINE_BROWSING) && (row == s_onlineSelectedRecord))
         {
             RECT highlight;
             highlight.x = D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_ICON_X_OFFSET - 8;
@@ -161,8 +215,18 @@ static void MM_HighScore_OnlineStartGhostReplay(void)
     gNativeOnlineLeaderboardMode = 0;
     data.characterIDs[0] = s_onlineGhostCharacterId;
     gGT->numPlyrNextGame = 1;
-    gGT->gameMode1 &= ~(BATTLE_MODE | RELIC_RACE | ADVENTURE_MODE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
-    gGT->gameMode1 |= TIME_TRIAL;
+    gGT->gameMode1 &= ~(BATTLE_MODE | TIME_TRIAL | RELIC_RACE | ADVENTURE_MODE | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+    if (s_onlineGhostMode == NATIVE_GHOST_MODE_RELIC_RACE)
+    {
+        gNativeRelicRaceMode = 1;
+        gNativeRelicRaceResultTier = -1;
+        gGT->gameMode1 |= RELIC_RACE;
+    }
+    else
+    {
+        gNativeRelicRaceMode = 0;
+        gGT->gameMode1 |= TIME_TRIAL;
+    }
     gGT->gameMode2 &= ~(CUP_ANY_KIND | CHEAT_WUMPA | CHEAT_MASK | CHEAT_TURBO | CHEAT_ENGINE | CHEAT_BOMBS);
     gGT->currLEV = s_onlineGhostTrackId;
     sdata->boolReplayHumanGhost = 0;
@@ -173,7 +237,9 @@ static void MM_HighScore_OnlineStartGhostReplay(void)
 static void MM_HighScore_OnlineInit(void)
 {
     s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_BROWSING;
-    s_onlineSelectedRace = 0;
+    s_onlineSelectedRecord = 0;
+    s_onlineCategory = MM_HIGHSCORE_ONLINE_COURSE;
+    s_onlineGhostMode = NATIVE_GHOST_MODE_TIME_TRIAL;
     s_onlineGhostMenu.rowSelected = 0;
     D230.highScoreTransition.state = ENTERING_MENU;
     D230.highScoreTransition.mainFrame = MM_HIGHSCORE_MAIN_TRANSITION_MAX_FRAME;
@@ -200,6 +266,15 @@ static void MM_HighScore_OnlineHandleBrowsingInput(void)
         return;
     }
 
+    if ((buttons & (BTN_L1 | BTN_R1)) != 0)
+    {
+        OtherFX_Play(0, 1);
+        s_onlineCategory ^= 1;
+        s_onlineSelectedRecord = 0;
+        MM_HighScore_OnlineClampSelection();
+        return;
+    }
+
     if ((buttons & BTN_LEFT) != 0)
     {
         OtherFX_Play(0, 1);
@@ -217,27 +292,29 @@ static void MM_HighScore_OnlineHandleBrowsingInput(void)
         return;
     }
 
-    if (track.raceCount > 0)
+    int recordCount = MM_HighScore_OnlineRecordCount(&track);
+    if (recordCount > 0)
     {
         if ((buttons & BTN_UP) != 0)
         {
             OtherFX_Play(0, 1);
-            s_onlineSelectedRace--;
-            if (s_onlineSelectedRace < 0) s_onlineSelectedRace = track.raceCount - 1;
+            s_onlineSelectedRecord--;
+            if (s_onlineSelectedRecord < 0) s_onlineSelectedRecord = recordCount - 1;
             return;
         }
         if ((buttons & BTN_DOWN) != 0)
         {
             OtherFX_Play(0, 1);
-            s_onlineSelectedRace++;
-            if (s_onlineSelectedRace >= track.raceCount) s_onlineSelectedRace = 0;
+            s_onlineSelectedRecord++;
+            if (s_onlineSelectedRecord >= recordCount) s_onlineSelectedRecord = 0;
             return;
         }
     }
 
     if ((buttons & (BTN_CROSS_one | BTN_CIRCLE)) != 0)
     {
-        if ((s_onlineSelectedRace < 0) || (s_onlineSelectedRace >= track.raceCount) || !track.race[s_onlineSelectedRace].hasGhost)
+        struct NativeLeaderboardEntry *entry = MM_HighScore_OnlineRecordAt(&track, s_onlineSelectedRecord);
+        if ((entry == NULL) || !entry->hasGhost)
         {
             OtherFX_Play(5, 1);
             return;
@@ -275,15 +352,20 @@ static void MM_HighScore_OnlineHandleGhostMenuInput(void)
     }
 
     struct NativeLeaderboardTrack track;
-    if (!MM_HighScore_OnlineGetTrack(D230.highScoreSelection.currentTrack, &track) ||
-        (s_onlineSelectedRace < 0) || (s_onlineSelectedRace >= track.raceCount))
+    if (!MM_HighScore_OnlineGetTrack(D230.highScoreSelection.currentTrack, &track))
     {
         OtherFX_Play(5, 1);
         s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_BROWSING;
         return;
     }
 
-    struct NativeLeaderboardEntry *entry = &track.race[s_onlineSelectedRace];
+    struct NativeLeaderboardEntry *entry = MM_HighScore_OnlineRecordAt(&track, s_onlineSelectedRecord);
+    if (entry == NULL)
+    {
+        OtherFX_Play(5, 1);
+        s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_BROWSING;
+        return;
+    }
     if (!entry->hasGhost || !NativeLeaderboard_RequestGhost(entry->recordId))
     {
         OtherFX_Play(5, 1);
@@ -293,6 +375,7 @@ static void MM_HighScore_OnlineHandleGhostMenuInput(void)
     OtherFX_Play(1, 1);
     s_onlineGhostTrackId = D230.arcadeTracks[D230.highScoreSelection.currentTrack].levID;
     s_onlineGhostCharacterId = entry->characterId;
+    s_onlineGhostMode = (s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? NATIVE_GHOST_MODE_RELIC_RACE : NATIVE_GHOST_MODE_TIME_TRIAL;
     s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_DOWNLOADING;
     RaceFlag_ResetTextAnim();
 }
@@ -360,7 +443,7 @@ static void MM_HighScore_OnlineMenuProc(void)
         {
             D230.highScoreTransition.trackFrame = MM_HIGHSCORE_SLIDE_TRANSITION_FRAMES;
             D230.highScoreTransition.activeHorizontalMove = D230.highScoreTransition.pendingHorizontalMove;
-            s_onlineSelectedRace = 0;
+            s_onlineSelectedRecord = 0;
             videoResetRequested = true;
         }
     }
@@ -413,6 +496,13 @@ static void MM_HighScore_OnlineMenuProc(void)
         }
     }
 
+    if ((s_onlineHighScoreState == MM_HIGHSCORE_ONLINE_BROWSING) &&
+        (D230.highScoreTransition.state == IN_MENU) && (D230.highScoreTransition.trackFrame == 0))
+    {
+        MM_HighScore_Text3D((char *)MM_HighScore_OnlineSwapCategoryText(),
+                            MM_HIGHSCORE_ONLINE_SWAP_HINT_X, MM_HIGHSCORE_ONLINE_SWAP_HINT_Y,
+                            FONT_SMALL, JUSTIFY_CENTER | ORANGE);
+    }
     RECT wipeRect;
     const struct TransitionMeta *titleMeta = &D230.transitionMeta_HighScores[MM_HIGHSCORE_TITLE_META_INDEX];
     wipeRect.w = MM_HIGHSCORE_WIPE_RECT_W;
