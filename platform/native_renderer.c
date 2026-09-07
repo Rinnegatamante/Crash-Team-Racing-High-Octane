@@ -3707,6 +3707,13 @@ void NativeRenderer_DrawGhostReplayOverlay(void)
 	if ((buttonsHeld & (BTN_L1 | BTN_L2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[0], overlayX, overlayY, overlayW, overlayH, 16, 0, 48, 16);
 	if ((buttonsHeld & (BTN_R1 | BTN_R2)) != 0) NativeRenderer_DrawGhostReplayImageRegion(s_ghostReplayShoulderTexture[1], overlayX, overlayY, overlayW, overlayH, 237, 0, 48, 16);
 
+	if ((buttonsHeld & BTN_SELECT) != 0) NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 224, 128, 12, 6);
+	if ((buttonsHeld & BTN_START) != 0)  NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 242, 128, 12, 6);
+	if ((buttonsHeld & NATIVE_GHOST_OVERLAY_TOUCH_FRONT_LEFT) != 0)  NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 66, 18, 82, 5);
+	if ((buttonsHeld & NATIVE_GHOST_OVERLAY_TOUCH_FRONT_RIGHT) != 0) NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 152, 18, 82, 5);
+	if ((buttonsHeld & NATIVE_GHOST_OVERLAY_TOUCH_REAR_LEFT) != 0)   NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 66, 127, 82, 5);
+	if ((buttonsHeld & NATIVE_GHOST_OVERLAY_TOUCH_REAR_RIGHT) != 0)  NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, 152, 127, 82, 5);
+
 	const int stickTravel = 8;
 	const int leftStickX = 38 + (((int)stickLX - 128) * stickTravel) / 127;
 	const int leftStickY = 90 + (((int)stickLY - 128) * stickTravel) / 127;
@@ -3714,6 +3721,8 @@ void NativeRenderer_DrawGhostReplayOverlay(void)
 	const int rightStickY = 90 + (((int)stickRY - 128) * stickTravel) / 127;
 	NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, leftStickX, leftStickY, 8, 8);
 	NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, rightStickX, rightStickY, 8, 8);
+	if ((buttonsHeld & BTN_L3) != 0) NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, leftStickX - 2, leftStickY - 2, 12, 12);
+	if ((buttonsHeld & BTN_R3) != 0) NativeRenderer_DrawGhostReplayHighlight(overlayX, overlayY, overlayW, overlayH, rightStickX - 2, rightStickY - 2, 12, 12);
 
 	if (previousStencilEnabled)
 	{

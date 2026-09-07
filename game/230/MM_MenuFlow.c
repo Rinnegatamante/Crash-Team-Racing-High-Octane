@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_input.h>
 
 #if defined(CTR_NATIVE)
 #include "platform/native_leaderboard.h"
@@ -211,21 +212,42 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 4, 1, 0, 0},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
-	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 0, 4, 4},
-#else
-	{LNG_LANGUAGE, 7, 1, 0, 0},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
+	{LNG_LANGUAGE, 5, 1, 0, 0},
+	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 5, 4, 4},
-	{NATIVE_MENU_STRING_ANTI_ALIASING, 4, 6, 5, 5},
-	{NATIVE_MENU_STRING_DITHERING, 5, 7, 6, 6},
-	{NATIVE_MENU_STRING_BORDERLESS, 6, 0, 7, 7},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 4, 0, 5, 5},
+#else
+	{LNG_LANGUAGE, 8, 1, 0, 0},
+	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_ANTI_ALIASING, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_DITHERING, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_BORDERLESS, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 6, 8, 7, 7},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 7, 0, 8, 8},
 #endif
+	{RECTMENU_STRING_NONE},
+};
+
+static struct MenuRow s_nativeControlsRows[] =
+{
+	{NATIVE_MENU_STRING_CONTROL_HEADER | MENU_ROW_LOCKED, 0, 1, 0, 0},
+	{NATIVE_MENU_STRING_CONTROL_CROSS, 13, 2, 1, 1},
+	{NATIVE_MENU_STRING_CONTROL_SQUARE, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_CONTROL_CIRCLE, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_CONTROL_TRIANGLE, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_CONTROL_L1, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_CONTROL_R1, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_CONTROL_L2, 6, 8, 7, 7},
+	{NATIVE_MENU_STRING_CONTROL_R2, 7, 9, 8, 8},
+	{NATIVE_MENU_STRING_CONTROL_UP, 8, 10, 9, 9},
+	{NATIVE_MENU_STRING_CONTROL_DOWN, 9, 11, 10, 10},
+	{NATIVE_MENU_STRING_CONTROL_LEFT, 10, 12, 11, 11},
+	{NATIVE_MENU_STRING_CONTROL_RIGHT, 11, 13, 12, 12},
+	{NATIVE_MENU_STRING_CONTROL_START, 12, 1, 13, 13},
 	{RECTMENU_STRING_NONE},
 };
 
@@ -244,6 +266,7 @@ static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
 static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
 static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu);
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu);
+static void MM_NativeControlsMenuProc(struct RectMenu *menu);
 static void MM_NativeBossFightMenuProc(struct RectMenu *menu);
 
 static struct RectMenu s_nativeLanguageBootMenu =
@@ -292,6 +315,18 @@ static struct RectMenu s_nativeOptionsMenu =
 	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
 	.rows = s_nativeOptionsRows,
 	.funcPtr = MM_NativeOptionsMenuProc,
+	.drawStyle = RECTMENU_DRAW_STYLE_NATIVE_OPTIONS,
+};
+
+static struct RectMenu s_nativeControlsMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_CONTROLS,
+	.posX_curr = 256,
+	.posY_curr = 120,
+	.state = CENTER_ON_COORDS | USE_SMALL_FONT | BIG_TEXT_IN_TITLE | RECTMENU_DRAW_CALLBACK_FLAGS,
+	.rows = s_nativeControlsRows,
+	.funcPtr = MM_NativeControlsMenuProc,
+	.rowSelected = 1,
 };
 
 static struct RectMenu s_nativeBossFightMenu =
@@ -307,6 +342,12 @@ static struct RectMenu s_nativeBossFightMenu =
 s32 s_nativeLanguageChosen = 0;
 static s32 s_nativeLanguageTimer;
 static s16 s_nativeLanguageRow;
+int gNativeControlsSelectedColumn = 0;
+int gNativeControlsSelectedAction = 0;
+int gNativeControlsCaptureActive = 0;
+static s32 s_nativeControlsWaitForRelease;
+static s32 s_nativeControlsWaitDevice;
+static s32 s_nativeControlsWaitBinding;
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
@@ -757,6 +798,23 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		return;
 	}
 
+	if (choose == NATIVE_MENU_STRING_CONTROLS)
+	{
+		s_nativeControlsMenu.rowSelected = 1;
+		s_nativeControlsMenu.posX_curr = 256;
+		s_nativeControlsMenu.posY_curr = 120;
+		s_nativeControlsMenu.state = CENTER_ON_COORDS | USE_SMALL_FONT | BIG_TEXT_IN_TITLE | RECTMENU_DRAW_CALLBACK_FLAGS;
+		s_nativeControlsMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeControlsMenu.ptrPrevBox_InHierarchy = menu;
+		gNativeControlsSelectedColumn = 0;
+		gNativeControlsSelectedAction = 0;
+		gNativeControlsCaptureActive = 0;
+		s_nativeControlsWaitForRelease = 0;
+
+		sdata->ptrDesiredMenu = &s_nativeControlsMenu;
+		return;
+	}
+
 	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
 	{
 		gNativeMirrorModeEnabled ^= 1;
@@ -805,6 +863,133 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		save_config();
 	}
 #endif
+}
+
+static void MM_NativeControlsMenuProc(struct RectMenu *menu)
+{
+	if ((menu == NULL) || (menu->funcState != RECTMENU_FUNC_STATE_DRAW))
+	{
+		return;
+	}
+
+	if (menu->rowSelected < 1 || menu->rowSelected > PLATFORM_INPUT_BIND_ACTION_COUNT)
+	{
+		menu->rowSelected = 1;
+	}
+	gNativeControlsSelectedAction = menu->rowSelected - 1;
+
+	if (gNativeControlsCaptureActive)
+	{
+		int binding;
+#ifdef __vita__
+		const int device = PLATFORM_INPUT_BINDING_CONTROLLER;
+#else
+		const int device = gNativeControlsSelectedColumn == 0 ? PLATFORM_INPUT_BINDING_KBM : PLATFORM_INPUT_BINDING_CONTROLLER;
+#endif
+		RECTMENU_ClearInput();
+		if (Platform_InputPollBindingCapture(device, &binding))
+		{
+			Platform_InputSetBinding(gNativeControlsSelectedAction, device, binding);
+			save_config();
+			gNativeControlsCaptureActive = 0;
+			s_nativeControlsWaitForRelease = 1;
+			s_nativeControlsWaitDevice = device;
+			s_nativeControlsWaitBinding = binding;
+			OtherFX_Play(1, 1);
+		}
+		return;
+	}
+
+	if (s_nativeControlsWaitForRelease)
+	{
+		RECTMENU_ClearInput();
+		if (!Platform_InputBindingIsActive(s_nativeControlsWaitDevice, s_nativeControlsWaitBinding))
+		{
+			s_nativeControlsWaitForRelease = 0;
+		}
+		return;
+	}
+
+	u32 tap = sdata->buttonTapPerPlayer[0];
+	if ((tap & BTN_UP) != 0)
+	{
+		menu->rowSelected--;
+		if (menu->rowSelected < 1)
+		{
+			menu->rowSelected = PLATFORM_INPUT_BIND_ACTION_COUNT;
+		}
+		gNativeControlsSelectedAction = menu->rowSelected - 1;
+		OtherFX_Play(0, 1);
+		RECTMENU_ClearInput();
+		return;
+	}
+	if ((tap & BTN_DOWN) != 0)
+	{
+		menu->rowSelected++;
+		if (menu->rowSelected > PLATFORM_INPUT_BIND_ACTION_COUNT)
+		{
+			menu->rowSelected = 1;
+		}
+		gNativeControlsSelectedAction = menu->rowSelected - 1;
+		OtherFX_Play(0, 1);
+		RECTMENU_ClearInput();
+		return;
+	}
+
+#ifndef __vita__
+	if ((tap & BTN_LEFT) != 0)
+	{
+		if (gNativeControlsSelectedColumn != 0)
+		{
+			gNativeControlsSelectedColumn = 0;
+			OtherFX_Play(0, 1);
+		}
+		RECTMENU_ClearInput();
+		return;
+	}
+	if ((tap & BTN_RIGHT) != 0)
+	{
+		if (gNativeControlsSelectedColumn != 1)
+		{
+			gNativeControlsSelectedColumn = 1;
+			OtherFX_Play(0, 1);
+		}
+		RECTMENU_ClearInput();
+		return;
+	}
+#endif
+
+	if ((tap & (BTN_CROSS_one | BTN_CIRCLE)) != 0)
+	{
+#ifdef __vita__
+		const int device = PLATFORM_INPUT_BINDING_CONTROLLER;
+#else
+		const int device = gNativeControlsSelectedColumn == 0 ? PLATFORM_INPUT_BINDING_KBM : PLATFORM_INPUT_BINDING_CONTROLLER;
+#endif
+		gNativeControlsCaptureActive = 1;
+		Platform_InputBeginBindingCapture(device);
+		OtherFX_Play(1, 1);
+		RECTMENU_ClearInput();
+		return;
+	}
+
+	if ((tap & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0)
+	{
+		struct RectMenu *parent = menu->ptrPrevBox_InHierarchy;
+		gNativeControlsCaptureActive = 0;
+		s_nativeControlsWaitForRelease = 0;
+		if (parent != NULL)
+		{
+			struct RectMenu *root = parent;
+			while (root->ptrPrevBox_InHierarchy != NULL)
+			{
+				root = root->ptrPrevBox_InHierarchy;
+			}
+			sdata->ptrDesiredMenu = root;
+		}
+		OtherFX_Play(2, 1);
+		RECTMENU_ClearInput();
+	}
 }
 
 static void MM_NativeBossFightPrepareMenu(void)

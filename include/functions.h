@@ -156,6 +156,13 @@ void MM_NativeBossFight_JumpToBossSelect(void);
 int NativeGhostInput_GetGhostFps(const char *ghostName);
 int NativeGhostInput_GetGhostMode(const char *ghostName);
 b32 NativeGhostInput_IsModernGhost(const char *ghostName);
+enum NativeGhostReplayOverlayButtonBits
+{
+	NATIVE_GHOST_OVERLAY_TOUCH_FRONT_LEFT = 1u << 19,
+	NATIVE_GHOST_OVERLAY_TOUCH_FRONT_RIGHT = 1u << 20,
+	NATIVE_GHOST_OVERLAY_TOUCH_REAR_LEFT = 1u << 21,
+	NATIVE_GHOST_OVERLAY_TOUCH_REAR_RIGHT = 1u << 22,
+};
 b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *stickLY, u8 *stickRX, u8 *stickRY);
 void NativeGhostInput_ClearSelection(void);
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID);

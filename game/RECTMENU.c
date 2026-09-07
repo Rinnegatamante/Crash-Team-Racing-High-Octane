@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_input.h>
 
 extern int cfg_language;
 extern int gNativeMirrorModeEnabled;
@@ -10,6 +11,9 @@ extern int gNativeAntiAliasingEnabled;
 extern int gNativeDitheringEnabled;
 extern int gNativeBorderlessEnabled;
 #endif
+extern int gNativeControlsSelectedColumn;
+extern int gNativeControlsSelectedAction;
+extern int gNativeControlsCaptureActive;
 
 static char *RECTMENU_GetString(s16 stringIndex)
 {
@@ -165,6 +169,33 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"INVERSA",
 		"OMGEKEERD",
 	};
+	static const char *controlsTitle[6] =
+	{
+		"CONTROLS", "COMMANDES", "STEUERUNG", "COMANDI", "CONTROLES", "BESTURING",
+	};
+	static const char *controlHeaderAction[6] =
+	{
+		"ACTION", "ACTION", "AKTION", "AZIONE", "ACCION", "ACTIE",
+	};
+	static const char *controlHeaderKbm[6] =
+	{
+		"KB+M", "CLAV/SOURIS", "TAST/MOUSE", "KB+M", "KB+M", "KB+M",
+	};
+	static const char *controlHeaderController[6] =
+	{
+		"CONTROLLER", "MANETTE", "CONTROLLER", "CONTROLLER", "MANDO", "CONTROLLER",
+	};
+	static const char *controlAction[6][PLATFORM_INPUT_BIND_ACTION_COUNT] =
+	{
+		{"* ACCELERATE", "[ BRAKE/REVERSE", "@ USE POWER-UP", "^ TOGGLE HUD", "HOP / SLIDE L1", "HOP / SLIDE R1", "CAMERA CHANGE", "REAR VIEW", "DPAD UP", "DPAD DOWN", "DPAD LEFT", "DPAD RIGHT", "START / PAUSE"},
+		{"* ACCELERER", "[ FREIN/RECUL", "@ UTILISER BONUS", "^ AFFICHAGE HUD", "SAUT / DERAP L1", "SAUT / DERAP R1", "CHANGER CAMERA", "VUE ARRIERE", "HAUT", "BAS", "GAUCHE", "DROITE", "START / PAUSE"},
+		{"* BESCHLEUNIGEN", "[ BREMSE/RUECK", "@ POWER-UP NUTZEN", "^ HUD UMSCHALTEN", "SPRUNG / DRIFT L1", "SPRUNG / DRIFT R1", "KAMERA WECHSEL", "RUECKSICHT", "STEUERKREUZ OBEN", "STEUERKREUZ UNTEN", "STEUERKREUZ LINKS", "STEUERKREUZ RECHTS", "START / PAUSE"},
+		{"* ACCELERA", "[ FRENO/RETRO", "@ USA POWER-UP", "^ CAMBIA HUD", "SALTO / DERAP L1", "SALTO / DERAP R1", "CAMBIA CAMERA", "VISTA POSTERIORE", "DPAD SU", "DPAD GIU", "DPAD SINISTRA", "DPAD DESTRA", "START / PAUSA"},
+		{"* ACELERAR", "[ FRENO/REVERSA", "@ USAR POWER-UP", "^ CAMBIAR HUD", "SALTO / DERRAPE L1", "SALTO / DERRAPE R1", "CAMBIAR CAMARA", "VISTA TRASERA", "DPAD ARRIBA", "DPAD ABAJO", "DPAD IZQUIERDA", "DPAD DERECHA", "START / PAUSA"},
+		{"* GAS", "[ REM/ACHTERUIT", "@ POWER-UP GEBR.", "^ HUD WISSELEN", "SPRONG / DRIFT L1", "SPRONG / DRIFT R1", "CAMERA WISSEL", "ACHTERUITZICHT", "DPAD OMHOOG", "DPAD OMLAAG", "DPAD LINKS", "DPAD RECHTS", "START / PAUZE"},
+	};
+	static char controlRow[128];
+	static char controlHeaderRow[128];
 
 	int languageRow = 0;
 	if ((cfg_language >= 2) && (cfg_language <= 7))
@@ -172,7 +203,37 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		languageRow = cfg_language - 2;
 	}
 
-	switch (stringIndex & MENU_ROW_LNG_MASK)
+	s16 nativeStringIndex = stringIndex & MENU_ROW_LNG_MASK;
+	if ((nativeStringIndex >= NATIVE_MENU_STRING_CONTROL_CROSS) && (nativeStringIndex <= NATIVE_MENU_STRING_CONTROL_START))
+	{
+		int action = nativeStringIndex - NATIVE_MENU_STRING_CONTROL_CROSS;
+		char kb[32];
+		char controller[32];
+		const int selected = gNativeControlsSelectedAction == action;
+#ifndef __vita__
+		Platform_InputGetBindingName(action, PLATFORM_INPUT_BINDING_KBM, kb, sizeof(kb));
+#endif
+		Platform_InputGetBindingName(action, PLATFORM_INPUT_BINDING_CONTROLLER, controller, sizeof(controller));
+#ifdef __vita__
+		char controllerField[16];
+		const char *controllerText = (gNativeControlsCaptureActive && selected) ? "PRESS..." : controller;
+		snprintf(controllerField, sizeof(controllerField), selected ? ">%-13.13s<" : " %-13.13s ", controllerText);
+		snprintf(controlRow, sizeof(controlRow), "%-16.16s | %s",
+		         controlAction[languageRow][action], controllerField);
+#else
+		char kbField[13];
+		char controllerField[16];
+		const char *kbText = (gNativeControlsCaptureActive && selected && gNativeControlsSelectedColumn == 0) ? "PRESS..." : kb;
+		const char *controllerText = (gNativeControlsCaptureActive && selected && gNativeControlsSelectedColumn == 1) ? "PRESS..." : controller;
+		snprintf(kbField, sizeof(kbField), (selected && gNativeControlsSelectedColumn == 0) ? ">%-10.10s<" : " %-10.10s ", kbText);
+		snprintf(controllerField, sizeof(controllerField), (selected && gNativeControlsSelectedColumn == 1) ? ">%-13.13s<" : " %-13.13s ", controllerText);
+		snprintf(controlRow, sizeof(controlRow), "%-16.16s | %s | %s",
+		         controlAction[languageRow][action], kbField, controllerField);
+#endif
+		return controlRow;
+	}
+
+	switch (nativeStringIndex)
 	{
 	case NATIVE_MENU_STRING_GHOST_REPLAY:
 		return (char *)ghostReplay[languageRow];
@@ -184,6 +245,17 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)defaultCamera[languageRow][gNativeDefaultCameraFar != 0];
 	case NATIVE_MENU_STRING_DEFAULT_HUD:
 		return (char *)defaultHud[languageRow][gNativeDefaultHudSpeedometer != 0];
+	case NATIVE_MENU_STRING_CONTROLS:
+		return (char *)controlsTitle[languageRow];
+	case NATIVE_MENU_STRING_CONTROL_HEADER:
+#ifdef __vita__
+		snprintf(controlHeaderRow, sizeof(controlHeaderRow), "%-16.16s |  %-13.13s ",
+		         controlHeaderAction[languageRow], controlHeaderController[languageRow]);
+#else
+		snprintf(controlHeaderRow, sizeof(controlHeaderRow), "%-16.16s |  %-10.10s  |  %-13.13s ",
+		         controlHeaderAction[languageRow], controlHeaderKbm[languageRow], controlHeaderController[languageRow]);
+#endif
+		return controlHeaderRow;
 #ifndef __vita__
 	case NATIVE_MENU_STRING_ANTI_ALIASING:
 		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];
@@ -565,6 +637,25 @@ void RECTMENU_DrawFullRect(struct RectMenu *menu, RECT *inner)
 }
 
 
+#if defined(CTR_NATIVE)
+enum RectMenuNativeOptionsLayout
+{
+	RECTMENU_NATIVE_OPTIONS_SEPARATOR_GAP = 5,
+};
+
+static b32 RECTMENU_NativeOptionsSeparatorBeforeRow(struct RectMenu *menu, struct MenuRow *row)
+{
+	if ((menu->drawStyle & RECTMENU_DRAW_STYLE_NATIVE_OPTIONS) == 0)
+	{
+		return false;
+	}
+
+	s16 stringIndex = row->stringIndex & MENU_ROW_LNG_MASK;
+	return stringIndex == NATIVE_MENU_STRING_FRAME_RATE ||
+	       stringIndex == NATIVE_MENU_STRING_DEFAULT_CAMERA;
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80045b1c-0x80045c50.
 void RECTMENU_GetHeight(struct RectMenu *m, s16 *height, b32 boolCheckSubmenu)
 {
@@ -590,6 +681,12 @@ void RECTMENU_GetHeight(struct RectMenu *m, s16 *height, b32 boolCheckSubmenu)
 			// add rows
 			for (row = m->rows; row->stringIndex != -1; row++)
 			{
+#if defined(CTR_NATIVE)
+				if (RECTMENU_NativeOptionsSeparatorBeforeRow(m, row))
+				{
+					*height += RECTMENU_NATIVE_OPTIONS_SEPARATOR_GAP;
+				}
+#endif
 				*height += lineHeight;
 			}
 		}
@@ -830,6 +927,21 @@ LAB_80045e94:
 			state = menu->state;
 			if (((state & (ONLY_DRAW_TITLE | SHOW_ONLY_HIGHLIT_ROW)) == 0) || (sVar6 == menu->rowSelected))
 			{
+#if defined(CTR_NATIVE)
+				if (RECTMENU_NativeOptionsSeparatorBeforeRow(menu, row))
+				{
+					RECT separator = {
+						.x = (s16)(local_40 + posX + menu->posX_prev - 3),
+						.y = (s16)(posY_prev + 1),
+						.w = (s16)(menuWidth + 6),
+						.h = 2,
+					};
+					Color separatorColor;
+					separatorColor.self = sdata->battleSetup_Color_UI_1;
+					RECTMENU_DrawOuterRect_Edge(&separator, separatorColor, 0x20, gGT->backBuffer->otMem.uiOT);
+					posY_prev += RECTMENU_NATIVE_OPTIONS_SEPARATOR_GAP;
+				}
+#endif
 				uVar5 = row->stringIndex;
 				textFlags = 0x17;
 				if ((uVar5 & 0x8000) == 0)
@@ -870,6 +982,18 @@ LAB_80045e94:
 		if ((menu->state & SHOW_ONLY_HIGHLIT_ROW) == 0)
 		{
 			background.y += menu->rowSelected * sVar7 + local_50 + -1;
+#if defined(CTR_NATIVE)
+			if ((menu->drawStyle & RECTMENU_DRAW_STYLE_NATIVE_OPTIONS) != 0)
+			{
+				for (s16 rowIndex = 0; rowIndex <= menu->rowSelected; rowIndex++)
+				{
+					if (RECTMENU_NativeOptionsSeparatorBeforeRow(menu, &menu->rows[rowIndex]))
+					{
+						background.y += RECTMENU_NATIVE_OPTIONS_SEPARATOR_GAP;
+					}
+				}
+			}
+#endif
 		}
 		else
 		{

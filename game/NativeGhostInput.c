@@ -22,6 +22,7 @@ enum
     NATIVE_GHOST_INPUT_STICK_RX_3BIT_MASK = 0x7,
     NATIVE_GHOST_INPUT_STICK_RY_SHIFT = 24,
     NATIVE_GHOST_INPUT_TIMER_PHASE_MASK = 7,
+    NATIVE_GHOST_INPUT_OVERLAY_BIND_ACTION_COUNT = 12,
 };
 
 struct NativeGhostInputHeader
@@ -225,6 +226,82 @@ static b32 NativeGhostInput_PhysicalAxisActive(u8 value)
     return (delta < -8) || (delta > 8);
 }
 
+static const u32 s_nativeGhostInputOverlayActionButtons[NATIVE_GHOST_INPUT_OVERLAY_BIND_ACTION_COUNT] =
+{
+    BTN_CROSS, BTN_SQUARE, BTN_CIRCLE, BTN_TRIANGLE,
+    BTN_L1, BTN_R1, BTN_L2, BTN_R2,
+    BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT,
+};
+
+static const u8 s_nativeGhostInputOverlayDefaultButtons[NATIVE_GHOST_INPUT_OVERLAY_BIND_ACTION_COUNT] =
+{
+    PLATFORM_INPUT_OVERLAY_SOUTH, PLATFORM_INPUT_OVERLAY_WEST,
+    PLATFORM_INPUT_OVERLAY_EAST, PLATFORM_INPUT_OVERLAY_NORTH,
+    PLATFORM_INPUT_OVERLAY_L1, PLATFORM_INPUT_OVERLAY_R1,
+    PLATFORM_INPUT_OVERLAY_L2, PLATFORM_INPUT_OVERLAY_R2,
+    PLATFORM_INPUT_OVERLAY_UP, PLATFORM_INPUT_OVERLAY_DOWN,
+    PLATFORM_INPUT_OVERLAY_LEFT, PLATFORM_INPUT_OVERLAY_RIGHT,
+};
+
+static void NativeGhostInput_StoreHeaderMetadata(struct NativeGhostInputHeader *header)
+{
+    header->reserved[0] = s_nativeGhostInputStartTimerPhase & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+}
+
+static void NativeGhostInput_LoadHeaderMetadata(const struct NativeGhostInputHeader *header)
+{
+    s_nativeGhostInputStartTimerPhase = header->reserved[0] & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+}
+
+static u32 NativeGhostInput_OverlayButtonBit(u8 overlayButton)
+{
+    switch (overlayButton)
+    {
+    case PLATFORM_INPUT_OVERLAY_SOUTH: return BTN_CROSS;
+    case PLATFORM_INPUT_OVERLAY_WEST: return BTN_SQUARE;
+    case PLATFORM_INPUT_OVERLAY_EAST: return BTN_CIRCLE;
+    case PLATFORM_INPUT_OVERLAY_NORTH: return BTN_TRIANGLE;
+    case PLATFORM_INPUT_OVERLAY_L1: return BTN_L1;
+    case PLATFORM_INPUT_OVERLAY_R1: return BTN_R1;
+    case PLATFORM_INPUT_OVERLAY_L2: return BTN_L2;
+    case PLATFORM_INPUT_OVERLAY_R2: return BTN_R2;
+    case PLATFORM_INPUT_OVERLAY_UP: return BTN_UP;
+    case PLATFORM_INPUT_OVERLAY_DOWN: return BTN_DOWN;
+    case PLATFORM_INPUT_OVERLAY_LEFT: return BTN_LEFT;
+    case PLATFORM_INPUT_OVERLAY_RIGHT: return BTN_RIGHT;
+    case PLATFORM_INPUT_OVERLAY_START: return BTN_START;
+    case PLATFORM_INPUT_OVERLAY_SELECT: return BTN_SELECT;
+    case PLATFORM_INPUT_OVERLAY_L3: return BTN_L3;
+    case PLATFORM_INPUT_OVERLAY_R3: return BTN_R3;
+    case PLATFORM_INPUT_OVERLAY_TOUCH_FRONT_LEFT: return NATIVE_GHOST_OVERLAY_TOUCH_FRONT_LEFT;
+    case PLATFORM_INPUT_OVERLAY_TOUCH_FRONT_RIGHT: return NATIVE_GHOST_OVERLAY_TOUCH_FRONT_RIGHT;
+    case PLATFORM_INPUT_OVERLAY_TOUCH_REAR_LEFT: return NATIVE_GHOST_OVERLAY_TOUCH_REAR_LEFT;
+    case PLATFORM_INPUT_OVERLAY_TOUCH_REAR_RIGHT: return NATIVE_GHOST_OVERLAY_TOUCH_REAR_RIGHT;
+    default: return 0;
+    }
+}
+
+static u32 NativeGhostInput_GetOverlayButtons(u32 logicalButtons)
+{
+    u32 overlayButtons = 0;
+    for (int action = 0; action < NATIVE_GHOST_INPUT_OVERLAY_BIND_ACTION_COUNT; action++)
+    {
+        if ((logicalButtons & s_nativeGhostInputOverlayActionButtons[action]) == 0)
+        {
+            continue;
+        }
+
+        int overlayButton = Platform_InputGetBindingOverlayButton(
+            action, PLATFORM_INPUT_BINDING_CONTROLLER);
+        if ((overlayButton < 0) || (overlayButton >= PLATFORM_INPUT_OVERLAY_COUNT))
+        {
+            overlayButton = s_nativeGhostInputOverlayDefaultButtons[action];
+        }
+        overlayButtons |= NativeGhostInput_OverlayButtonBit((u8)overlayButton);
+    }
+    return overlayButtons;
+}
+
 b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *stickLY, u8 *stickRX, u8 *stickRY)
 {
     if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive || !s_nativeGhostInputDisplayValid ||
@@ -237,7 +314,7 @@ b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *st
 
     if (buttonsHeld != NULL)
     {
-        *buttonsHeld = s_nativeGhostInputDisplayFrame.buttonsHeld & NATIVE_GHOST_INPUT_BUTTON_MASK;
+        *buttonsHeld = NativeGhostInput_GetOverlayButtons(s_nativeGhostInputDisplayFrame.buttonsHeld);
     }
     b32 hasPhysicalStickSource =
         (s_nativeGhostInputRecordingFlags & NATIVE_GHOST_INPUT_FLAG_STICK_OVERLAY_SOURCE) != 0;
@@ -546,7 +623,7 @@ b32 NativeGhostInput_SerializeRecording(void *dst, int dstSize)
     header.frameSize = sizeof(struct NativeGhostInputFrame);
     header.flags = s_nativeGhostInputRecordingFlags;
     header.totalTimeMS = s_nativeGhostInputTotalTimeMS;
-    header.reserved[0] = s_nativeGhostInputStartTimerPhase;
+    NativeGhostInput_StoreHeaderMetadata(&header);
 
     memcpy(dst, &header, sizeof(header));
     memcpy((u8 *)dst + sizeof(header), s_nativeGhostInputFrames, s_nativeGhostInputFrameCount * sizeof(struct NativeGhostInputFrame));
@@ -583,7 +660,7 @@ b32 NativeGhostInput_LoadSerializedGhost(const void *src, int size, u16 expected
     s_nativeGhostInputTrackID = header.trackID;
     s_nativeGhostInputCharacterID = header.characterID;
     s_nativeGhostInputRecordingFlags = header.flags;
-    s_nativeGhostInputStartTimerPhase = header.reserved[0] & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+    NativeGhostInput_LoadHeaderMetadata(&header);
     s_nativeGhostInputExternalLoaded = true;
     gNativeGhostReplayFpsOverride = NativeGhostInput_HeaderUses60Fps(&header) ? 1 : 0;
     return true;
@@ -609,7 +686,7 @@ b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName)
     header.frameSize = sizeof(struct NativeGhostInputFrame);
     header.flags = s_nativeGhostInputRecordingFlags;
     header.totalTimeMS = s_nativeGhostInputTotalTimeMS;
-    header.reserved[0] = s_nativeGhostInputStartTimerPhase;
+    NativeGhostInput_StoreHeaderMetadata(&header);
 
     return NativeMemcard_WriteReplayData(0, ghostName, &header, sizeof(header), s_nativeGhostInputFrames,
                                          s_nativeGhostInputFrameCount * sizeof(struct NativeGhostInputFrame)) == NATIVE_MEMCARD_OK;
@@ -708,11 +785,12 @@ b32 NativeGhostInput_BeginPlayback(void)
     s_nativeGhostInputFrameCount = header.frameCount;
     s_nativeGhostInputTotalTimeMS = header.totalTimeMS;
     s_nativeGhostInputRecordingFlags = header.flags;
+    NativeGhostInput_LoadHeaderMetadata(&header);
     b32 use60Fps = NativeGhostInput_HeaderUses60Fps(&header);
     gNativeGhostReplayFpsOverride = use60Fps ? 1 : 0;
     if (use60Fps && ((header.flags & NATIVE_GHOST_INPUT_FLAG_TIMING_METADATA) != 0))
     {
-        s_nativeGhostInputPlaybackTimerPhase = header.reserved[0] & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
+        s_nativeGhostInputPlaybackTimerPhase = s_nativeGhostInputStartTimerPhase & NATIVE_GHOST_INPUT_TIMER_PHASE_MASK;
         s_nativeGhostInputPlaybackTimerPhasePending = true;
     }
     else

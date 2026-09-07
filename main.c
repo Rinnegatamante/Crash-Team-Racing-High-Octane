@@ -66,6 +66,7 @@ DIR *__wrap_opendir(const char *fname) {
 #endif
 
 #include <platform.h>
+#include <platform/native_input.h>
 
 int gNativeRelicRaceMode = 0;
 int gNativeRelicRaceResultTier = -1;
@@ -249,6 +250,10 @@ void load_config(void)
 				gNativeBorderlessEnabled = (value != 0);
 			}
 #endif
+			else if (Platform_InputConfigSetBinding(buffer, value))
+			{
+				// Binding override consumed by the native input layer.
+			}
 		}
 		fclose(config);
 	}
@@ -269,6 +274,24 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "dithering", gNativeDitheringEnabled != 0);
 		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);
 #endif
+		for (int device = 0; device < PLATFORM_INPUT_BINDING_DEVICE_COUNT; device++)
+		{
+#ifdef __vita__
+			if (device == PLATFORM_INPUT_BINDING_KBM)
+			{
+				continue;
+			}
+#endif
+			for (int action = 0; action < PLATFORM_INPUT_BIND_ACTION_COUNT; action++)
+			{
+				char key[32];
+				Platform_InputGetBindingConfigKey(action, device, key, sizeof(key));
+				if (key[0] != 0)
+				{
+					fprintf(config, "%s=%d\n", key, Platform_InputGetBinding(action, device));
+				}
+			}
+		}
 		fclose(config);
 	}
 }
