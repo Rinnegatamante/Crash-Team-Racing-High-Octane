@@ -1431,7 +1431,8 @@ static void SelectProfile_FinalizeGhost(struct RectMenu *menu)
 		return;
 	}
 
-	if (sdata->ptrGhostTapePlaying != NULL)
+	if ((sdata->ptrGhostTapePlaying != NULL) &&
+	    ((gNativeRelicRaceMode == 0) || (sdata->boolReplayHumanGhost != 0)))
 	{
 		data.characterIDs[1] = sdata->ptrGhostTapePlaying->characterID;
 	}
