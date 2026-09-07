@@ -1092,7 +1092,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	}
 
 	if (((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0) &&
-	    (s_nativeAdhocMenuStage != MM_NATIVE_ADHOC_STAGE_GAME_FLOW))
+	    ((s_nativeAdhocMenuStage != MM_NATIVE_ADHOC_STAGE_GAME_FLOW) || !NativeAdhoc_IsActive()))
 	{
 		if (NativeAdhoc_IsActive())
 		{
