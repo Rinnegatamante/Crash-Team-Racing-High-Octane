@@ -307,11 +307,12 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 	const int barWidth = CTR_WIDESCREEN_SCALE_X(UI_SLIDE_METER_BAR_W);
 	int barHeight = gGT->numPlyrCurrGame >= UI_SLIDE_METER_SPLIT_PLAYER_COUNT ? UI_SLIDE_METER_BAR_H_SPLIT : UI_SLIDE_METER_BAR_H_FULL;
 
+	int meterLeft = driver->turbo_MeterRoomLeft;
+	int maxRoom = driver->const_turboMaxRoom * ELAPSED_MS;
 	int meterLength = 0;
-	if (driver->turbo_MeterRoomLeft != 0)
+	if ((meterLeft != 0) && (maxRoom > 0))
 	{
-		int currentRoomRemaining = driver->turbo_MeterRoomLeft * barWidth;
-		int maxRoom = driver->const_turboMaxRoom * ELAPSED_MS;
+		int currentRoomRemaining = meterLeft * barWidth;
 		meterLength = barWidth - (currentRoomRemaining / maxRoom);
 	}
 
@@ -328,10 +329,59 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 	const PrimCode primCode = {.poly = {.quad = 1, .renderCode = RenderCode_Polygon}};
 	ColorCode colorCode = MakeColorCode(UI_SLIDE_METER_READY_R, UI_SLIDE_METER_READY_G, UI_SLIDE_METER_READY_B, primCode);
 
+#if defined(CTR_NATIVE)
+	int readyRoom = driver->const_turboLowRoomWarning * ELAPSED_MS;
+	if ((maxRoom > 0) && (readyRoom > 0))
+	{
+		int red;
+		int green;
+
+		if ((meterLeft > readyRoom) && (maxRoom > readyRoom))
+		{
+			int approachProgress = ((maxRoom - meterLeft) * 0xff) / (maxRoom - readyRoom);
+			if (approachProgress < 0)
+			{
+				approachProgress = 0;
+			}
+			else if (approachProgress > 0xff)
+			{
+				approachProgress = 0xff;
+			}
+
+			red = approachProgress;
+			green = 0xff;
+		}
+		else
+		{
+			int reserveProgress = ((readyRoom - meterLeft) * 100) / readyRoom;
+			if (reserveProgress < 0)
+			{
+				reserveProgress = 0;
+			}
+			else if (reserveProgress > 100)
+			{
+				reserveProgress = 100;
+			}
+
+			red = 0xff;
+			if (reserveProgress < 60)
+			{
+				green = 0xff - ((reserveProgress * 0x9f) / 60);
+			}
+			else
+			{
+				green = 0x60 - (((reserveProgress - 60) * 0x60) / 40);
+			}
+		}
+
+		colorCode = MakeColorCode(red, green, 0, primCode);
+	}
+#else
 	if (driver->const_turboLowRoomWarning * ELAPSED_MS < driver->turbo_MeterRoomLeft)
 	{
 		colorCode = MakeColorCode(UI_SLIDE_METER_WAIT_R, UI_SLIDE_METER_WAIT_G, UI_SLIDE_METER_WAIT_B, primCode);
 	}
+#endif
 
 	for (int i = 0; i < UI_SLIDE_METER_PRIM_COUNT; i++)
 	{
