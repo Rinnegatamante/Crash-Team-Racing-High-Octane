@@ -41,6 +41,7 @@ static int s_onlineCategory;
 static int s_onlineGhostMode;
 static u16 s_onlineGhostTrackId;
 static u16 s_onlineGhostCharacterId;
+static char s_onlineGhostNickname[NATIVE_LEADERBOARD_NICKNAME_SIZE];
 
 static const char *MM_HighScore_OnlineSwapCategoryText(void)
 {
@@ -213,6 +214,8 @@ static void MM_HighScore_OnlineStartGhostReplay(void)
         return;
     }
 
+    NativeGhostInput_SetLeaderboardReplaySource(s_onlineGhostNickname);
+
     struct GameTracker *gGT = sdata->gGT;
     gNativeGhostReplayMode = 1;
     gNativeOnlineLeaderboardMode = 0;
@@ -244,6 +247,7 @@ static void MM_HighScore_OnlineInit(void)
     s_onlineSelectedRecord = 0;
     s_onlineCategory = MM_HIGHSCORE_ONLINE_COURSE;
     s_onlineGhostMode = NATIVE_GHOST_MODE_TIME_TRIAL;
+    s_onlineGhostNickname[0] = '\0';
     s_onlineGhostMenu.rowSelected = 0;
     D230.highScoreTransition.state = ENTERING_MENU;
     D230.highScoreTransition.mainFrame = MM_HIGHSCORE_MAIN_TRANSITION_MAX_FRAME;
@@ -379,6 +383,7 @@ static void MM_HighScore_OnlineHandleGhostMenuInput(void)
     OtherFX_Play(1, 1);
     s_onlineGhostTrackId = MM_HighScore_GetLogicalTrackId(D230.highScoreSelection.currentTrack);
     s_onlineGhostCharacterId = entry->characterId;
+    snprintf(s_onlineGhostNickname, sizeof(s_onlineGhostNickname), "%s", entry->nickname);
     s_onlineGhostMode = (s_onlineCategory == MM_HIGHSCORE_ONLINE_RELIC) ? NATIVE_GHOST_MODE_RELIC_RACE : NATIVE_GHOST_MODE_TIME_TRIAL;
     s_onlineHighScoreState = MM_HIGHSCORE_ONLINE_DOWNLOADING;
     RaceFlag_ResetTextAnim();

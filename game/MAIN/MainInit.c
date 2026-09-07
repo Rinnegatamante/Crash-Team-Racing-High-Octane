@@ -518,6 +518,10 @@ void MainInit_Drivers(struct GameTracker *gGT)
 			GhostReplay_Init2();
 			GhostTape_Start();
 		}
+		else if (NativeGhostInput_IsLeaderboardReplay())
+		{
+			GhostTape_StartLeaderboardReplayCapture();
+		}
 
 #if defined(CTR_NATIVE)
 		if (gNativeGhostReplayMode == 0)

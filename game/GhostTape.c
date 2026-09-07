@@ -1,17 +1,12 @@
 #include <common.h>
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80027df4-0x80027e90.
-void GhostTape_Start(void)
+static void GhostTape_StartInternal(b32 startNativeInputRecording)
 {
 	struct GhostHeader *gh;
 	struct Driver *d;
 	struct GameTracker *gGT = sdata->gGT;
 
 	d = gGT->drivers[0];
-
-	// v1 - PizzaHut (June), Spyro2 (July)
-	// v4 - Aug5, Aug14, Sep3, Retail
-
 	gh = sdata->GhostRecording.ptrGhost;
 	gh->version = GHOST_TAPE_VERSION_RETAIL;
 	gh->levelID = gGT->levelID;
@@ -20,26 +15,51 @@ void GhostTape_Start(void)
 	sdata->GhostRecording.VelX = 0;
 	sdata->GhostRecording.VelY = 0;
 	sdata->GhostRecording.VelZ = 0;
-
 	sdata->GhostRecording.timeElapsedInRace = 0;
 	sdata->boolGhostTooBigToSave = 0;
 	sdata->ghostOverflowTextTimer = 0;
 	sdata->boolCanSaveGhost = 1;
-
 	sdata->GhostRecording.ptrCurrOffset = sdata->GhostRecording.ptrStartOffset;
-
 	sdata->GhostRecording.countEightFrames = 0;
 	sdata->GhostRecording.countSixteenFrames = 0;
 	sdata->GhostRecording.timeOfLast80buffer = 0;
 	sdata->GhostRecording.boostCooldown1E = 0;
-
 	sdata->GhostRecording.animFrame = -1;
 	sdata->GhostRecording.animIndex = -1;
 	sdata->GhostRecording.instanceFlags = 0;
 
-	NativeGhostInput_StartRecording();
+	if (startNativeInputRecording)
+	{
+		NativeGhostInput_StartRecording();
+	}
+}
 
-	return;
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x80027df4-0x80027e90.
+void GhostTape_Start(void)
+{
+	GhostTape_StartInternal(true);
+}
+
+void GhostTape_StartLeaderboardReplayCapture(void)
+{
+	if (!NativeGhostInput_IsLeaderboardReplay())
+	{
+		return;
+	}
+
+	struct GhostHeader *gh = MEMPACK_AllocMem(0x3e00);
+	if (gh == NULL)
+	{
+		sdata->boolCanSaveGhost = 0;
+		sdata->boolGhostTooBigToSave = 1;
+		return;
+	}
+
+	char *recordBuffer = GHOSTHEADER_GETRECORDBUFFER(gh);
+	sdata->GhostRecording.ptrGhost = gh;
+	sdata->GhostRecording.ptrStartOffset = &recordBuffer[0];
+	sdata->GhostRecording.ptrEndOffset = &recordBuffer[0x3DD4];
+	GhostTape_StartInternal(false);
 }
 
 
@@ -53,7 +73,10 @@ void GhostTape_End(void)
 	// quit, if ghost cant be saved
 	if (sdata->boolCanSaveGhost == 0)
 	{
-		NativeGhostInput_DiscardRecording();
+		if (!NativeGhostInput_IsLeaderboardReplay())
+		{
+			NativeGhostInput_DiscardRecording();
+		}
 		return;
 	}
 

@@ -71,6 +71,8 @@ static b32 s_nativeGhostInputPlaybackActive;
 static b32 s_nativeGhostInputExternalLoaded;
 static b32 s_nativeGhostInputDisplayValid;
 static struct NativeGhostInputFrame s_nativeGhostInputDisplayFrame;
+static b32 s_nativeGhostInputLeaderboardReplay;
+static char s_nativeGhostInputLeaderboardNickname[0x11];
 static char s_nativeGhostInputSelectedName[0x40];
 
 static int NativeGhostInput_HeaderMode(const struct NativeGhostInputHeader *header)
@@ -167,6 +169,28 @@ b32 NativeGhostInput_IsModernGhost(const char *ghostName)
     return NativeGhostInput_GetGhostFps(ghostName) != 0;
 }
 
+void NativeGhostInput_SetLeaderboardReplaySource(const char *nickname)
+{
+    s_nativeGhostInputLeaderboardReplay = true;
+    if (nickname == NULL)
+    {
+        s_nativeGhostInputLeaderboardNickname[0] = '\0';
+        return;
+    }
+
+    snprintf(s_nativeGhostInputLeaderboardNickname, sizeof(s_nativeGhostInputLeaderboardNickname), "%s", nickname);
+}
+
+b32 NativeGhostInput_IsLeaderboardReplay(void)
+{
+    return s_nativeGhostInputLeaderboardReplay;
+}
+
+const char *NativeGhostInput_GetLeaderboardReplayName(void)
+{
+    return s_nativeGhostInputLeaderboardNickname;
+}
+
 void NativeGhostInput_ClearSelection(void)
 {
     s_nativeGhostInputSelectedName[0] = '\0';
@@ -174,6 +198,8 @@ void NativeGhostInput_ClearSelection(void)
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputPlaybackTimerPhasePending = false;
     s_nativeGhostInputExternalLoaded = false;
+    s_nativeGhostInputLeaderboardReplay = false;
+    s_nativeGhostInputLeaderboardNickname[0] = '\0';
     s_nativeGhostInputDisplayValid = false;
     gNativeGhostReplayFpsOverride = -1;
 }
@@ -384,6 +410,8 @@ void NativeGhostInput_StartRecording(void)
     struct Driver *driver = gGT->drivers[0];
 
     gNativeGhostReplayFpsOverride = -1;
+    s_nativeGhostInputExternalLoaded = false;
+    s_nativeGhostInputLeaderboardReplay = false;
     s_nativeGhostInputRecording = true;
     s_nativeGhostInputRecordingInvalid = false;
     s_nativeGhostInputPendingValid = false;
@@ -670,7 +698,8 @@ b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName)
 {
     struct NativeGhostInputHeader header;
 
-    if (s_nativeGhostInputRecordingInvalid || (s_nativeGhostInputFrameCount == 0))
+    if ((s_nativeGhostInputFrameCount == 0) ||
+        (!s_nativeGhostInputExternalLoaded && s_nativeGhostInputRecordingInvalid))
     {
         NativeMemcard_RemoveReplay(0, ghostName);
         return false;

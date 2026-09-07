@@ -135,6 +135,7 @@ void GhostReplay_ThTick(struct Thread *t);
 void GhostTape_Destroy(void);
 void GhostTape_End(void);
 void GhostTape_Start(void);
+void GhostTape_StartLeaderboardReplayCapture(void);
 void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap);
 void GhostTape_WriteMoves(s16 raceFinished);
 
@@ -164,6 +165,9 @@ enum NativeGhostReplayOverlayButtonBits
 	NATIVE_GHOST_OVERLAY_TOUCH_REAR_RIGHT = 1u << 22,
 };
 b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *stickLY, u8 *stickRX, u8 *stickRY);
+void NativeGhostInput_SetLeaderboardReplaySource(const char *nickname);
+b32 NativeGhostInput_IsLeaderboardReplay(void);
+const char *NativeGhostInput_GetLeaderboardReplayName(void);
 void NativeGhostInput_ClearSelection(void);
 b32 NativeGhostInput_SelectGhost(const char *ghostName, u16 trackID, u16 characterID);
 void NativeGhostInput_StartRecording(void);

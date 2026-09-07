@@ -638,6 +638,7 @@ u32 SelectProfile_InputLogic(struct RectMenu *menu, s16 numRows, u32 confirmFlag
 
 extern struct RectMenu menu224;
 extern struct RectMenu menu224NoSave;
+extern struct RectMenu menu224LeaderboardGhostReplay;
 
 static s16 *SelectProfile_AllProfiles_Mode(void)
 {
@@ -739,7 +740,13 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 		sdata->GhostRecording.ptrGhost->timeElapsedInRace = time;
 	}
 
-	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], NativeReverseTrack_GetCurrentLogicalTrackId(), time, gGT->prevNameEntered);
+	char *ghostName = gGT->prevNameEntered;
+	if (NativeGhostInput_IsLeaderboardReplay())
+	{
+		ghostName = (char *)NativeGhostInput_GetLeaderboardReplayName();
+	}
+
+	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], NativeReverseTrack_GetCurrentLogicalTrackId(), time, ghostName);
 
 	sdata->ghostProfile_indexSave = menu->rowSelected;
 	sdata->ghostProfile_rowSelect = -1;
@@ -1415,7 +1422,14 @@ static void SelectProfile_FinalizeGhost(struct RectMenu *menu)
 
 	if (sdata->memcardAction == SELECT_PROFILE_ACTION_SAVE)
 	{
-		sdata->ptrDesiredMenu = (*SelectProfile_AllProfiles_ExitToPrevious() != 0) ? &menu224 : &menu224NoSave;
+		if (NativeGhostInput_IsLeaderboardReplay())
+		{
+			sdata->ptrDesiredMenu = &menu224LeaderboardGhostReplay;
+		}
+		else
+		{
+			sdata->ptrDesiredMenu = (*SelectProfile_AllProfiles_ExitToPrevious() != 0) ? &menu224 : &menu224NoSave;
+		}
 		return;
 	}
 
