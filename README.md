@@ -49,7 +49,7 @@ The full online leaderboard for Time Trials and Relic Races is available at this
 - Install the .vpk.
 - Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in `ux0:data/ctr/assets` named as `ctr-u.bin`.
 
-# How to Install (PC)
+## How to Install (PC)
 
 - Dump your US copy of `Crash Team Racing` for PS1 and place the bin file in the `assets` folder named as `ctr-u.bin`.
 
