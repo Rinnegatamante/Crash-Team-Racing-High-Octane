@@ -217,13 +217,14 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 0, 4, 4},
 #else
-	{LNG_LANGUAGE, 6, 1, 0, 0},
+	{LNG_LANGUAGE, 7, 1, 0, 0},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_ANTI_ALIASING, 4, 6, 5, 5},
-	{NATIVE_MENU_STRING_BORDERLESS, 5, 0, 6, 6},
+	{NATIVE_MENU_STRING_DITHERING, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_BORDERLESS, 6, 0, 7, 7},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -313,6 +314,7 @@ extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
+extern int gNativeDitheringEnabled;
 extern int gNativeBorderlessEnabled;
 #endif
 extern int gNativeGhostReplayMode;
@@ -786,6 +788,13 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	if (choose == NATIVE_MENU_STRING_ANTI_ALIASING)
 	{
 		gNativeAntiAliasingEnabled ^= 1;
+		save_config();
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_DITHERING)
+	{
+		gNativeDitheringEnabled ^= 1;
 		save_config();
 		return;
 	}

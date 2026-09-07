@@ -191,6 +191,7 @@ int gNativeDefaultCameraFar = 0;
 int gNativeDefaultHudSpeedometer = 0;
 #ifndef __vita__
 int gNativeAntiAliasingEnabled = 1;
+int gNativeDitheringEnabled = 1;
 int gNativeBorderlessEnabled = 0;
 #endif
 int cfg_language = 2; // Default: PAL UK language
@@ -239,6 +240,10 @@ void load_config(void)
 			{
 				gNativeAntiAliasingEnabled = (value != 0);
 			}
+			else if (strcmp("dithering", buffer) == 0)
+			{
+				gNativeDitheringEnabled = (value != 0);
+			}
 			else if (strcmp("borderless", buffer) == 0)
 			{
 				gNativeBorderlessEnabled = (value != 0);
@@ -261,6 +266,7 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "default_hud_speedometer", gNativeDefaultHudSpeedometer != 0);
 #ifndef __vita__
 		fprintf(config, "%s=%d\n", "anti_aliasing", gNativeAntiAliasingEnabled != 0);
+		fprintf(config, "%s=%d\n", "dithering", gNativeDitheringEnabled != 0);
 		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);
 #endif
 		fclose(config);

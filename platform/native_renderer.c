@@ -352,6 +352,7 @@ int g_windowWidth = 0;
 int g_windowHeight = 0;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
+extern int gNativeDitheringEnabled;
 #endif
 
 global_variable int s_presentAspectW = 4;
@@ -1015,6 +1016,7 @@ typedef struct
 	GLint lutLoc;
 #ifndef __vita__
 	GLint psxSemiTransPassLoc;
+	GLint psxDitherEnabledLoc;
 #endif
 	GLint psxDrawMaskSetLoc;
 	GLint psxTextureOutputStpLoc;
@@ -1070,6 +1072,7 @@ GLint u_bilinearFilterLoc;
 GLint u_texelSizeLoc;
 #ifndef __vita__
 GLint u_psxSemiTransPassLoc;
+GLint u_psxDitherEnabledLoc;
 #endif
 GLint u_psxDrawMaskSetLoc;
 GLint u_psxTextureOutputStpLoc;
@@ -1216,6 +1219,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #define GPU_DITHERING "\tvec4 dither(vec4 color) { return color; }\n"
 #else
 #define GPU_DITHERING                                             \
+	"\tuniform int psxDitherEnabled;\n"                            \
 	"	const mat4 c_dither = mat4(\n"                              \
 	"		-4.0,  +0.0,  -3.0,  +1.0,\n"                              \
 	"		+2.0,  -2.0,  +3.0,  -1.0,\n"                              \
@@ -1223,7 +1227,7 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 	"		+3.0,  -1.0,  +2.0,  -2.0) / 255.0;\n"                     \
 	"	vec4 dither(vec4 color) {\n"                                \
 	"		ivec2 dc = ivec2(mod(floor(v_ditherCoord), 4.0));\n"       \
-	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w);\n" \
+	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w * float(psxDitherEnabled));\n" \
 	"		return color;\n"                                           \
 	"	}\n"
 #endif
@@ -1679,6 +1683,7 @@ internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source,
 	sh->lutLoc = glGetUniformLocation(sh->shader, "s_rgLut");
 #ifndef __vita__
 	sh->psxSemiTransPassLoc = glGetUniformLocation(sh->shader, "psxSemiTransPass");
+	sh->psxDitherEnabledLoc = glGetUniformLocation(sh->shader, "psxDitherEnabled");
 #endif
 	sh->psxDrawMaskSetLoc = glGetUniformLocation(sh->shader, "psxDrawMaskSet");
 	sh->psxTextureOutputStpLoc = glGetUniformLocation(sh->shader, "psxTextureOutputStp");
@@ -2262,6 +2267,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiT
 	u_texelSizeLoc = texFormat == TF_32_BIT_RGBA ? shader->texelSizeLoc : -1;
 #ifndef __vita__
 	u_psxSemiTransPassLoc = shader->psxSemiTransPassLoc;
+	u_psxDitherEnabledLoc = shader->psxDitherEnabledLoc;
 #endif
 	u_psxDrawMaskSetLoc = shader->psxDrawMaskSetLoc;
 	u_psxTextureOutputStpLoc = shader->psxTextureOutputStpLoc;
@@ -2283,6 +2289,10 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiT
 	if (u_psxSemiTransPassLoc >= 0)
 	{
 		glUniform1i(u_psxSemiTransPassLoc, semiTransPass);
+	}
+	if (u_psxDitherEnabledLoc >= 0)
+	{
+		glUniform1i(u_psxDitherEnabledLoc, gNativeDitheringEnabled != 0);
 	}
 #endif
 

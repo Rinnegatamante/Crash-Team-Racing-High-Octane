@@ -7,6 +7,7 @@ extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
+extern int gNativeDitheringEnabled;
 extern int gNativeBorderlessEnabled;
 #endif
 
@@ -58,6 +59,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 	{
 		"AA: OFF",
 		"AA: FXAA",
+	};
+	static const char *dithering[6][2] =
+	{
+		{"DITHER: OFF", "DITHER: ON"},
+		{"TRAMAGE: NON", "TRAMAGE: OUI"},
+		{"DITHER: AUS", "DITHER: EIN"},
+		{"DITHER: NO", "DITHER: SI"},
+		{"DITHER: NO", "DITHER: SI"},
+		{"DITHER: UIT", "DITHER: AAN"},
 	};
 	static const char *displayMode[2] =
 	{
@@ -177,6 +187,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 #ifndef __vita__
 	case NATIVE_MENU_STRING_ANTI_ALIASING:
 		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];
+	case NATIVE_MENU_STRING_DITHERING:
+		return (char *)dithering[languageRow][gNativeDitheringEnabled != 0];
 	case NATIVE_MENU_STRING_BORDERLESS:
 		return (char *)displayMode[gNativeBorderlessEnabled != 0];
 #endif
