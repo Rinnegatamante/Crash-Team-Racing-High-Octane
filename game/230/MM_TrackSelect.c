@@ -84,6 +84,14 @@ static struct MenuRow s_reverseVariantRows[] =
 	{RECTMENU_STRING_NONE},
 };
 
+static struct MenuRow s_tigerTempleVariantRows[] =
+{
+	{NATIVE_MENU_STRING_TRACK_NORMAL, 2, 1, 0, 0},
+	{NATIVE_MENU_STRING_TRACK_REVERSE, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_TRACK_ALTERNATIVE, 1, 0, 2, 2},
+	{RECTMENU_STRING_NONE},
+};
+
 static struct RectMenu s_reverseVariantMenu =
 {
 	.stringIndexTitle = RECTMENU_STRING_NONE,
@@ -107,9 +115,20 @@ static b32 MM_TrackSelect_CanChooseReverse(struct GameTracker *gGT, s16 physical
 	       ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0));
 }
 
-static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLevelId, b32 reverse)
+static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLevelId, int variant)
 {
-	NativeReverseTrack_SelectPhysical(physicalLevelId, reverse);
+	if (variant == 2)
+	{
+		if (physicalLevelId != TIGER_TEMPLE)
+		{
+			return false;
+		}
+		NativeReverseTrack_SelectAlternative(physicalLevelId);
+	}
+	else
+	{
+		NativeReverseTrack_SelectPhysical(physicalLevelId, variant == 1);
+	}
 	s16 logicalTrackId = NativeReverseTrack_GetTrackIdForPhysical(physicalLevelId);
 	gGT->currLEV = logicalTrackId;
 
@@ -637,8 +656,8 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			if (variantResult == 1)
 			{
 				s16 physicalLevelId = selectMenu[D230.trackSelect.currentTrack].levID;
-				b32 reverse = s_reverseVariantMenu.rowSelected == 1;
-				if (MM_TrackSelect_ChooseVariant(gGT, physicalLevelId, reverse))
+				int variant = s_reverseVariantMenu.rowSelected;
+				if (MM_TrackSelect_ChooseVariant(gGT, physicalLevelId, variant))
 				{
 					OtherFX_Play(1, 1);
 					s_reverseVariantOpen = false;
@@ -727,6 +746,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				if (MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
 				{
 					OtherFX_Play(1, 1);
+					s_reverseVariantMenu.rows = (physicalLevelId == TIGER_TEMPLE) ? s_tigerTempleVariantRows : s_reverseVariantRows;
 					s_reverseVariantMenu.rowSelected = 0;
 					s_reverseVariantOpen = true;
 					break;

@@ -181,7 +181,6 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	u32 rngXY;
 	u32 rngZ;
 	const int framePhase = CTR_NATIVE_60FPS_ACTIVE ? (sdata->gGT->timer & 1) : 0;
-	const b32 updateParticleCount = !CTR_NATIVE_60FPS_ACTIVE || (framePhase != 0);
 
 	(void)numPlyr;
 
@@ -208,26 +207,27 @@ void RenderWeather(struct PushBuffer *pb, struct PrimMem *primMem, struct RainBu
 	CTC2((u32)pb->distanceToScreen_PREV, 26);
 
 	currentParticles = rainBuffer->numParticles_curr;
-	if ((gameMode1 == 0) && updateParticleCount)
+	if (gameMode1 == 0)
 	{
 		s32 maxParticles = (u16)rainBuffer->numParticles_max;
 		s32 vanishRate = (u16)rainBuffer->vanishRate;
+		s32 particleStep = RenderWeather_GetFrameVelocityStep(vanishRate, framePhase);
 		s32 diff = maxParticles - currentParticles;
 
 		if (maxParticles != currentParticles)
 		{
 			if (diff < 0)
 			{
-				currentParticles -= vanishRate;
-				if (diff + vanishRate > 0)
+				currentParticles -= particleStep;
+				if (diff + particleStep > 0)
 				{
 					currentParticles = maxParticles;
 				}
 			}
 			else
 			{
-				currentParticles += vanishRate;
-				if (diff - vanishRate < 0)
+				currentParticles += particleStep;
+				if (diff - particleStep < 0)
 				{
 					currentParticles = maxParticles;
 				}

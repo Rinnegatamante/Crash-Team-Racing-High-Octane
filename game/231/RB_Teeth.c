@@ -2,13 +2,32 @@
 
 static char s_teeth[] = "teeth";
 
+static b32 RB_Teeth_IsAlwaysOpen(void)
+{
+	b32 relicRace = (sdata->gGT->gameMode1 & RELIC_RACE) != 0;
+#if defined(CTR_NATIVE)
+	if (gNativeAlternativeTrackEnabled != 0)
+	{
+		return !relicRace;
+	}
+#endif
+	return relicRace;
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800b9df0-0x800ba2c0.
 void RB_Teeth_LInB(struct Instance *inst)
 {
 	inst->depthBiasNormal += 2;
 
-	// If in relic race
-	if ((sdata->gGT->gameMode1 & RELIC_RACE) != 0)
+	b32 alwaysOpen = RB_Teeth_IsAlwaysOpen();
+#if defined(CTR_NATIVE)
+	if (((sdata->gGT->gameMode1 & RELIC_RACE) != 0) && (gNativeAlternativeTrackEnabled != 0))
+	{
+		sdata->doorAccessFlags &= 0xfffffffe;
+		inst->flags &= ~HIDE_MODEL;
+	}
+#endif
+	if (alwaysOpen)
 	{
 		// enable access through a door (disable collision)
 		sdata->doorAccessFlags |= 1;
@@ -207,9 +226,8 @@ int RB_Teeth_LInC(struct Instance *teethInst, struct Thread *t, struct Scratchpa
 
 	// This is the door you can shoot in tiger temple
 
-	// If in relic race, ignore the function,
-	// there are no weapons to activate door anyways
-	if ((sdata->gGT->gameMode1 & RELIC_RACE) != 0)
+	b32 alwaysOpen = RB_Teeth_IsAlwaysOpen();
+	if (alwaysOpen)
 	{
 		return 2;
 	}

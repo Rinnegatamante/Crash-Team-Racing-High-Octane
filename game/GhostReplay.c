@@ -351,7 +351,7 @@ void GhostReplay_Init1(void)
 	// Relic Race and Reverse variants only use the human ghost; retail N. Tropy/Oxide tapes are forward-track recordings.
 	b32 humanGhostOnly = relicRaceGameplay;
 #if defined(CTR_NATIVE)
-	humanGhostOnly |= gNativeReverseTrackEnabled != 0;
+	humanGhostOnly |= NativeReverseTrack_IsCustomVariantActive();
 #endif
 	s32 ghostCount = humanGhostOnly ? 1 : 2;
 	if (humanGhostOnly)

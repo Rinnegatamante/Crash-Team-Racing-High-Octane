@@ -7,6 +7,10 @@
 #define NATIVE_REVERSE_SCORE_SAVE_NAME "BASCUS-94426R"
 #define NATIVE_REVERSE_SCORE_MAGIC 0x31565248u
 #define NATIVE_REVERSE_SCORE_VERSION 1u
+#define NATIVE_ALTERNATIVE_TRACK_LOGICAL_ID 26
+#define NATIVE_ALTERNATIVE_SCORE_SAVE_NAME "BASCUS-94426A"
+#define NATIVE_ALTERNATIVE_SCORE_MAGIC 0x31415648u
+#define NATIVE_ALTERNATIVE_SCORE_VERSION 1u
 
 struct NativeReverseTrackDef
 {
@@ -22,6 +26,14 @@ struct NativeReverseScoreSave
 	struct HighScoreTrack tracks[NATIVE_REVERSE_TRACK_COUNT];
 };
 
+struct NativeAlternativeScoreSave
+{
+	u32 magic;
+	u32 version;
+	u32 checksum;
+	struct HighScoreTrack track;
+};
+
 static const struct NativeReverseTrackDef s_nativeReverseTrackDefs[NATIVE_REVERSE_TRACK_COUNT] =
 {
 	{18, CRASH_COVE},
@@ -35,10 +47,13 @@ static const struct NativeReverseTrackDef s_nativeReverseTrackDefs[NATIVE_REVERS
 };
 
 int gNativeReverseTrackEnabled = 0;
+int gNativeAlternativeTrackEnabled = 0;
 static s16 s_nativeReverseTrackLogicalId = -1;
 static s16 s_nativeReverseTrackPhysicalId = -1;
 static struct HighScoreTrack s_nativeReverseHighScores[NATIVE_REVERSE_TRACK_COUNT];
 static b32 s_nativeReverseHighScoresLoaded;
+static struct HighScoreTrack s_nativeAlternativeHighScore;
+static b32 s_nativeAlternativeHighScoreLoaded;
 
 static int NativeReverseTrack_FindLogicalIndex(s16 logicalId)
 {
@@ -69,6 +84,21 @@ b32 NativeReverseTrack_IsLogicalReverse(s16 logicalId)
 	return NativeReverseTrack_FindLogicalIndex(logicalId) >= 0;
 }
 
+b32 NativeReverseTrack_IsLogicalAlternative(s16 logicalId)
+{
+	return logicalId == NATIVE_ALTERNATIVE_TRACK_LOGICAL_ID;
+}
+
+b32 NativeReverseTrack_IsLogicalVariant(s16 logicalId)
+{
+	return NativeReverseTrack_IsLogicalReverse(logicalId) || NativeReverseTrack_IsLogicalAlternative(logicalId);
+}
+
+b32 NativeReverseTrack_IsCustomVariantActive(void)
+{
+	return (gNativeReverseTrackEnabled != 0) || (gNativeAlternativeTrackEnabled != 0);
+}
+
 b32 NativeReverseTrack_IsPhysicalSupported(s16 physicalId)
 {
 	return NativeReverseTrack_FindPhysicalIndex(physicalId) >= 0;
@@ -76,6 +106,10 @@ b32 NativeReverseTrack_IsPhysicalSupported(s16 physicalId)
 
 s16 NativeReverseTrack_GetPhysicalFromLogical(s16 logicalId)
 {
+	if (NativeReverseTrack_IsLogicalAlternative(logicalId))
+	{
+		return TIGER_TEMPLE;
+	}
 	int index = NativeReverseTrack_FindLogicalIndex(logicalId);
 	return (index >= 0) ? s_nativeReverseTrackDefs[index].physicalId : logicalId;
 }
@@ -89,6 +123,7 @@ s16 NativeReverseTrack_GetLogicalFromPhysical(s16 physicalId)
 void NativeReverseTrack_ClearSelection(void)
 {
 	gNativeReverseTrackEnabled = 0;
+	gNativeAlternativeTrackEnabled = 0;
 	s_nativeReverseTrackLogicalId = -1;
 	s_nativeReverseTrackPhysicalId = -1;
 }
@@ -98,6 +133,7 @@ void NativeReverseTrack_SelectPhysical(s16 physicalId, b32 reverse)
 	if (!reverse)
 	{
 		gNativeReverseTrackEnabled = 0;
+		gNativeAlternativeTrackEnabled = 0;
 		s_nativeReverseTrackLogicalId = physicalId;
 		s_nativeReverseTrackPhysicalId = physicalId;
 		return;
@@ -111,8 +147,24 @@ void NativeReverseTrack_SelectPhysical(s16 physicalId, b32 reverse)
 	}
 
 	gNativeReverseTrackEnabled = 1;
+	gNativeAlternativeTrackEnabled = 0;
 	s_nativeReverseTrackLogicalId = s_nativeReverseTrackDefs[index].logicalId;
 	s_nativeReverseTrackPhysicalId = physicalId;
+}
+
+
+void NativeReverseTrack_SelectAlternative(s16 physicalId)
+{
+	if (physicalId != TIGER_TEMPLE)
+	{
+		NativeReverseTrack_ClearSelection();
+		return;
+	}
+
+	gNativeReverseTrackEnabled = 0;
+	gNativeAlternativeTrackEnabled = 1;
+	s_nativeReverseTrackLogicalId = NATIVE_ALTERNATIVE_TRACK_LOGICAL_ID;
+	s_nativeReverseTrackPhysicalId = TIGER_TEMPLE;
 }
 
 void NativeReverseTrack_SelectLogical(s16 logicalId)
@@ -121,8 +173,15 @@ void NativeReverseTrack_SelectLogical(s16 logicalId)
 	if (index >= 0)
 	{
 		gNativeReverseTrackEnabled = 1;
+		gNativeAlternativeTrackEnabled = 0;
 		s_nativeReverseTrackLogicalId = logicalId;
 		s_nativeReverseTrackPhysicalId = s_nativeReverseTrackDefs[index].physicalId;
+		return;
+	}
+
+	if (NativeReverseTrack_IsLogicalAlternative(logicalId))
+	{
+		NativeReverseTrack_SelectAlternative(TIGER_TEMPLE);
 		return;
 	}
 
@@ -140,7 +199,7 @@ s16 NativeReverseTrack_GetSelectedLogicalTrackId(void)
 
 s16 NativeReverseTrack_GetTrackIdForPhysical(s16 physicalId)
 {
-	if (gNativeReverseTrackEnabled && (s_nativeReverseTrackPhysicalId == physicalId))
+	if (NativeReverseTrack_IsCustomVariantActive() && (s_nativeReverseTrackPhysicalId == physicalId))
 	{
 		return s_nativeReverseTrackLogicalId;
 	}
@@ -149,7 +208,7 @@ s16 NativeReverseTrack_GetTrackIdForPhysical(s16 physicalId)
 
 s16 NativeReverseTrack_GetCurrentLogicalTrackId(void)
 {
-	if (gNativeReverseTrackEnabled && (s_nativeReverseTrackLogicalId >= 0))
+	if (NativeReverseTrack_IsCustomVariantActive() && (s_nativeReverseTrackLogicalId >= 0))
 	{
 		return s_nativeReverseTrackLogicalId;
 	}
@@ -171,7 +230,7 @@ static b32 NativeReverseTrack_IsAllowedMode(void)
 
 s16 NativeReverseTrack_ResolveLoadLevel(s16 requestedLevelId)
 {
-	if (!gNativeReverseTrackEnabled)
+	if (!NativeReverseTrack_IsCustomVariantActive())
 	{
 		return requestedLevelId;
 	}
@@ -207,34 +266,36 @@ static u32 NativeReverseTrack_Checksum(const void *source, int size)
 	return hash;
 }
 
+static void NativeReverseTrack_ResetHighScoreTrack(struct HighScoreTrack *track, int physicalId)
+{
+	memset(track, 0, sizeof(*track));
+	for (int mode = 0; mode < MEMCARD_HIGH_SCORE_MODE_COUNT; mode++)
+	{
+		for (int entryIndex = 0; entryIndex < MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE; entryIndex++)
+		{
+			int characterId = physicalId + mode + entryIndex;
+			characterId = characterId - PENTA_PENGUIN * (characterId / PENTA_PENGUIN);
+
+			struct HighScoreEntry *entry = &track->scoreEntry[mode * MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE + entryIndex];
+			entry->time = MEMCARD_HIGH_SCORE_DEFAULT_TIME;
+			entry->characterID = characterId;
+			if ((sdata != NULL) && (sdata->lngStrings != NULL))
+			{
+				strcpy(entry->name, sdata->lngStrings[data.MetaDataCharacters[characterId].name_LNG_short]);
+			}
+			else
+			{
+				strcpy(entry->name, "CTR");
+			}
+		}
+	}
+}
+
 static void NativeReverseTrack_ResetHighScores(void)
 {
 	for (int trackIndex = 0; trackIndex < NATIVE_REVERSE_TRACK_COUNT; trackIndex++)
 	{
-		struct HighScoreTrack *track = &s_nativeReverseHighScores[trackIndex];
-		memset(track, 0, sizeof(*track));
-
-		for (int mode = 0; mode < MEMCARD_HIGH_SCORE_MODE_COUNT; mode++)
-		{
-			for (int entryIndex = 0; entryIndex < MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE; entryIndex++)
-			{
-				int physicalId = s_nativeReverseTrackDefs[trackIndex].physicalId;
-				int characterId = physicalId + mode + entryIndex;
-				characterId = characterId - PENTA_PENGUIN * (characterId / PENTA_PENGUIN);
-
-				struct HighScoreEntry *entry = &track->scoreEntry[mode * MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE + entryIndex];
-				entry->time = MEMCARD_HIGH_SCORE_DEFAULT_TIME;
-				entry->characterID = characterId;
-				if ((sdata != NULL) && (sdata->lngStrings != NULL))
-				{
-					strcpy(entry->name, sdata->lngStrings[data.MetaDataCharacters[characterId].name_LNG_short]);
-				}
-				else
-				{
-					strcpy(entry->name, "CTR");
-				}
-			}
-		}
+		NativeReverseTrack_ResetHighScoreTrack(&s_nativeReverseHighScores[trackIndex], s_nativeReverseTrackDefs[trackIndex].physicalId);
 	}
 }
 
@@ -262,20 +323,53 @@ static void NativeReverseTrack_EnsureHighScoresLoaded(void)
 	s_nativeReverseHighScoresLoaded = true;
 }
 
-void NativeReverseTrack_SaveHighScores(void)
+
+static void NativeReverseTrack_EnsureAlternativeHighScoreLoaded(void)
 {
-	if (!s_nativeReverseHighScoresLoaded)
+	if (s_nativeAlternativeHighScoreLoaded)
 	{
 		return;
 	}
 
-	struct NativeReverseScoreSave save;
+	struct NativeAlternativeScoreSave save;
 	memset(&save, 0, sizeof(save));
-	save.magic = NATIVE_REVERSE_SCORE_MAGIC;
-	save.version = NATIVE_REVERSE_SCORE_VERSION;
-	memcpy(save.tracks, s_nativeReverseHighScores, sizeof(save.tracks));
-	save.checksum = NativeReverseTrack_Checksum(save.tracks, sizeof(save.tracks));
-	NativeMemcard_WriteSaveData(NATIVE_REVERSE_SCORE_SAVE_NAME, "", 0, (const u8 *)&save, sizeof(save));
+	if ((NativeMemcard_ReadSaveData(NATIVE_ALTERNATIVE_SCORE_SAVE_NAME, (u8 *)&save, sizeof(save), 0) == NATIVE_MEMCARD_OK) &&
+	    (save.magic == NATIVE_ALTERNATIVE_SCORE_MAGIC) &&
+	    (save.version == NATIVE_ALTERNATIVE_SCORE_VERSION) &&
+	    (save.checksum == NativeReverseTrack_Checksum(&save.track, sizeof(save.track))))
+	{
+		memcpy(&s_nativeAlternativeHighScore, &save.track, sizeof(s_nativeAlternativeHighScore));
+	}
+	else
+	{
+		NativeReverseTrack_ResetHighScoreTrack(&s_nativeAlternativeHighScore, TIGER_TEMPLE);
+	}
+	s_nativeAlternativeHighScoreLoaded = true;
+}
+
+void NativeReverseTrack_SaveHighScores(void)
+{
+	if (s_nativeReverseHighScoresLoaded)
+	{
+		struct NativeReverseScoreSave save;
+		memset(&save, 0, sizeof(save));
+		save.magic = NATIVE_REVERSE_SCORE_MAGIC;
+		save.version = NATIVE_REVERSE_SCORE_VERSION;
+		memcpy(save.tracks, s_nativeReverseHighScores, sizeof(save.tracks));
+		save.checksum = NativeReverseTrack_Checksum(save.tracks, sizeof(save.tracks));
+		NativeMemcard_WriteSaveData(NATIVE_REVERSE_SCORE_SAVE_NAME, "", 0, (const u8 *)&save, sizeof(save));
+	}
+
+	if (s_nativeAlternativeHighScoreLoaded)
+	{
+		struct NativeAlternativeScoreSave save;
+		memset(&save, 0, sizeof(save));
+		save.magic = NATIVE_ALTERNATIVE_SCORE_MAGIC;
+		save.version = NATIVE_ALTERNATIVE_SCORE_VERSION;
+		memcpy(&save.track, &s_nativeAlternativeHighScore, sizeof(save.track));
+		save.checksum = NativeReverseTrack_Checksum(&save.track, sizeof(save.track));
+		NativeMemcard_WriteSaveData(NATIVE_ALTERNATIVE_SCORE_SAVE_NAME, "", 0, (const u8 *)&save, sizeof(save));
+	}
 }
 
 struct HighScoreTrack *NativeReverseTrack_GetHighScoreTrack(s16 logicalId)
@@ -285,6 +379,12 @@ struct HighScoreTrack *NativeReverseTrack_GetHighScoreTrack(s16 logicalId)
 	{
 		NativeReverseTrack_EnsureHighScoresLoaded();
 		return &s_nativeReverseHighScores[index];
+	}
+
+	if (NativeReverseTrack_IsLogicalAlternative(logicalId))
+	{
+		NativeReverseTrack_EnsureAlternativeHighScoreLoaded();
+		return &s_nativeAlternativeHighScore;
 	}
 
 	if ((logicalId >= 0) && (logicalId < MEMCARD_HIGH_SCORE_TRACK_COUNT))
@@ -387,6 +487,22 @@ const char *NativeReverseTrack_GetSuffix(void)
 	return suffix[languageRow];
 }
 
+const char *NativeReverseTrack_GetAlternativeSuffix(void)
+{
+	extern int cfg_language;
+	static const char *suffix[6] =
+	{
+		" ALTERNATIVE",
+		" ALTERNATIVE",
+		" ALTERNATIV",
+		" ALTERNATIVA",
+		" ALTERNATIVA",
+		" ALTERNATIEF",
+	};
+	int languageRow = ((cfg_language >= 2) && (cfg_language <= 7)) ? cfg_language - 2 : 0;
+	return suffix[languageRow];
+}
+
 void NativeReverseTrack_FormatName(s16 logicalId, char *dst, int dstSize)
 {
 	if ((dst == NULL) || (dstSize <= 0))
@@ -399,6 +515,10 @@ void NativeReverseTrack_FormatName(s16 logicalId, char *dst, int dstSize)
 	if (NativeReverseTrack_IsLogicalReverse(logicalId))
 	{
 		snprintf(dst, dstSize, "%s%s", baseName, NativeReverseTrack_GetSuffix());
+	}
+	else if (NativeReverseTrack_IsLogicalAlternative(logicalId))
+	{
+		snprintf(dst, dstSize, "%s%s", baseName, NativeReverseTrack_GetAlternativeSuffix());
 	}
 	else
 	{

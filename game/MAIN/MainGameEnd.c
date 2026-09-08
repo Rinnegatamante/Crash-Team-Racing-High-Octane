@@ -55,8 +55,8 @@ void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 		return;
 	}
 #if defined(CTR_NATIVE)
-	// Reverse variants have their own records, but never participate in the retail N. Tropy/Oxide unlock chain.
-	if (gNativeReverseTrackEnabled != 0)
+	// Native track variants have their own records, but never participate in the retail N. Tropy/Oxide unlock chain.
+	if (NativeReverseTrack_IsCustomVariantActive())
 	{
 		return;
 	}
@@ -164,7 +164,7 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	if (highScoreIndex < 0)
 	{
 #if defined(CTR_NATIVE)
-		if (gNativeReverseTrackEnabled != 0) NativeReverseTrack_SaveHighScores();
+		if (NativeReverseTrack_IsCustomVariantActive()) NativeReverseTrack_SaveHighScores();
 #endif
 		return;
 	}
@@ -181,7 +181,7 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	entry->characterID = data.characterIDs[(u8)player->driverID];
 	memmove(entry->name, gGT->prevNameEntered, 0x11);
 #if defined(CTR_NATIVE)
-	if (gNativeReverseTrackEnabled != 0) NativeReverseTrack_SaveHighScores();
+	if (NativeReverseTrack_IsCustomVariantActive()) NativeReverseTrack_SaveHighScores();
 #endif
 }
 

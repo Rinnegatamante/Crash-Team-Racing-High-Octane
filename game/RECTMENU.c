@@ -169,6 +169,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"INVERSA",
 		"OMGEKEERD",
 	};
+	static const char *trackAlternative[6] =
+	{
+		"ALTERNATIVE",
+		"ALTERNATIVE",
+		"ALTERNATIV",
+		"ALTERNATIVA",
+		"ALTERNATIVA",
+		"ALTERNATIEF",
+	};
 	static const char *controlsTitle[6] =
 	{
 		"CONTROLS", "COMMANDES", "STEUERUNG", "COMANDI", "CONTROLES", "BESTURING",
@@ -284,6 +293,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)trackNormal[languageRow];
 	case NATIVE_MENU_STRING_TRACK_REVERSE:
 		return (char *)trackReverse[languageRow];
+	case NATIVE_MENU_STRING_TRACK_ALTERNATIVE:
+		return (char *)trackAlternative[languageRow];
 	default:
 		return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
 	}

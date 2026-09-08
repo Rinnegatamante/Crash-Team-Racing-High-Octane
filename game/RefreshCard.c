@@ -341,6 +341,10 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 	{
 		strcat(description, NativeReverseTrack_GetSuffix());
 	}
+	else if (NativeReverseTrack_IsLogicalAlternative((s16)levelID))
+	{
+		strcat(description, NativeReverseTrack_GetAlternativeSuffix());
+	}
 	strcat(description, sdata->strcatData1_colon);
 	strcat(&description[strlen(description)], sdata->lngStrings[data.MetaDataCharacters[(s16)characterID].name_LNG_short]);
 	strcat(description, sdata->strcatData1_colon);

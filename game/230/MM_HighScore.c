@@ -6,7 +6,7 @@ enum
 	MM_HIGHSCORE_SLIDE_TRANSITION_FRAMES = 8,
 	MM_HIGHSCORE_LAST_ARCADE_TRACK = 0x11,
 #if defined(CTR_NATIVE)
-	MM_HIGHSCORE_LAST_TRACK = 0x19,
+	MM_HIGHSCORE_LAST_TRACK = 0x1a,
 #else
 	MM_HIGHSCORE_LAST_TRACK = MM_HIGHSCORE_LAST_ARCADE_TRACK,
 #endif
@@ -177,7 +177,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 
 		// Reverse variants do not participate in N. Tropy/Oxide progression.
 #if defined(CTR_NATIVE)
-		if (!NativeReverseTrack_IsLogicalReverse(logicalTrackId))
+		if (!NativeReverseTrack_IsLogicalVariant(logicalTrackId))
 #endif
 		for (s32 ghostStarIndex = 0; ghostStarIndex < MM_HIGHSCORE_GHOST_STAR_COUNT; ghostStarIndex++)
 		{
