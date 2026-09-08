@@ -1213,11 +1213,12 @@ void MM_Cheat_MaxInvisibility(void);
 void MM_Cheat_MaxEngine(void);
 void MM_Cheat_MaxBombs(void);
 void MM_Cheat_AdvDifficulty(void);
-void MM_Cheat_SuperHard(void);
 void MM_Cheat_IcyTracks(void);
 void MM_Cheat_SuperTurboPads(void);
-void MM_Cheat_OneLap(void);
 void MM_Cheat_TurboCounter(void);
+b32 NativeCheat_DisablesRecords(void);
+void NativeCheat_ApplyConfigured(void);
+u32 NativeCheat_GetMenuBit(int index);
 
 void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empty, struct PrimMem *primMem, uint32_t *otMem, u32 transparency);
 

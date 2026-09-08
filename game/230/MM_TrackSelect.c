@@ -846,13 +846,6 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				D230.trackSelect.lapBoxOpen = 0;
 			}
 		}
-
-		// If "One Lap Race" Cheat is enabled
-		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
-		{
-			// Set number of Laps to 1
-			gGT->numLaps = 1;
-		}
 	}
 
 	// decrease frame from track list motion

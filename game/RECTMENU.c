@@ -6,6 +6,7 @@ extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
+extern u32 gNativeCheatConfigMask;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeDitheringEnabled;
@@ -178,6 +179,24 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"ALTERNATIVA",
 		"ALTERNATIEF",
 	};
+	static const char *cheatsTitle[6] =
+	{
+		"CHEATS", "TRICHES", "CHEATS", "TRUCCHI", "TRUCOS", "CHEATS",
+	};
+	static const char *cheatToggle[6][2] =
+	{
+		{"OFF", "ON"}, {"NON", "OUI"}, {"AUS", "EIN"}, {"NO", "SI"}, {"NO", "SI"}, {"UIT", "AAN"},
+	};
+	static const char *cheatName[6][10] =
+	{
+		{"INFINITE WUMPA", "INFINITE MASK", "INFINITE TURBOS", "INFINITE BOMBS", "INVISIBILITY", "SUPER ENGINE", "ICY TRACKS", "SUPER TURBO PADS", "ADV DIFFICULTY", "BOOST COUNTER"},
+		{"WUMPA INFINIS", "MASQUE INFINI", "TURBOS INFINIS", "BOMBES INFINIES", "INVISIBILITE", "SUPER MOTEUR", "PISTES GLACEES", "SUPER TURBO PADS", "DIFFICULTE ADV", "COMPTEUR TURBO"},
+		{"WUMPA UNENDLICH", "MASKE UNENDLICH", "TURBOS UNENDLICH", "BOMBEN UNENDLICH", "UNSICHTBAR", "SUPER MOTOR", "EISIGE STRECKEN", "SUPER TURBO-PADS", "ADV-SCHWIERIG", "TURBO-ZAEHLER"},
+		{"WUMPA INFINITI", "MASCHERA INFINITA", "TURBO INFINITI", "BOMBE INFINITE", "INVISIBILITA", "SUPER MOTORE", "PISTE GHIACCIATE", "SUPER TURBO PAD", "DIFFICOLTA ADV", "CONTATORE TURBO"},
+		{"WUMPA INFINITA", "MASCARA INFINITA", "TURBOS INFINITOS", "BOMBAS INFINITAS", "INVISIBILIDAD", "SUPER MOTOR", "PISTAS HELADAS", "SUPER TURBO PADS", "DIFICULTAD ADV", "CONTADOR TURBO"},
+		{"ONEINDIG WUMPA", "ONEINDIG MASKER", "ONEINDIGE TURBOS", "ONEINDIGE BOMMEN", "ONZICHTBAAR", "SUPER MOTOR", "IJZIGE BANEN", "SUPER TURBO PADS", "ADV MOEILIJK", "TURBO TELLER"},
+	};
+	static char cheatRow[64];
 	static const char *controlsTitle[6] =
 	{
 		"CONTROLS", "COMMANDES", "STEUERUNG", "COMANDI", "CONTROLES", "BESTURING",
@@ -242,6 +261,16 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return controlRow;
 	}
 
+	if ((nativeStringIndex >= NATIVE_MENU_STRING_CHEAT_WUMPA) &&
+	    (nativeStringIndex <= NATIVE_MENU_STRING_CHEAT_TURBOCOUNT))
+	{
+		int cheatIndex = nativeStringIndex - NATIVE_MENU_STRING_CHEAT_WUMPA;
+		u32 cheatBit = NativeCheat_GetMenuBit(cheatIndex);
+		int enabled = (gNativeCheatConfigMask & cheatBit) != 0;
+		snprintf(cheatRow, sizeof(cheatRow), "%s: %s", cheatName[languageRow][cheatIndex], cheatToggle[languageRow][enabled]);
+		return cheatRow;
+	}
+
 	switch (nativeStringIndex)
 	{
 	case NATIVE_MENU_STRING_GHOST_REPLAY:
@@ -256,6 +285,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)defaultHud[languageRow][gNativeDefaultHudSpeedometer != 0];
 	case NATIVE_MENU_STRING_CONTROLS:
 		return (char *)controlsTitle[languageRow];
+	case NATIVE_MENU_STRING_CHEATS:
+		return (char *)cheatsTitle[languageRow];
 	case NATIVE_MENU_STRING_CONTROL_HEADER:
 #ifdef __vita__
 		snprintf(controlHeaderRow, sizeof(controlHeaderRow), "%-16.16s |  %-13.13s ",

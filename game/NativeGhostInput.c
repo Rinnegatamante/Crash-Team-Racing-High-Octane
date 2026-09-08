@@ -698,6 +698,12 @@ b32 NativeGhostInput_SaveRecordingForGhost(const char *ghostName)
 {
     struct NativeGhostInputHeader header;
 
+    if (NativeCheat_DisablesRecords())
+    {
+        NativeMemcard_RemoveReplay(0, ghostName);
+        return false;
+    }
+
     if ((s_nativeGhostInputFrameCount == 0) ||
         (!s_nativeGhostInputExternalLoaded && s_nativeGhostInputRecordingInvalid))
     {

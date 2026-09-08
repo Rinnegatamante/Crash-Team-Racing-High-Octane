@@ -18,7 +18,11 @@ static void GhostTape_StartInternal(b32 startNativeInputRecording)
 	sdata->GhostRecording.timeElapsedInRace = 0;
 	sdata->boolGhostTooBigToSave = 0;
 	sdata->ghostOverflowTextTimer = 0;
+#if defined(CTR_NATIVE)
+	sdata->boolCanSaveGhost = !NativeCheat_DisablesRecords();
+#else
 	sdata->boolCanSaveGhost = 1;
+#endif
 	sdata->GhostRecording.ptrCurrOffset = sdata->GhostRecording.ptrStartOffset;
 	sdata->GhostRecording.countEightFrames = 0;
 	sdata->GhostRecording.countSixteenFrames = 0;
@@ -30,7 +34,18 @@ static void GhostTape_StartInternal(b32 startNativeInputRecording)
 
 	if (startNativeInputRecording)
 	{
+#if defined(CTR_NATIVE)
+		if (sdata->boolCanSaveGhost != 0)
+		{
+			NativeGhostInput_StartRecording();
+		}
+		else
+		{
+			NativeGhostInput_DiscardRecording();
+		}
+#else
 		NativeGhostInput_StartRecording();
+#endif
 	}
 }
 

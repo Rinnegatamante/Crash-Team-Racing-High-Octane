@@ -1,5 +1,49 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern u32 gNativeCheatConfigMask;
+
+static const u32 s_nativeCheatMenuBits[] =
+{
+	CHEAT_WUMPA, CHEAT_MASK, CHEAT_TURBO, CHEAT_BOMBS, CHEAT_INVISIBLE, CHEAT_ENGINE,
+	CHEAT_ICY, CHEAT_TURBOPAD, CHEAT_ADV, CHEAT_TURBOCOUNT,
+};
+#endif
+
+u32 NativeCheat_GetMenuBit(int index)
+{
+#if defined(CTR_NATIVE)
+	if ((index < 0) || ((u32)index >= (u32)(sizeof(s_nativeCheatMenuBits) / sizeof(s_nativeCheatMenuBits[0]))))
+	{
+		return 0;
+	}
+	return s_nativeCheatMenuBits[index];
+#else
+	(void)index;
+	return 0;
+#endif
+}
+
+void NativeCheat_ApplyConfigured(void)
+{
+#if defined(CTR_NATIVE)
+	if ((sdata == NULL) || (sdata->gGT == NULL))
+	{
+		return;
+	}
+	sdata->gGT->gameMode2 = (sdata->gGT->gameMode2 & ~CHEAT_ALL) | (gNativeCheatConfigMask & CHEAT_ALL);
+#endif
+}
+
+b32 NativeCheat_DisablesRecords(void)
+{
+#if defined(CTR_NATIVE)
+	return (sdata != NULL) && (sdata->gGT != NULL) && ((sdata->gGT->gameMode2 & CHEAT_ALL) != 0);
+#else
+	return 0;
+#endif
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ac9fc-0x800aca34.
 void MM_Cheat_MaxWumpa(void)
 {
@@ -112,13 +156,6 @@ void MM_Cheat_AdvDifficulty(void)
 	OtherFX_Play(MM_CHEAT_SUCCESS_SFX, 1);
 }
 
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800acd88-0x800acdc4.
-void MM_Cheat_SuperHard(void)
-{
-	sdata->gGT->gameMode2 |= CHEAT_SUPERHARD;
-	OtherFX_Play(MM_CHEAT_SUCCESS_SFX, 1);
-}
-
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800acdc4-0x800ace00.
 void MM_Cheat_IcyTracks(void)
 {
@@ -130,13 +167,6 @@ void MM_Cheat_IcyTracks(void)
 void MM_Cheat_SuperTurboPads(void)
 {
 	sdata->gGT->gameMode2 |= CHEAT_TURBOPAD;
-	OtherFX_Play(MM_CHEAT_SUCCESS_SFX, 1);
-}
-
-// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ace3c-0x800ace78.
-void MM_Cheat_OneLap(void)
-{
-	sdata->gGT->gameMode2 |= CHEAT_ONELAP;
 	OtherFX_Play(MM_CHEAT_SUCCESS_SFX, 1);
 }
 

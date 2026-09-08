@@ -19,6 +19,17 @@ void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 	gGT->newHighScoreIndex = -1;
 	gGT->gameModeEnd &= 0x7bffffff;
 
+	b32 recordsDisabled = 0;
+#if defined(CTR_NATIVE)
+	recordsDisabled = NativeCheat_DisablesRecords();
+	if (recordsDisabled)
+	{
+		gGT->gameModeEnd &= ~(NEW_BEST_LAP | NEW_HIGH_SCORE);
+		sdata->boolCanSaveGhost = 0;
+		NativeLeaderboard_ClearPendingUpload();
+	}
+#endif
+
 	int timeBonus = 0;
 
 	if ((driver->numTimeCrates == gGT->timeCratesInLEV) && (subtractTimeCrateBonus != 0))
@@ -28,25 +39,31 @@ void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 
 	int raceTime = driver->timeElapsedInRace - timeBonus;
 
-	for (s16 i = 0; i < 5; i++)
+	if (!recordsDisabled)
 	{
-		if (raceTime < (s32)sdata->ptrActiveHighScoreEntry[i + 1].time)
+		for (s16 i = 0; i < 5; i++)
 		{
-			gGT->newHighScoreIndex = i;
-			gGT->gameModeEnd |= 0x88000000;
-			break;
+			if (raceTime < (s32)sdata->ptrActiveHighScoreEntry[i + 1].time)
+			{
+				gGT->newHighScoreIndex = i;
+				gGT->gameModeEnd |= 0x88000000;
+				break;
+			}
 		}
 	}
 
 	gGT->bestLapTime = sdata->ptrActiveHighScoreEntry[0].time;
 
-	for (s16 i = 0; i < gGT->numLaps; i++)
+	if (!recordsDisabled)
 	{
-		if (gGT->lapTime[i] < gGT->bestLapTime)
+		for (s16 i = 0; i < gGT->numLaps; i++)
 		{
-			gGT->bestLapTime = gGT->lapTime[i];
-			gGT->lapIndexNewBest = i;
-			gGT->gameModeEnd |= 0x8c000000;
+			if (gGT->lapTime[i] < gGT->bestLapTime)
+			{
+				gGT->bestLapTime = gGT->lapTime[i];
+				gGT->lapIndexNewBest = i;
+				gGT->gameModeEnd |= 0x8c000000;
+			}
 		}
 	}
 
@@ -122,6 +139,17 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	}
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *player = gGT->drivers[0];
+
+#if defined(CTR_NATIVE)
+	if (NativeCheat_DisablesRecords())
+	{
+		gGT->newHighScoreIndex = -1;
+		gGT->gameModeEnd &= ~(NEW_BEST_LAP | NEW_HIGH_SCORE);
+		sdata->boolCanSaveGhost = 0;
+		NativeLeaderboard_ClearPendingUpload();
+		return;
+	}
+#endif
 
 	MainGameEnd_SoloRaceGetReward(0);
 

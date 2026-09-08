@@ -526,13 +526,13 @@ skipRelicAwarded:
 #if defined(CTR_NATIVE)
 			if (gNativeGhostReplayMode != 0)
 			{
-				RECTMENU_Show((NativeGhostInput_IsLeaderboardReplay() && !sdata->boolGhostTooBigToSave)
+				RECTMENU_Show((NativeGhostInput_IsLeaderboardReplay() && !sdata->boolGhostTooBigToSave && !NativeCheat_DisablesRecords())
 				                  ? &menu224LeaderboardGhostReplay
 				                  : &menu224GhostReplay);
 			}
 			else if (gNativeRelicRaceMode != 0)
 			{
-				RECTMENU_Show(sdata->boolGhostTooBigToSave ? &menu224NoSave : &menu224);
+				RECTMENU_Show((sdata->boolGhostTooBigToSave || NativeCheat_DisablesRecords()) ? &menu224NoSave : &menu224);
 			}
 			else
 			{

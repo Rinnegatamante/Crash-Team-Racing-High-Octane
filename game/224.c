@@ -268,13 +268,13 @@ void TT_EndEvent_DrawMenu(void)
 
 		if (gNativeGhostReplayMode != 0)
 		{
-			RECTMENU_Show((NativeGhostInput_IsLeaderboardReplay() && !sdata->boolGhostTooBigToSave)
+			RECTMENU_Show((NativeGhostInput_IsLeaderboardReplay() && !sdata->boolGhostTooBigToSave && !NativeCheat_DisablesRecords())
 			                  ? &menu224LeaderboardGhostReplay
 			                  : &menu224GhostReplay);
 		}
 		else
 		{
-			RECTMENU_Show(sdata->boolGhostTooBigToSave ? &menu224NoSave : &menu224);
+			RECTMENU_Show((sdata->boolGhostTooBigToSave || NativeCheat_DisablesRecords()) ? &menu224NoSave : &menu224);
 		}
 	}
 

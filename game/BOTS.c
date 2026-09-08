@@ -9,7 +9,6 @@ enum
 	BOTS_ADV_MAX_LOSS_DIFFICULTY_INDEX = 10,
 	BOTS_DIFFICULTY_PARAM_COUNT = 14,
 	BOTS_DIFFICULTY_BLEND_DENOMINATOR = 0xf0,
-	BOTS_DIFFICULTY_SUPERHARD = 0x140,
 	BOTS_DIFFICULTY_CUP_OFFSET = 0x50,
 	BOTS_ADV_NORMAL_SCALE = 5,
 	BOTS_ADV_CHEAT_SCALE = 7,
@@ -228,11 +227,6 @@ void BOTS_Adv_AdjustDifficulty(void)
 	if ((gameMode1 & ARCADE_MODE) != 0)
 	{
 		currDifficulty = (u16)gGT->arcadeDifficulty;
-
-		if ((gameMode2 & CHEAT_SUPERHARD) != 0)
-		{
-			currDifficulty = BOTS_DIFFICULTY_SUPERHARD;
-		}
 
 		cupDifficulty = (s16)((u16)gGT->arcadeDifficulty + BOTS_DIFFICULTY_CUP_OFFSET);
 	}

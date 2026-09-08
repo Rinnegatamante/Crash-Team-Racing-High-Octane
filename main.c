@@ -190,6 +190,7 @@ int gNative60FpsEnabled = 0;
 int gNativeForce30Fps = 0;
 int gNativeDefaultCameraFar = 0;
 int gNativeDefaultHudSpeedometer = 0;
+u32 gNativeCheatConfigMask = 0;
 #ifndef __vita__
 int gNativeAntiAliasingEnabled = 1;
 int gNativeDitheringEnabled = 1;
@@ -204,6 +205,46 @@ static const char *NativeConfig_GetPath(void)
 #else
 	return "config.ini";
 #endif
+}
+
+struct NativeCheatConfigEntry
+{
+	const char *key;
+	u32 bit;
+};
+
+static const struct NativeCheatConfigEntry s_nativeCheatConfig[] =
+{
+	{"cheat_wumpa", CHEAT_WUMPA},
+	{"cheat_mask", CHEAT_MASK},
+	{"cheat_turbo", CHEAT_TURBO},
+	{"cheat_bombs", CHEAT_BOMBS},
+	{"cheat_invisible", CHEAT_INVISIBLE},
+	{"cheat_engine", CHEAT_ENGINE},
+	{"cheat_icy", CHEAT_ICY},
+	{"cheat_turbopad", CHEAT_TURBOPAD},
+	{"cheat_adv", CHEAT_ADV},
+	{"cheat_turbocount", CHEAT_TURBOCOUNT},
+};
+
+static int NativeConfig_SetCheat(const char *key, int value)
+{
+	for (u32 i = 0; i < (u32)(sizeof(s_nativeCheatConfig) / sizeof(s_nativeCheatConfig[0])); i++)
+	{
+		if (strcmp(key, s_nativeCheatConfig[i].key) == 0)
+		{
+			if (value != 0)
+			{
+				gNativeCheatConfigMask |= s_nativeCheatConfig[i].bit;
+			}
+			else
+			{
+				gNativeCheatConfigMask &= ~s_nativeCheatConfig[i].bit;
+			}
+			return 1;
+		}
+	}
+	return 0;
 }
 
 void load_config(void)
@@ -250,6 +291,10 @@ void load_config(void)
 				gNativeBorderlessEnabled = (value != 0);
 			}
 #endif
+			else if (NativeConfig_SetCheat(buffer, value))
+			{
+				// Persistent gameplay cheat toggle consumed.
+			}
 			else if (Platform_InputConfigSetBinding(buffer, value))
 			{
 				// Binding override consumed by the native input layer.
@@ -274,6 +319,10 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "dithering", gNativeDitheringEnabled != 0);
 		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);
 #endif
+		for (u32 i = 0; i < (u32)(sizeof(s_nativeCheatConfig) / sizeof(s_nativeCheatConfig[0])); i++)
+		{
+			fprintf(config, "%s=%d\n", s_nativeCheatConfig[i].key, (gNativeCheatConfigMask & s_nativeCheatConfig[i].bit) != 0);
+		}
 		for (int device = 0; device < PLATFORM_INPUT_BINDING_DEVICE_COUNT; device++)
 		{
 #ifdef __vita__

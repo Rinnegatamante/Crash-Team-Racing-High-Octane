@@ -1299,6 +1299,7 @@ void NativeLeaderboard_ClearPendingUpload(void)
 void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const char *nickname, u32 raceTimeMs, u32 lapTimeMs, b32 raceBest, b32 lapBest)
 {
     NativeLeaderboard_ClearPendingUpload();
+    if (NativeCheat_DisablesRecords()) return;
     if (!s_nativeLeaderboard.initialized || (!raceBest && !lapBest) || (trackId >= NATIVE_LEADERBOARD_TRACK_COUNT)) return;
     struct NativeLeaderboardUpload *upload = &s_nativeLeaderboard.pendingUpload;
     upload->trackId = trackId;
@@ -1342,6 +1343,7 @@ void NativeLeaderboard_StageTimeTrialRecord(u16 trackId, u16 characterId, const 
 void NativeLeaderboard_StageRelicRaceRecord(u16 trackId, u16 characterId, const char *nickname, u32 relicTimeMs, b32 relicBest)
 {
     NativeLeaderboard_ClearPendingUpload();
+    if (NativeCheat_DisablesRecords()) return;
     if (!s_nativeLeaderboard.initialized || !relicBest || (trackId >= NATIVE_LEADERBOARD_TRACK_COUNT)) return;
 
     struct NativeLeaderboardUpload *upload = &s_nativeLeaderboard.pendingUpload;
@@ -1377,6 +1379,11 @@ void NativeLeaderboard_StageRelicRaceRecord(u16 trackId, u16 characterId, const 
 
 void NativeLeaderboard_CommitPendingUpload(void)
 {
+    if (NativeCheat_DisablesRecords())
+    {
+        NativeLeaderboard_ClearPendingUpload();
+        return;
+    }
     if (!s_nativeLeaderboard.pendingUploadValid) return;
     struct NativeLeaderboardJob job;
     memset(&job, 0, sizeof(job));

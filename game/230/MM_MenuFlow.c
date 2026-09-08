@@ -166,9 +166,11 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 #if defined(__vita__)
 	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
-	{LNG_OPTIONS, 6, 7, 7, 7},
+	{NATIVE_MENU_STRING_CHEATS, 6, 8, 7, 7},
+	{LNG_OPTIONS, 7, 8, 8, 8},
 #else
-	{LNG_OPTIONS, 5, 6, 6, 6},
+	{NATIVE_MENU_STRING_CHEATS, 5, 7, 6, 6},
+	{LNG_OPTIONS, 6, 7, 7, 7},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -183,11 +185,13 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 #if defined(__vita__)
 	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_CHEATS, 6, 8, 7, 7},
+	{LNG_OPTIONS, 7, 9, 8, 8},
+	{LNG_SCRAPBOOK, 8, 9, 9, 9},
+#else
+	{NATIVE_MENU_STRING_CHEATS, 5, 7, 6, 6},
 	{LNG_OPTIONS, 6, 8, 7, 7},
 	{LNG_SCRAPBOOK, 7, 8, 8, 8},
-#else
-	{LNG_OPTIONS, 5, 7, 6, 6},
-	{LNG_SCRAPBOOK, 6, 7, 7, 7},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -232,6 +236,21 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{RECTMENU_STRING_NONE},
 };
 
+static struct MenuRow s_nativeCheatsRows[] =
+{
+	{NATIVE_MENU_STRING_CHEAT_WUMPA, 0, 1, 0, 0},
+	{NATIVE_MENU_STRING_CHEAT_MASK, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_CHEAT_TURBO, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_CHEAT_BOMBS, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_CHEAT_INVISIBLE, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_CHEAT_ENGINE, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_CHEAT_ICY, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_CHEAT_TURBOPAD, 6, 8, 7, 7},
+	{NATIVE_MENU_STRING_CHEAT_ADV, 7, 9, 8, 8},
+	{NATIVE_MENU_STRING_CHEAT_TURBOCOUNT, 8, 9, 9, 9},
+	{RECTMENU_STRING_NONE},
+};
+
 static struct MenuRow s_nativeControlsRows[] =
 {
 	{NATIVE_MENU_STRING_CONTROL_HEADER | MENU_ROW_LOCKED, 0, 1, 0, 0},
@@ -266,6 +285,7 @@ static void MM_NativeLanguageBootMenuProc(struct RectMenu *menu);
 static void MM_NativeLanguageMainMenuProc(struct RectMenu *menu);
 static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu);
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu);
+static void MM_NativeCheatsMenuProc(struct RectMenu *menu);
 static void MM_NativeControlsMenuProc(struct RectMenu *menu);
 static void MM_NativeBossFightMenuProc(struct RectMenu *menu);
 
@@ -318,6 +338,14 @@ static struct RectMenu s_nativeOptionsMenu =
 	.drawStyle = RECTMENU_DRAW_STYLE_NATIVE_OPTIONS,
 };
 
+static struct RectMenu s_nativeCheatsMenu =
+{
+	.stringIndexTitle = NATIVE_MENU_STRING_CHEATS,
+	.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE,
+	.rows = s_nativeCheatsRows,
+	.funcPtr = MM_NativeCheatsMenuProc,
+};
+
 static struct RectMenu s_nativeControlsMenu =
 {
 	.stringIndexTitle = NATIVE_MENU_STRING_CONTROLS,
@@ -353,6 +381,7 @@ extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
+extern u32 gNativeCheatConfigMask;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
 extern int gNativeDitheringEnabled;
@@ -565,11 +594,6 @@ static int MM_NativeAdhocPollWait(struct GameTracker *gGT)
 		}
 		gGT->numPlyrNextGame = 2;
 		gGT->numLaps = MM_DEFAULT_LAP_COUNT;
-		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
-		{
-			gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
-		}
-
 		MM_NativeAdhocResetHierarchy();
 		MM_NativeAdhocSetMainBreadcrumb(adhocGameMode == NATIVE_ADHOC_GAME_MODE_ARCADE ? LNG_ARCADE : LNG_VS);
 		s_nativeAdhocMenuStage = MM_NATIVE_ADHOC_STAGE_GAME_FLOW;
@@ -865,6 +889,26 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 #endif
 }
 
+static void MM_NativeCheatsMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE) return;
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT) return;
+
+	struct RectMenu *parent = menu->ptrPrevBox_InHierarchy;
+	if (menu->rowSelected < 0)
+	{
+		if (parent != NULL) parent->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		return;
+	}
+
+	u32 cheatBit = NativeCheat_GetMenuBit(menu->rowSelected);
+	if (cheatBit == 0) return;
+
+	gNativeCheatConfigMask ^= cheatBit;
+	NativeCheat_ApplyConfigured();
+	save_config();
+}
+
 static void MM_NativeControlsMenuProc(struct RectMenu *menu)
 {
 	if ((menu == NULL) || (menu->funcState != RECTMENU_FUNC_STATE_DRAW))
@@ -1085,6 +1129,10 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	struct GameTracker *gGT = sdata->gGT;
 
 #if defined(CTR_NATIVE)
+	if ((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
+	{
+		NativeCheat_ApplyConfigured();
+	}
 #if defined(__vita__)
 	if ((mainMenu->funcState == RECTMENU_FUNC_STATE_UPDATE) && MM_NativeAdhocPollWait(gGT))
 	{
@@ -1290,11 +1338,6 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	if (choose == LNG_ARCADE)
 	{
 		// DONT change, should only work in Arcade, and VS
-		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
-		{
-			gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
-		}
-
 		// set game mode to Arcade Mode
 		gGT->gameMode1 |= ARCADE_MODE;
 
@@ -1308,11 +1351,6 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	if (choose == LNG_VS)
 	{
 		// DONT change, should only work in Arcade, and VS
-		if ((gGT->gameMode2 & CHEAT_ONELAP) != 0)
-		{
-			gGT->numLaps = MM_ONE_LAP_CHEAT_COUNT;
-		}
-
 		// next menu is choosing single+cup
 		mainMenu->ptrNextBox_InHierarchy = &D230.menuRaceType;
 		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
@@ -1378,6 +1416,18 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		return;
 	}
 #endif
+
+	// Cheats
+	if (choose == NATIVE_MENU_STRING_CHEATS)
+	{
+		s_nativeCheatsMenu.rowSelected = 0;
+		s_nativeCheatsMenu.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE;
+		s_nativeCheatsMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeCheatsMenu.ptrPrevBox_InHierarchy = mainMenu;
+		mainMenu->ptrNextBox_InHierarchy = &s_nativeCheatsMenu;
+		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
 
 	// Options
 	if (choose == LNG_OPTIONS)
@@ -1687,6 +1737,12 @@ void MM_MenuProc_NewLoad(struct RectMenu *menu)
 	{
 		return;
 	}
+
+#if defined(CTR_NATIVE)
+	// Reapply persistent cheat choices here: retail allowed cheat codes to be
+	// entered on NEW/LOAD after Adventure selection cleared item-cheat bits.
+	NativeCheat_ApplyConfigured();
+#endif
 
 	// if Load was chosen
 	D230.desiredMenuIndex = row;
