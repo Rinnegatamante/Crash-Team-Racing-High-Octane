@@ -1242,6 +1242,11 @@ internal s32 NativeInput_FindSlotForDeviceIndex(Sint32 deviceIndex)
 
 	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
+		if ((s_controllers[slot].controller != NULL) &&
+		    (s_controllers[slot].instanceId == (SDL_JoystickID)deviceIndex))
+		{
+			return slot;
+		}
 		if (s_controllerToSlotMapping[slot] == deviceIndex)
 		{
 			return slot;
@@ -1276,6 +1281,7 @@ internal void NativeInput_CloseController(s32 slot)
 
 	controller->controller = NULL;
 	controller->instanceId = -1;
+	s_controllerToSlotMapping[slot] = -1;
 	controller->analogEnabled = 0;
 	controller->switchingAnalog = 0;
 
@@ -1314,6 +1320,7 @@ internal void NativeInput_OpenController(SDL_JoystickID instanceId, s32 slot)
 
 	joystick = SDL_GetGamepadJoystick(controller->controller);
 	controller->instanceId = joystick != NULL ? SDL_GetJoystickID(joystick) : instanceId;
+	s_controllerToSlotMapping[slot] = controller->instanceId;
 	controller->analogEnabled = 1;
 	controller->switchingAnalog = 0;
 	NativeInput_MoveKeyboardOffControllerSlot(slot);
@@ -1352,6 +1359,7 @@ int Platform_InputInit(void)
 	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
 		s_controllers[slot].instanceId = -1;
+		s_controllerToSlotMapping[slot] = -1;
 		NativeInput_ResetSnapshot(slot);
 		s_installedSnapshots[slot] = s_controllers[slot].snapshot;
 	}
