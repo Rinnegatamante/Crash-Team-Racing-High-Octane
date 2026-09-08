@@ -166,11 +166,9 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 #if defined(__vita__)
 	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
-	{NATIVE_MENU_STRING_CHEATS, 6, 8, 7, 7},
-	{LNG_OPTIONS, 7, 8, 8, 8},
-#else
-	{NATIVE_MENU_STRING_CHEATS, 5, 7, 6, 6},
 	{LNG_OPTIONS, 6, 7, 7, 7},
+#else
+	{LNG_OPTIONS, 5, 6, 6, 6},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -185,13 +183,11 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{NATIVE_MENU_STRING_BOSS_FIGHT, 4, 6, 5, 5},
 #if defined(__vita__)
 	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
-	{NATIVE_MENU_STRING_CHEATS, 6, 8, 7, 7},
-	{LNG_OPTIONS, 7, 9, 8, 8},
-	{LNG_SCRAPBOOK, 8, 9, 9, 9},
-#else
-	{NATIVE_MENU_STRING_CHEATS, 5, 7, 6, 6},
 	{LNG_OPTIONS, 6, 8, 7, 7},
 	{LNG_SCRAPBOOK, 7, 8, 8, 8},
+#else
+	{LNG_OPTIONS, 5, 7, 6, 6},
+	{LNG_SCRAPBOOK, 6, 7, 7, 7},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -216,22 +212,24 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 5, 1, 0, 0},
+	{LNG_LANGUAGE, 6, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 2, 4, 3, 3},
-	{NATIVE_MENU_STRING_DEFAULT_HUD, 3, 5, 4, 4},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 4, 0, 5, 5},
+	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_FRAME_RATE, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 5, 0, 6, 6},
 #else
-	{LNG_LANGUAGE, 8, 1, 0, 0},
+	{LNG_LANGUAGE, 9, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_FRAME_RATE, 1, 3, 2, 2},
-	{NATIVE_MENU_STRING_ANTI_ALIASING, 2, 4, 3, 3},
-	{NATIVE_MENU_STRING_DITHERING, 3, 5, 4, 4},
-	{NATIVE_MENU_STRING_BORDERLESS, 4, 6, 5, 5},
-	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 5, 7, 6, 6},
-	{NATIVE_MENU_STRING_DEFAULT_HUD, 6, 8, 7, 7},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 7, 0, 8, 8},
+	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_FRAME_RATE, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_ANTI_ALIASING, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_DITHERING, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_BORDERLESS, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 6, 8, 7, 7},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 7, 9, 8, 8},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 8, 0, 9, 9},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -839,6 +837,17 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		return;
 	}
 
+	if (choose == NATIVE_MENU_STRING_CHEATS)
+	{
+		s_nativeCheatsMenu.rowSelected = 0;
+		s_nativeCheatsMenu.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE;
+		s_nativeCheatsMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativeCheatsMenu.ptrPrevBox_InHierarchy = menu;
+		menu->ptrNextBox_InHierarchy = &s_nativeCheatsMenu;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+
 	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
 	{
 		gNativeMirrorModeEnabled ^= 1;
@@ -1417,17 +1426,6 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	}
 #endif
 
-	// Cheats
-	if (choose == NATIVE_MENU_STRING_CHEATS)
-	{
-		s_nativeCheatsMenu.rowSelected = 0;
-		s_nativeCheatsMenu.state = CENTER_ON_X | USE_SMALL_FONT | BIG_TEXT_IN_TITLE;
-		s_nativeCheatsMenu.ptrNextBox_InHierarchy = NULL;
-		s_nativeCheatsMenu.ptrPrevBox_InHierarchy = mainMenu;
-		mainMenu->ptrNextBox_InHierarchy = &s_nativeCheatsMenu;
-		mainMenu->state |= DRAW_NEXT_MENU_IN_HIERARCHY;
-		return;
-	}
 
 	// Options
 	if (choose == LNG_OPTIONS)
