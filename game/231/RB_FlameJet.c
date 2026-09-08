@@ -259,6 +259,11 @@ void RB_FlameJet_Particles(struct Instance *inst, struct FlameJet *fjObj)
 		}
 	}
 
+#if defined(__vita__)
+	// This causes a 4 time ping-pong between two rendertargets causing a massive influx of sceGxm scenes.
+	return;
+#endif
+
 	// heat particle is 1P only
 	if (gGT->numPlyrCurrGame > 1)
 	{
