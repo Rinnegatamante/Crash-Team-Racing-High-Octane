@@ -919,6 +919,10 @@ b32 MM_TrackSelect_boolTrackOpen(struct MainMenu_LevelRow *menuSelect);
 void MM_TrackSelect_Init(void);
 void MM_TrackSelect_MenuProc(struct RectMenu *menu);
 struct RectMenu *MM_TrackSelect_GetMenuPtr(void);
+#if defined(CTR_NATIVE)
+void MM_NativeLapSelect_Prepare(struct RectMenu *menu);
+s32 MM_NativeLapSelect_GetLapCount(s16 row);
+#endif
 void MM_CupSelect_Init(void);
 void MM_CupSelect_MenuProc(struct RectMenu *menu);
 void MM_Battle_CloseSubMenu(struct RectMenu *menu);

@@ -77,6 +77,57 @@ CTR_STATIC_ASSERT(MM_TRACK_VIDEO_PLAYING == 3);
 CTR_STATIC_ASSERT(MM_TRACK_SELECT_INPUT == 0x40073);
 
 #if defined(CTR_NATIVE)
+enum
+{
+	MM_NATIVE_LAP_MIN = 1,
+	MM_NATIVE_LAP_MAX = 9,
+	MM_NATIVE_LAP_DEFAULT = 3,
+};
+
+static struct MenuRow s_nativeLapRows[] =
+{
+	{NATIVE_MENU_STRING_LAP_1, 0, 1, 0, 0},
+	{NATIVE_MENU_STRING_LAP_2, 0, 2, 1, 1},
+	{NATIVE_MENU_STRING_LAP_3, 1, 3, 2, 2},
+	{NATIVE_MENU_STRING_LAP_4, 2, 4, 3, 3},
+	{NATIVE_MENU_STRING_LAP_5, 3, 5, 4, 4},
+	{NATIVE_MENU_STRING_LAP_6, 4, 6, 5, 5},
+	{NATIVE_MENU_STRING_LAP_7, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_LAP_8, 6, 8, 7, 7},
+	{NATIVE_MENU_STRING_LAP_9, 7, 8, 8, 8},
+	{RECTMENU_STRING_NONE},
+};
+
+static b32 s_nativeLapSelectionInitialized;
+
+static s16 MM_NativeLapSelect_ClampRow(s16 row)
+{
+	if ((row < 0) || (row >= MM_NATIVE_LAP_MAX))
+	{
+		return MM_NATIVE_LAP_DEFAULT - MM_NATIVE_LAP_MIN;
+	}
+	return row;
+}
+
+void MM_NativeLapSelect_Prepare(struct RectMenu *menu)
+{
+	if (!s_nativeLapSelectionInitialized)
+	{
+		sdata->uselessLapRowCopy = MM_NATIVE_LAP_DEFAULT - MM_NATIVE_LAP_MIN;
+		s_nativeLapSelectionInitialized = true;
+	}
+
+	s16 row = MM_NativeLapSelect_ClampRow((s16)sdata->uselessLapRowCopy);
+	sdata->uselessLapRowCopy = row;
+	menu->rows = s_nativeLapRows;
+	menu->rowSelected = row;
+}
+
+s32 MM_NativeLapSelect_GetLapCount(s16 row)
+{
+	return MM_NativeLapSelect_ClampRow(row) + MM_NATIVE_LAP_MIN;
+}
+
 static struct MenuRow s_reverseVariantRows[] =
 {
 	{NATIVE_MENU_STRING_TRACK_NORMAL, 1, 1, 0, 0},
@@ -470,6 +521,7 @@ void MM_TrackSelect_Init(void)
 	D230.trackSelect.lapBoxOpen = false;
 	D230.trackSelect.transition.state = ENTERING_MENU;
 #if defined(CTR_NATIVE)
+	MM_NativeLapSelect_Prepare(&D230.menuLapSel);
 	s_reverseVariantOpen = false;
 	s_reverseVariantMenu.rowSelected = 0;
 	NativeReverseTrack_ClearSelection();
@@ -824,7 +876,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		sdata->uselessLapRowCopy = D230.menuLapSel.rowSelected;
 
 		// get lap count
+#if defined(CTR_NATIVE)
+		gGT->numLaps = MM_NativeLapSelect_GetLapCount(D230.menuLapSel.rowSelected);
+#else
 		gGT->numLaps = D230.lapCountByRow[D230.menuLapSel.rowSelected].lapCount;
+#endif
 
 		// if it is time to start the race
 		if (lapSelTransitionState == 1)

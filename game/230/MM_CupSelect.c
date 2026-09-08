@@ -61,6 +61,57 @@ struct MMCupSelectCustomCupsState
 
 static struct MMCupSelectCustomCupsState customCups;
 
+#if defined(CTR_NATIVE)
+static void MM_CupSelect_LapMenuProc(struct RectMenu *menu);
+static s16 s_nativeCupPendingId;
+
+static struct RectMenu s_nativeCupLapMenu =
+{
+	.stringIndexTitle = LNG_LAPS,
+	.posX_curr = 0x100,
+	.posY_curr = 0x6c,
+	.state = CENTER_ON_COORDS | USE_SMALL_FONT | BIG_TEXT_IN_TITLE | EXECUTE_FUNCPTR,
+	.rows = NULL,
+	.funcPtr = MM_CupSelect_LapMenuProc,
+};
+
+static void MM_CupSelect_StartPendingCup(struct RectMenu *lapMenu)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	sdata->uselessLapRowCopy = lapMenu->rowSelected;
+	gGT->numLaps = MM_NativeLapSelect_GetLapCount(lapMenu->rowSelected);
+	gGT->cup.cupID = s_nativeCupPendingId;
+	gGT->cup.trackIndex = 0;
+
+	for (s32 driverIndex = 0; driverIndex < MM_CUP_SELECT_DRIVER_SLOT_COUNT; driverIndex++)
+	{
+		gGT->cup.points[driverIndex] = 0;
+	}
+
+	gGT->currLEV = data.ArcadeCups[gGT->cup.cupID].CupTrack[0].trackID;
+	sdata->ptrDesiredMenu = &data.menuQueueLoadTrack;
+}
+
+static void MM_CupSelect_LapMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	if (menu->rowSelected < 0)
+	{
+		D230.menuCupSelect.rowSelected = s_nativeCupPendingId;
+		MM_CupSelect_Init();
+		sdata->ptrDesiredMenu = &D230.menuCupSelect;
+		return;
+	}
+
+	MM_CupSelect_StartPendingCup(menu);
+}
+#endif
+
 static s8 MM_CupSelect_CustomCups_FindTrackRow(s16 trackID)
 {
 	for (s8 row = 0; row < MM_CUSTOM_CUPS_TRACK_COUNT; row++)
@@ -329,6 +380,14 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 				// if cup selected
 				if (D230.cupSelectTransition.startAfterExit != 0)
 				{
+#if defined(CTR_NATIVE)
+					s_nativeCupPendingId = menu->rowSelected;
+					s_nativeCupLapMenu.state = CENTER_ON_COORDS | USE_SMALL_FONT | BIG_TEXT_IN_TITLE | EXECUTE_FUNCPTR;
+					s_nativeCupLapMenu.ptrNextBox_InHierarchy = NULL;
+					s_nativeCupLapMenu.ptrPrevBox_InHierarchy = NULL;
+					MM_NativeLapSelect_Prepare(&s_nativeCupLapMenu);
+					sdata->ptrDesiredMenu = &s_nativeCupLapMenu;
+#else
 					// set cupID to the cup selected
 					gGT->cup.cupID = menu->rowSelected;
 
@@ -347,6 +406,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 
 					// set current level
 					gGT->currLEV = data.ArcadeCups[gGT->cup.cupID].CupTrack[gGT->cup.trackIndex].trackID;
+#endif
 					return;
 				}
 

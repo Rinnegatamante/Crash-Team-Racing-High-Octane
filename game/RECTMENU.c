@@ -197,6 +197,9 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"ONEINDIG WUMPA", "ONEINDIG MASKER", "ONEINDIGE TURBOS", "ONEINDIGE BOMMEN", "ONZICHTBAAR", "SUPER MOTOR", "IJZIGE BANEN", "SUPER TURBO PADS", "ADV MOEILIJK", "TURBO TELLER"},
 	};
 	static char cheatRow[64];
+	static const char *lapSingular[6] = {"LAP", "TOUR", "RUNDE", "GIRO", "VUELTA", "RONDE"};
+	static const char *lapPlural[6] = {"LAPS", "TOURS", "RUNDEN", "GIRI", "VUELTAS", "RONDEN"};
+	static char lapRow[32];
 	static const char *controlsTitle[6] =
 	{
 		"CONTROLS", "COMMANDES", "STEUERUNG", "COMANDI", "CONTROLES", "BESTURING",
@@ -269,6 +272,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		int enabled = (gNativeCheatConfigMask & cheatBit) != 0;
 		snprintf(cheatRow, sizeof(cheatRow), "%s: %s", cheatName[languageRow][cheatIndex], cheatToggle[languageRow][enabled]);
 		return cheatRow;
+	}
+
+	if ((nativeStringIndex >= NATIVE_MENU_STRING_LAP_1) &&
+	    (nativeStringIndex <= NATIVE_MENU_STRING_LAP_9))
+	{
+		int lapCount = nativeStringIndex - NATIVE_MENU_STRING_LAP_1 + 1;
+		const char *label = (lapCount == 1) ? lapSingular[languageRow] : lapPlural[languageRow];
+		snprintf(lapRow, sizeof(lapRow), "%d %s", lapCount, label);
+		return lapRow;
 	}
 
 	switch (nativeStringIndex)
