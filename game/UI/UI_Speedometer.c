@@ -1,5 +1,10 @@
 #include <common.h>
 
+static s16 UI_SpeedometerAspectX(int localX, int anchorX)
+{
+	return (s16)(anchorX + CTR_WIDESCREEN_SCALE_X(localX));
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800511c0-0x800516ac.
 void UI_DrawSpeedNeedle(s16 posX, s16 posY, struct Driver *driver)
 {
@@ -135,8 +140,8 @@ void UI_DrawSpeedBG(void)
 	for (int i = 0; i < pointCount; i += 2)
 	{
 		Point pt[2];
-		pt[0] = MakePoint(vertexesExtLine[i].x + xOffset, vertexesExtLine[i].y + yOffset);
-		pt[1] = MakePoint(vertexesExtLine[i + 1].x + xOffset, vertexesExtLine[i + 1].y + yOffset);
+		pt[0] = MakePoint(UI_SpeedometerAspectX(vertexesExtLine[i].x, xOffset), vertexesExtLine[i].y + yOffset);
+		pt[1] = MakePoint(UI_SpeedometerAspectX(vertexesExtLine[i + 1].x, xOffset), vertexesExtLine[i + 1].y + yOffset);
 		CTR_Box_DrawWirePrims(pt[0], pt[1], MakeColor(0xff, 0xff, 0xff), sdata->gGT->pushBuffer_UI.ptrOT);
 		CTR_Box_DrawWirePrims(MakePoint(pt[0].x + 1, pt[0].y + 1), MakePoint(pt[1].x + 1, pt[1].y + 1), MakeColor(0, 0, 0), sdata->gGT->pushBuffer_UI.ptrOT);
 	}
@@ -148,7 +153,7 @@ void UI_DrawSpeedBG(void)
 		Point pt[4];
 		for (int j = 0; j < 4; j++)
 		{
-			pt[j] = MakePoint(vertexes[i + j].x + xOffset, vertexes[i + j].y + yOffset);
+			pt[j] = MakePoint(UI_SpeedometerAspectX(vertexes[i + j].x, xOffset), vertexes[i + j].y + yOffset);
 		}
 		CTR_Box_DrawWirePrims(pt[0], pt[2], MakeColor(0xff, 0xff, 0xff), sdata->gGT->pushBuffer_UI.ptrOT);
 		CTR_Box_DrawWirePrims(pt[1], pt[3], MakeColor(0xff, 0xff, 0xff), sdata->gGT->pushBuffer_UI.ptrOT);
@@ -186,7 +191,7 @@ void UI_DrawSpeedBG(void)
 	} TPage_PolyG3;
 
 	/* Draw transparent background */
-	s16 p2x = vertexes[pointCount - 1].x + xOffset;
+	s16 p2x = UI_SpeedometerAspectX(vertexes[pointCount - 1].x, xOffset);
 	s16 p2y = vertexes[1].y + yOffset;
 	for (int i = 0; i < pointCount - 2; i += 2)
 	{
@@ -209,9 +214,9 @@ void UI_DrawSpeedBG(void)
 		}
 		p->p.gPolyCode = primCode;
 
-		p->p.v[0].pos.x = vertexes[i + 1].x + xOffset;
+		p->p.v[0].pos.x = UI_SpeedometerAspectX(vertexes[i + 1].x, xOffset);
 		p->p.v[0].pos.y = vertexes[i + 1].y + yOffset;
-		p->p.v[1].pos.x = vertexes[i + 3].x + xOffset;
+		p->p.v[1].pos.x = UI_SpeedometerAspectX(vertexes[i + 3].x, xOffset);
 		p->p.v[1].pos.y = vertexes[i + 3].y + yOffset;
 		p->p.v[2].pos.x = p2x;
 		p->p.v[2].pos.y = p2y;
