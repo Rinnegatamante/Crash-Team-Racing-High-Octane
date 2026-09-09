@@ -1,7 +1,7 @@
 #include <common.h>
 #include "platform/native_pc_account.h"
 
-#if defined(_WIN32) && !defined(__vita__)
+#if (defined(_WIN32) || defined(__EMSCRIPTEN__)) && !defined(__vita__)
 #include "platform/native_log.h"
 #include <SDL3/SDL.h>
 #include <ctype.h>
@@ -47,9 +47,13 @@ int NativePcAccount_Init(void)
     memset(&s_nativePcAccount, 0, sizeof(s_nativePcAccount));
     s_nativePcAccount.initialized = true;
 
+#if defined(__EMSCRIPTEN__)
+    int pathLength = snprintf(s_nativePcAccount.keyPath, sizeof(s_nativePcAccount.keyPath), "/highoctane.key");
+#else
     const char *basePath = SDL_GetBasePath();
     if (basePath == NULL) basePath = ".\\";
     int pathLength = snprintf(s_nativePcAccount.keyPath, sizeof(s_nativePcAccount.keyPath), "%shighoctane.key", basePath);
+#endif
     if ((pathLength <= 0) || ((size_t)pathLength >= sizeof(s_nativePcAccount.keyPath))) return 0;
 
     FILE *file = fopen(s_nativePcAccount.keyPath, "rb");
@@ -61,14 +65,24 @@ int NativePcAccount_Init(void)
     contents[bytesRead] = '\0';
 
     char *context = NULL;
+#if defined(_WIN32)
     char *line = strtok_s(contents, "\r\n", &context);
+#else
+    char *line = strtok(contents, "\r\n");
+#endif
     if ((line == NULL) || (strcmp(NativePcAccount_Trim(line), NATIVE_PC_ACCOUNT_KEY_HEADER) != 0))
     {
         Platform_LogWarn("[CTR Account] Invalid highoctane.key header\n");
         return 0;
     }
 
-    while ((line = strtok_s(NULL, "\r\n", &context)) != NULL)
+    while (
+#if defined(_WIN32)
+           (line = strtok_s(NULL, "\r\n", &context))
+#else
+           (line = strtok(NULL, "\r\n"))
+#endif
+           != NULL)
     {
         line = NativePcAccount_Trim(line);
         char *equals = strchr(line, '=');

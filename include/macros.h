@@ -46,7 +46,7 @@ typedef double f64;
 #if defined(CTR_NATIVE) && defined(__vita__)
 #define CTR_NATIVE_HAS_ADHOC       1
 #define CTR_NATIVE_HAS_LEADERBOARD 1
-#elif defined(CTR_NATIVE) && defined(_WIN32)
+#elif defined(CTR_NATIVE) && (defined(_WIN32) || defined(__EMSCRIPTEN__))
 #define CTR_NATIVE_HAS_ADHOC       0
 #define CTR_NATIVE_HAS_LEADERBOARD 1
 #else

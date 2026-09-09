@@ -5,6 +5,9 @@
 #include "platform/native_path.h"
 
 #include <errno.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 #if defined(_WIN32)
 #include "platform/native_win32.h"
 #else
@@ -19,8 +22,13 @@
 #define NATIVE_MEMCARD_MAX_NAME        64
 #define NATIVE_MEMCARD_MAX_PATH        512
 #define NATIVE_MEMCARD_COPY_BUFFER     8192
+#if defined(__EMSCRIPTEN__)
+#define NATIVE_MEMCARD_DEFAULT_ROOT    "/persistent/memcards"
+#define NATIVE_MEMCARD_REPLAY_ROOT     "/persistent/replays"
+#else
 #define NATIVE_MEMCARD_DEFAULT_ROOT    "memcards"
 #define NATIVE_MEMCARD_REPLAY_ROOT     "replays"
+#endif
 #define NATIVE_MEMCARD_SLOT_COUNT      2
 
 struct NativeMemcardFindState
@@ -39,6 +47,15 @@ struct NativeMemcardDeviceName
 global_variable struct NativeMemcardFindState s_memcardFind;
 global_variable char s_memcardRoot[NATIVE_MEMCARD_MAX_PATH];
 global_variable char s_memcardResolvedPath[NATIVE_MEMCARD_MAX_PATH];
+
+#if defined(__EMSCRIPTEN__)
+internal void NativeMemcard_RequestPersistenceSync(void)
+{
+	emscripten_run_script("if (Module.ctrSyncPersistentStorage) Module.ctrSyncPersistentStorage();");
+}
+#else
+#define NativeMemcard_RequestPersistenceSync() ((void)0)
+#endif
 
 internal struct NativeMemcardDeviceName NativeMemcard_ParseDeviceName(const char *save_name)
 {
@@ -787,7 +804,12 @@ enum NativeMemcardResult NativeMemcard_RemoveFile(const char *save_name)
 {
 	const char *path = NativeMemcard_PathFromDeviceName(save_name, 0);
 
-	return remove(path) == 0 ? NATIVE_MEMCARD_OK : NATIVE_MEMCARD_NOT_FOUND;
+	if (remove(path) == 0)
+	{
+		NativeMemcard_RequestPersistenceSync();
+		return NATIVE_MEMCARD_OK;
+	}
+	return NATIVE_MEMCARD_NOT_FOUND;
 }
 
 enum NativeMemcardResult NativeMemcard_ReadSaveData(const char *save_name, unsigned char *dst, int byte_count, int data_offset)
@@ -836,6 +858,7 @@ enum NativeMemcardResult NativeMemcard_WriteSaveData(const char *save_name, cons
 		return NATIVE_MEMCARD_IO_ERROR;
 	}
 
+	NativeMemcard_RequestPersistenceSync();
 	return NATIVE_MEMCARD_OK;
 }
 
@@ -956,6 +979,7 @@ enum NativeMemcardResult NativeMemcard_WriteReplayData(int slot, const char *gho
         return NATIVE_MEMCARD_IO_ERROR;
     }
 
+    NativeMemcard_RequestPersistenceSync();
     return NATIVE_MEMCARD_OK;
 }
 
@@ -973,5 +997,10 @@ enum NativeMemcardResult NativeMemcard_RemoveReplay(int slot, const char *ghost_
         return NATIVE_MEMCARD_NOT_FOUND;
     }
 
-    return remove(path) == 0 ? NATIVE_MEMCARD_OK : NATIVE_MEMCARD_IO_ERROR;
+    if (remove(path) == 0)
+    {
+        NativeMemcard_RequestPersistenceSync();
+        return NATIVE_MEMCARD_OK;
+    }
+    return NATIVE_MEMCARD_IO_ERROR;
 }

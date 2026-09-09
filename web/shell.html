@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crash Team Racing: High Octane</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101010;
+      color: #f4f1ea;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #242424;
+    }
+
+    main {
+      width: min(1280px, 100vw);
+      padding: 20px;
+    }
+
+    .launcher {
+      margin-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid #353535;
+      background: #181818;
+    }
+
+    .launcher strong { margin-right: auto; }
+
+    input[type="file"] { max-width: 100%; }
+
+    button {
+      border: 0;
+      padding: 9px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: #f28c18;
+      color: #111;
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    #status {
+      flex-basis: 100%;
+      color: #bdb8ae;
+      font-size: 0.9rem;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      outline: none;
+    }
+
+  </style>
+</head>
+<body>
+  <main>
+    <section class="launcher">
+      <strong>Crash Team Racing: High Octane</strong>
+      <label>CTR disc <input id="disc" type="file" accept=".bin,application/octet-stream"></label>
+      <label>Online Key File <input id="account-key" type="file" accept=".key,text/plain"></label>
+      <button id="export-save" type="button" disabled>Export Save</button>
+      <button id="import-save" type="button" disabled>Import Save</button>
+      <input id="import-save-file" type="file" accept=".hosave,application/json" hidden>
+      <button id="play" type="button" disabled>Play</button>
+      <div id="status">Loading WebAssembly runtime...</div>
+    </section>
+
+    <canvas id="canvas" width="1280" height="720" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+  </main>
+
+  <script>
+    const discInput = document.getElementById('disc');
+    const accountKeyInput = document.getElementById('account-key');
+    const exportSaveButton = document.getElementById('export-save');
+    const importSaveButton = document.getElementById('import-save');
+    const importSaveInput = document.getElementById('import-save-file');
+    const playButton = document.getElementById('play');
+    const statusText = document.getElementById('status');
+    const canvas = document.getElementById('canvas');
+    let runtimeReady = false;
+    let persistenceReady = false;
+    let gameStarted = false;
+    let persistenceSyncInFlight = false;
+    let persistenceSyncQueued = false;
+    const saveArchiveFormat = 'CTR-HIGH-OCTANE-WEB-SAVE-V1';
+
+    function updatePlayState() {
+      playButton.disabled = !runtimeReady || !persistenceReady || gameStarted || !discInput.files.length;
+      exportSaveButton.disabled = !persistenceReady;
+      importSaveButton.disabled = !persistenceReady || gameStarted;
+    }
+
+    discInput.addEventListener('change', updatePlayState);
+
+    function syncPersistentStorage(populate) {
+      return new Promise((resolve, reject) => {
+        Module.FS.syncfs(populate, error => error ? reject(error) : resolve());
+      });
+    }
+
+    function requestPersistentStorageSync() {
+      if (!persistenceReady) return;
+      if (persistenceSyncInFlight) {
+        persistenceSyncQueued = true;
+        return;
+      }
+
+      persistenceSyncInFlight = true;
+      Module.FS.syncfs(false, error => {
+        persistenceSyncInFlight = false;
+        if (error) console.error('[CTR Web] Failed to persist save data', error);
+        if (persistenceSyncQueued) {
+          persistenceSyncQueued = false;
+          requestPersistentStorageSync();
+        }
+      });
+    }
+
+    function bytesToBase64(bytes) {
+      let result = '';
+      const chunkSize = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        result += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+      }
+      return btoa(result);
+    }
+
+    function base64ToBytes(text) {
+      const binary = atob(text);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function collectPersistentFiles(path, basePath, files) {
+      const entries = Module.FS.readdir(path).filter(name => name !== '.' && name !== '..').sort();
+      for (const name of entries) {
+        const fullPath = `${path}/${name}`;
+        const stat = Module.FS.stat(fullPath);
+        if (Module.FS.isDir(stat.mode)) {
+          collectPersistentFiles(fullPath, basePath, files);
+        } else if (Module.FS.isFile(stat.mode)) {
+          files.push({
+            path: fullPath.slice(basePath.length + 1),
+            data: bytesToBase64(Module.FS.readFile(fullPath, { encoding: 'binary' }))
+          });
+        }
+      }
+    }
+
+    function clearPersistentDirectory(path) {
+      const entries = Module.FS.readdir(path).filter(name => name !== '.' && name !== '..');
+      for (const name of entries) {
+        const fullPath = `${path}/${name}`;
+        const stat = Module.FS.stat(fullPath);
+        if (Module.FS.isDir(stat.mode)) {
+          clearPersistentDirectory(fullPath);
+          Module.FS.rmdir(fullPath);
+        } else {
+          Module.FS.unlink(fullPath);
+        }
+      }
+    }
+
+    function validateArchivePath(path) {
+      if (!path || path.startsWith('/') || path.includes('\\')) return false;
+      return path.split('/').every(part => part && part !== '.' && part !== '..');
+    }
+
+    exportSaveButton.addEventListener('click', async () => {
+      if (!persistenceReady) return;
+      try {
+        await syncPersistentStorage(false);
+        const files = [];
+        collectPersistentFiles('/persistent', '/persistent', files);
+        const blob = new Blob([JSON.stringify({ format: saveArchiveFormat, files })], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'ctr-high-octane-save.hosave';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        statusText.textContent = `Exported ${files.length} persistent file${files.length === 1 ? '' : 's'}.`;
+      } catch (error) {
+        statusText.textContent = `Save export failed: ${error}`;
+        console.error(error);
+      }
+    });
+
+    importSaveButton.addEventListener('click', () => {
+      if (persistenceReady && !gameStarted) importSaveInput.click();
+    });
+
+    importSaveInput.addEventListener('change', async () => {
+      if (!persistenceReady || gameStarted || !importSaveInput.files.length) return;
+      try {
+        const archive = JSON.parse(await importSaveInput.files[0].text());
+        if (!archive || archive.format !== saveArchiveFormat || !Array.isArray(archive.files)) {
+          throw new Error('Unsupported save archive');
+        }
+
+        const files = archive.files.map(file => {
+          if (!file || typeof file.path !== 'string' || typeof file.data !== 'string' || !validateArchivePath(file.path)) {
+            throw new Error('Invalid save archive entry');
+          }
+          return { path: file.path, data: base64ToBytes(file.data) };
+        });
+
+        clearPersistentDirectory('/persistent');
+        for (const file of files) {
+          const slash = file.path.lastIndexOf('/');
+          if (slash >= 0) Module.FS.mkdirTree(`/persistent/${file.path.slice(0, slash)}`);
+          Module.FS.writeFile(`/persistent/${file.path}`, file.data);
+        }
+        await syncPersistentStorage(false);
+        statusText.textContent = `Imported ${files.length} persistent file${files.length === 1 ? '' : 's'}.`;
+      } catch (error) {
+        statusText.textContent = `Save import failed: ${error}`;
+        console.error(error);
+      } finally {
+        importSaveInput.value = '';
+      }
+    });
+
+    var Module = {
+      canvas,
+      print: console.log,
+      printErr: console.error,
+      ctrSyncPersistentStorage: requestPersistentStorageSync,
+      async onRuntimeInitialized() {
+        runtimeReady = true;
+        statusText.textContent = 'Loading save data from browser storage...';
+        try {
+          Module.FS.mkdirTree('/persistent');
+          Module.FS.mount(IDBFS, { autoPersist: true }, '/persistent');
+          await syncPersistentStorage(true);
+          persistenceReady = true;
+          statusText.textContent = 'Select your NTSC-U ctr-u.bin. highoctane.key is optional for online leaderboards.';
+        } catch (error) {
+          statusText.textContent = `Browser save storage unavailable: ${error}`;
+          console.error(error);
+        }
+        updatePlayState();
+      }
+    };
+
+    playButton.addEventListener('click', async () => {
+      if (!runtimeReady || gameStarted || !discInput.files.length) return;
+
+      gameStarted = true;
+      updatePlayState();
+      const disc = discInput.files[0];
+      statusText.textContent = `Reading ${disc.name} (${(disc.size / 1024 / 1024).toFixed(1)} MiB)...`;
+
+      try {
+        const bytes = new Uint8Array(await disc.arrayBuffer());
+        Module.FS.createDataFile('/assets', 'ctr-u.bin', bytes, true, false, true);
+
+        if (accountKeyInput.files.length) {
+          const keyBytes = new Uint8Array(await accountKeyInput.files[0].arrayBuffer());
+          if (Module.FS.analyzePath('/highoctane.key').exists) Module.FS.unlink('/highoctane.key');
+          Module.FS.createDataFile('/', 'highoctane.key', keyBytes, true, false, true);
+        }
+
+        statusText.textContent = 'Starting game...';
+        canvas.focus();
+        Module.callMain([]);
+      } catch (error) {
+        gameStarted = false;
+        updatePlayState();
+        statusText.textContent = `Failed to start: ${error}`;
+        console.error(error);
+      }
+    });
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
+</html>

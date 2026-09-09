@@ -58,7 +58,7 @@ static void NativeUserId_Initialize(void)
     }
     s_nativeUserIdDisplay[NATIVE_USER_ID_DISPLAY_LENGTH] = '\0';
     s_nativeUserIdAvailable = true;
-#elif defined(_WIN32)
+#elif defined(_WIN32) || defined(__EMSCRIPTEN__)
     const char *publicId = NativePcAccount_GetPublicId();
     if (publicId != NULL)
     {
@@ -70,7 +70,7 @@ static void NativeUserId_Initialize(void)
 
 const char *NativeUserId_GetDisplayString(void)
 {
-#if defined(_WIN32) && !defined(__vita__)
+#if (defined(_WIN32) || defined(__EMSCRIPTEN__)) && !defined(__vita__)
     return NativePcAccount_GetPublicId();
 #else
     NativeUserId_Initialize();
