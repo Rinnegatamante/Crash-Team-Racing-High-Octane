@@ -941,6 +941,27 @@ LAB_80045e94:
 	{
 		local_40 = (s16)(-menuWidth / 2);
 	}
+#if defined(CTR_NATIVE)
+	if (D230.titleMenuState == TITLE_MENU_STATE_IN_MENU)
+	{
+		int displayWidth = 0x200;
+		if (gGT->backBuffer != NULL && gGT->backBuffer->dispEnv.disp.w > 0)
+		{
+			displayWidth = gGT->backBuffer->dispEnv.disp.w;
+		}
+
+		const int borderLeft = local_40 + posX + menu->posX_prev - 6;
+		const int borderRight = borderLeft + menuWidth + 0xc;
+		if (borderLeft < 0)
+		{
+			posX -= borderLeft;
+		}
+		else if (borderRight > displayWidth)
+		{
+			posX -= borderRight - displayWidth;
+		}
+	}
+#endif
 	sVar6 = 0;
 	row = &menu->rows[0];
 	index = menu->stringIndexTitle;
