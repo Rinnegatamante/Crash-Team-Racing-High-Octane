@@ -165,7 +165,14 @@ void RB_Spider_ThTick(struct Thread *t)
 
 	if (spider->delay != 0)
 	{
+#if CTR_NATIVE_60FPS
+		if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+		{
+			spider->delay--;
+		}
+#else
 		spider->delay--;
+#endif
 		return;
 	}
 

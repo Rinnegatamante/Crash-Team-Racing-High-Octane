@@ -354,7 +354,8 @@ UpdateTrackerState:
 	// set pointer of the missile or warpball chasing the player
 	d->thTrackingMe = trackerTh;
 
-	if (data.trackerTimer[driverID] != 0)
+	if ((data.trackerTimer[driverID] != 0) &&
+	    (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0)))
 	{
 		data.trackerTimer[driverID]--;
 	}
@@ -405,7 +406,7 @@ UpdateTrackerState:
 		// red
 		bgColor = UI_TRACKER_BG_RED;
 
-		if (presentationEnabled && ((gGT->timer % beepRate) == 0))
+		if (presentationEnabled && ((gGT->timer % FPS_DOUBLE(beepRate)) == 0))
 		{
 			if ((gGT->gameMode1 & PAUSE_ALL) == 0)
 			{

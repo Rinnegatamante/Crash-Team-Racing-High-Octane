@@ -258,7 +258,7 @@ void RB_Player_ToggleFlicker(void)
 		    (0x2a0 < d->invincibleTimer) &&
 
 		    // odd number frames
-		    ((gGT->timer & 1) != 0))
+			((FPS_HALF(gGT->timer) & 1) != 0))
 		{
 			struct InstDrawPerPlayer *idpp = INST_GETIDPP(d->instSelf);
 

@@ -951,7 +951,8 @@ static int VehEmitter_ShouldSkipExhaust(struct Thread *thread, struct Driver *d)
 		}
 	}
 
-	if (d->failedBoostExhaustTimer != 0)
+	if ((d->failedBoostExhaustTimer != 0) &&
+	    (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0)))
 	{
 		d->failedBoostExhaustTimer--;
 	}

@@ -361,7 +361,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	// if highlight cooldown is gone
 	if (shield->highlightTimer == 0)
 	{
-		shield->highlightRot.y += 0x100;
+		shield->highlightRot.y += FPS_HALF(0x100);
 
 		highlightInst->flags &= ~HIDE_MODEL;
 
@@ -377,7 +377,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		if ((rotY + (rotYShiftInput >> 12) * -0x1000) == 0x400)
 		{
 			// cooldown is 30 frames (one second)
-			shield->highlightTimer = 30;
+			shield->highlightTimer = FPS_DOUBLE(30);
 
 			shield->highlightRot.y = 0xc00;
 
@@ -486,7 +486,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	// if animation is done
 	else
 	{
-		s16 timerIndex = ((gGT->timer >> 0) % 6);
+		s16 timerIndex = ((FPS_HALF(gGT->timer) >> 0) % 6);
 
 		scaleXZ = s_shieldPulseScale[timerIndex][0];
 		scaleY = s_shieldPulseScale[timerIndex][1];
@@ -523,8 +523,8 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 			goto LAB_800b0d6c;
 		}
 
-		// subtract 32ms by hand
-		duration -= 32;
+		// subtract one native frame while preserving the retail real-time duration
+		duration -= CTR_NATIVE_FRAME_ELAPSED_MS;
 		shield->duration = duration;
 
 		// 2.0 seconds
@@ -661,6 +661,13 @@ void RB_RainCloud_FadeAway(struct Thread *t)
 	struct Instance *inst;
 	struct Instance *parentInst;
 	struct RainCloud *rcloud;
+
+#if CTR_NATIVE_60FPS
+	if (CTR_NATIVE_60FPS_ACTIVE && ((sdata->gGT->timer & 1) == 0))
+	{
+		return;
+	}
+#endif
 
 	inst = t->inst;
 	rcloud = t->object;

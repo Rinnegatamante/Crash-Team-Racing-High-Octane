@@ -141,7 +141,7 @@ LAB_800adc08:;
 
 		if ((modelID == DYNAMIC_BOMB) || (modelID == DYNAMIC_SHIELD))
 		{
-			tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 4);
+			tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, FPS_HALF(4));
 
 			tw->vel.x = (MATH_Sin(tw->rotY) * 3) >> 7;
 			tw->vel.z = (MATH_Cos(tw->rotY) * 3) >> 7;
@@ -159,7 +159,7 @@ LAB_800adc08:;
 			// if 10 wumpa were not used
 			if ((tw->flags & TRACKER_FLAG_POWERED_UP) == 0)
 			{
-				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 0x40);
+				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, FPS_HALF(0x40));
 
 				tw->vel.x = (MATH_Sin(tw->rotY) * 5) >> 8;
 				tw->vel.z = (MATH_Cos(tw->rotY) * 5) >> 8;
@@ -168,7 +168,7 @@ LAB_800adc08:;
 			// if 10 wumpa were used
 			else
 			{
-				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, 0x80);
+				tw->rotY = RB_Hazard_InterpolateValue(tw->rotY, (int)desiredRotY, FPS_HALF(0x80));
 
 				tw->vel.x = (MATH_Sin(tw->rotY) * 3) >> 7;
 				tw->vel.z = (MATH_Cos(tw->rotY) * 3) >> 7;

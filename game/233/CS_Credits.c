@@ -399,7 +399,12 @@ void CS_Credits_DrawNames(struct CreditsObj *co)
 		return;
 	}
 
-	co->creditsPosY--;
+#if CTR_NATIVE_60FPS
+	if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+#endif
+	{
+		co->creditsPosY--;
+	}
 
 	if (co->creditsPosY < -CS_CREDITS_LINE_HEIGHT)
 	{
@@ -519,7 +524,12 @@ void CS_Credits_DrawEpilogue(struct CreditsObj *co)
 		return;
 	}
 
-	co->epilogueFramesLeft--;
+#if CTR_NATIVE_60FPS
+	if (!CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0))
+#endif
+	{
+		co->epilogueFramesLeft--;
+	}
 
 	if (co->epilogueFramesLeft <= 0)
 	{
@@ -593,6 +603,11 @@ void CS_Credits_ThTick(void)
 {
 	struct CreditsObj *co = &creditsBSS.creditsObj;
 	struct Instance *danceInst = creditsBSS.dancerInst_invisible;
+	b32 use30HzStep = true;
+
+#if CTR_NATIVE_60FPS
+	use30HzStep = !CTR_NATIVE_60FPS_ACTIVE || ((sdata->gGT->timer & 1) != 0);
+#endif
 
 	co->creditDanceInst = danceInst;
 
@@ -606,33 +621,36 @@ void CS_Credits_ThTick(void)
 
 		struct GameTracker *gGT = sdata->gGT;
 
-		if ((gGT->timer & 3) == 0)
+		if (use30HzStep)
 		{
-			for (int i = CS_CREDITS_GHOST_COUNT - 1; i > 0; i--)
+			if ((FPS_HALF(gGT->timer) & 3) == 0)
 			{
-				CS_Credits_AnimateCreditGhost(co->creditGhostInst[i], co->creditGhostInst[i - 1], i);
-				co->creditGhostModel[i] = co->creditGhostModel[i - 1];
+				for (int i = CS_CREDITS_GHOST_COUNT - 1; i > 0; i--)
+				{
+					CS_Credits_AnimateCreditGhost(co->creditGhostInst[i], co->creditGhostInst[i - 1], i);
+					co->creditGhostModel[i] = co->creditGhostModel[i - 1];
+				}
+
+				CS_Credits_AnimateCreditGhost(co->creditGhostInst[0], co->creditDanceInst, 0);
+				co->creditGhostModel[0] = co->creditDanceInst->model;
 			}
-
-			CS_Credits_AnimateCreditGhost(co->creditGhostInst[0], co->creditDanceInst, 0);
-			co->creditGhostModel[0] = co->creditDanceInst->model;
-		}
-		else
-		{
-			CS_Credits_AnimateCreditGhost(co->creditGhostInst[0], co->creditDanceInst, 0);
-
-			for (int i = 1; i < CS_CREDITS_GHOST_COUNT; i++)
+			else
 			{
-				struct Instance *ghost = co->creditGhostInst[i];
-				ghost->scale.x += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
-				ghost->scale.y += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
-				ghost->scale.z += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
-				ghost->alphaScale += CS_CREDITS_GHOST_TRAIL_ALPHA_STEP;
+				CS_Credits_AnimateCreditGhost(co->creditGhostInst[0], co->creditDanceInst, 0);
+
+				for (int i = 1; i < CS_CREDITS_GHOST_COUNT; i++)
+				{
+					struct Instance *ghost = co->creditGhostInst[i];
+					ghost->scale.x += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
+					ghost->scale.y += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
+					ghost->scale.z += CS_CREDITS_GHOST_TRAIL_SCALE_STEP;
+					ghost->alphaScale += CS_CREDITS_GHOST_TRAIL_ALPHA_STEP;
+				}
 			}
 		}
 	}
 
-	if (co->countdown > 0)
+	if (use30HzStep && (co->countdown > 0))
 	{
 		co->countdown--;
 	}

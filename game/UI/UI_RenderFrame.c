@@ -546,7 +546,7 @@ void UI_RenderFrame_Racing()
 						goto LAB_80053af4;
 					}
 
-					bVar3 = (gGT->timer & 1) == 0;
+					bVar3 = (FPS_HALF(gGT->timer) & 1) == 0;
 					sVar17 = (u16)bVar3 << 2;
 					partTimeVariable5 = ((u32)bVar3 << 0x12) >> 0x10;
 				}
@@ -584,7 +584,7 @@ void UI_RenderFrame_Racing()
 			// If you're in end-of-race and Battle
 			else if ((partTimeVariable5 & 0x200020) == 0x200020)
 			{
-				partTimeVariable5 = (u32)((gGT->timer & 1) == 0) << 2;
+				partTimeVariable5 = (u32)((FPS_HALF(gGT->timer) & 1) == 0) << 2;
 
 				// Draw the "st", "nd", "rd" suffix after "1st, 2nd, 3rd, etc"
 				UI_DrawPosSuffix(hudStructPtr[UI_HUD_SLOT_RANK].x, hudStructPtr[UI_HUD_SLOT_RANK].y, playerStruct, (s16)partTimeVariable5);

@@ -291,7 +291,8 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		turbo->fireAnimIndex = 0;
 	}
 
-	if (turbo->fireDisappearCountdown > 0)
+	if ((turbo->fireDisappearCountdown > 0) &&
+	    (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0)))
 	{
 		turbo->fireDisappearCountdown--;
 	}
@@ -373,15 +374,21 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 
 			if (turbo->fireDisappearCountdown == 0)
 			{
-				// increase transparency
-				instance->alphaScale += TURBO_FADE_FAST_STEP;
-				turbo->inst->alphaScale += TURBO_FADE_FAST_STEP;
+				if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+				{
+					// increase transparency
+					instance->alphaScale += TURBO_FADE_FAST_STEP;
+					turbo->inst->alphaScale += TURBO_FADE_FAST_STEP;
+				}
 			}
 			else
 			{
-				// increase transparency
-				instance->alphaScale += TURBO_FADE_SLOW_STEP;
-				turbo->inst->alphaScale += TURBO_FADE_SLOW_STEP;
+				if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+				{
+					// increase transparency
+					instance->alphaScale += TURBO_FADE_SLOW_STEP;
+					turbo->inst->alphaScale += TURBO_FADE_SLOW_STEP;
+				}
 			}
 		}
 		else

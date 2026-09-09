@@ -246,7 +246,7 @@ void AH_Map_HubArrowOuter(struct UIMap *map, int arrowIndex, int posX, int posY,
 	posX += D232.hubArrowInnerOffset[type].x;
 	posY += D232.hubArrowInnerOffset[type].y;
 
-	int timer = gGT->timer >> 0;
+	int timer = FPS_HALF(gGT->timer) >> 0;
 
 	int outlineColorR;
 	int outlineColorG;
@@ -464,7 +464,7 @@ void AH_Map_HubItems(struct UIMap *map, s16 *arrowCounter)
 				int colorOffset;
 
 				// if even frame
-				if ((gGT->timer & 2) == 0)
+				if ((FPS_HALF(gGT->timer) & 2) == 0)
 				{
 					colorOffset = (int)routeLockState * 6;
 				}
@@ -504,7 +504,7 @@ void AH_Map_HubItems(struct UIMap *map, s16 *arrowCounter)
 						// blue and white
 						// depending on frames
 						bossIconColor = AH_MAP_COLOR_FLASH_PRIMARY;
-						if ((gGT->timer & 2) != 0)
+						if ((FPS_HALF(gGT->timer) & 2) != 0)
 						{
 							bossIconColor = AH_MAP_COLOR_FLASH_SECONDARY;
 						}
@@ -563,7 +563,7 @@ void AH_Map_Warppads(struct UIMap *map, struct Thread *warppadThread, s16 *arrow
 			break;
 		case AH_WP_VISUAL_TROPHY_OPEN:
 			color = AH_MAP_COLOR_FLASH_PRIMARY;
-			if ((gGT->timer & 2) != 0)
+			if ((FPS_HALF(gGT->timer) & 2) != 0)
 			{
 				color = AH_MAP_COLOR_FLASH_SECONDARY;
 			}
@@ -577,7 +577,7 @@ void AH_Map_Warppads(struct UIMap *map, struct Thread *warppadThread, s16 *arrow
 			break;
 		case AH_WP_VISUAL_COLOR_CYCLE_OPEN:
 			// Each Slide Coliseum/Turbo Track color lasts two frames.
-			color = ((gGT->timer >> 1) & 7) + AH_MAP_COLOR_FLASH_PRIMARY;
+			color = ((FPS_HALF(gGT->timer) >> 1) & 7) + AH_MAP_COLOR_FLASH_PRIMARY;
 			break;
 		default:
 			color = AH_MAP_COLOR_INVALID;

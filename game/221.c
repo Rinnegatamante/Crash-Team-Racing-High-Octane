@@ -171,6 +171,10 @@ void CC_EndEvent_DrawMenu()
 {
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *driver = gGT->drivers[0];
+	b32 use30HzStep = true;
+#if CTR_NATIVE_60FPS
+	use30HzStep = !CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0);
+#endif
 	SVec2 pos;
 	s32 tokenRewardOffset = CC_EndEvent_GetRewardOffset(gGT);
 
@@ -195,12 +199,12 @@ void CC_EndEvent_DrawMenu()
 	}
 
 	// fly in from left
-	UI_Lerp2D_Linear(pos.v, -0x64, 0x18, 0x100, 0x18, elapsedFrames, CC_FLY_IN_FRAMES);
+	UI_Lerp2D_Linear(pos.v, -0x64, 0x18, 0x100, 0x18, elapsedFrames, FPS_DOUBLE(CC_FLY_IN_FRAMES));
 	DecalFont_DrawLine(sdata->lngStrings[LNG_TIME_REMAINING], pos.x, pos.y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 	UI_DrawLimitClock(pos.x - 0x33, pos.y + 0x11, FONT_BIG);
 
 	// fly in from right
-	UI_Lerp2D_Linear(pos.v, 0x264, 0x56, 0xcd, 0x56, elapsedFrames, CC_FLY_IN_FRAMES);
+	UI_Lerp2D_Linear(pos.v, 0x264, 0x56, 0xcd, 0x56, elapsedFrames, FPS_DOUBLE(CC_FLY_IN_FRAMES));
 
 	// Crystal count
 #if defined(CTR_NATIVE)
@@ -252,7 +256,7 @@ void CC_EndEvent_DrawMenu()
 		color = (JUSTIFY_CENTER | WHITE);
 	}
 
-	UI_Lerp2D_Linear(pos.v, -0x64, 0xA2, 0x100, 0xA2, elapsedFrames, CC_FLY_IN_FRAMES);
+	UI_Lerp2D_Linear(pos.v, -0x64, 0xA2, 0x100, 0xA2, elapsedFrames, FPS_DOUBLE(CC_FLY_IN_FRAMES));
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_CTR_TOKEN_AWARDED], pos.x, pos.y, FONT_BIG, color);
 #if defined(CTR_NATIVE)
@@ -270,7 +274,7 @@ void CC_EndEvent_DrawMenu()
 		if (token != NULL)
 #endif
 		{
-			if (token->scale.x < CC_TOKEN_GROW_LIMIT)
+			if (use30HzStep && (token->scale.x < CC_TOKEN_GROW_LIMIT))
 			{
 				token->scale.x += CC_TOKEN_GROW_STEP;
 				token->scale.y += CC_TOKEN_GROW_STEP;
