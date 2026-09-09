@@ -275,7 +275,12 @@ void UI_DrawRankedDrivers(void)
 
 				if (isTransitioning)
 				{
-					transitionTimer[0]++;
+#if CTR_NATIVE_60FPS
+					if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
+#endif
+					{
+						transitionTimer[0]++;
+					}
 
 					if (*transitionTimer >= UI_RANK_TRANSITION_FRAMES)
 					{
