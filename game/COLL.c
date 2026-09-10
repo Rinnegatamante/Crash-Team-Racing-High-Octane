@@ -1573,6 +1573,7 @@ DriverAirborne:
 	}
 
 BlendNormal:
+if (!CTR_NATIVE_60FPS_ACTIVE || ((gGT->timer & 1) != 0))
 {
 	s32 invWeight = COLL_FIXED_PLAYER_SEARCH_NORMAL_BLEND_TOTAL_WEIGHT - normalBlendWeight;
 	s32 normalX = CTR_MipsSra(CTR_MipsAddLo(CTR_MipsMulLo(normalBlendWeight, d->AxisAngle2_normalVec.x), CTR_MipsMulLo(invWeight, d->normalVecUP.x)),
