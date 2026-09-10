@@ -1,7 +1,9 @@
 # Crash Team Racing: High Octane
 <img src="screenshots/game1.jpg"></img><br>
-Crash Team Racing: High Octane is a sourceport for PSVita and PC (Windows) of Crash Team Racing based on the [ctr-native](https://github.com/CTR-tools/ctr-native) project.
+Crash Team Racing: High Octane is a sourceport for PSVita, PC (Windows) and Web Browser of Crash Team Racing based on the [ctr-native](https://github.com/CTR-tools/ctr-native) project.
 It focuses on new features, enhancements and optimization.
+
+You can play it from Web Browser as well from this link: [Web Browser Build](https://rinnegatamante.github.io/Crash-Team-Racing-High-Octane/).
 
 ## Features
 
@@ -42,7 +44,7 @@ The full online leaderboard for Time Trials and Relic Races is available at this
 ## Special controls bindings
 
 - [PSVITA Only] L2 and R2 are also mapped on right analog left/right to let PSVita use those controls.
-- [PC Only] F11 is a shortcut to swap between Windowed and Fullscreen Borderless mode.
+- [PC/Web Browser] F11 is a shortcut to swap between Windowed and Fullscreen Borderless mode.
 
 ## How to Install (PSVita)
 
