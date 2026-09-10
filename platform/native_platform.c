@@ -6,7 +6,12 @@
 #include "platform/native_adhoc.h"
 #include "platform/native_cd.h"
 #include "platform/native_discord.h"
+#if defined(__EMSCRIPTEN__)
+#include <GLES3/gl3.h>
+#include <emscripten.h>
+#else
 #include "platform/native_glad.h"
+#endif
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
 #include "platform/native_log.h"
@@ -814,6 +819,22 @@ internal void Native_EnsureVBlankTarget(void)
 internal void Native_WaitUntilVBlankTarget(void)
 {
 	const u64 freq = SDL_GetPerformanceFrequency();
+#ifdef __EMSCRIPTEN__
+	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+	while (SDL_GetPerformanceCounter() < s_nextVBlankCounter)
+	{
+		const u64 now = SDL_GetPerformanceCounter();
+		const u64 remaining = s_nextVBlankCounter - now;
+		u64 sleepMs = (remaining * 1000ull) / freq;
+
+		if (sleepMs == 0)
+		{
+			sleepMs = 1;
+		}
+		emscripten_sleep((unsigned int)sleepMs);
+	}
+	NativePerf_EndScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+#else
 	const u64 spinWindow = Native_CounterFromMicroseconds(freq, NATIVE_VSYNC_SPIN_US);
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
@@ -855,6 +876,7 @@ internal void Native_WaitUntilVBlankTarget(void)
 			SDL_DelayPrecise(sleepUs * 1000ull);
 		}
 	}
+#endif
 }
 
 internal void Native_EmitVBlank(void)

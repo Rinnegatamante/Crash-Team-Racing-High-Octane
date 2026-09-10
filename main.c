@@ -88,7 +88,9 @@ int gNativeRelicRaceResultTier = -1;
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
+#if !defined(__EMSCRIPTEN__)
 #include "platform/native_glad.c"
+#endif
 #include "platform/native_input.c"
 #include "platform/native_network.c"
 #include "platform/native_pc_account.c"
@@ -199,6 +201,8 @@ static const char *NativeConfig_GetPath(void)
 {
 #ifdef __vita__
 	return "ux0:data/ctr/config.ini";
+#elif defined(__EMSCRIPTEN__)
+	return "/persistent/config.ini";
 #else
 	return "config.ini";
 #endif
@@ -264,6 +268,9 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "borderless", gNativeBorderlessEnabled != 0);
 #endif
 		fclose(config);
+#if defined(__EMSCRIPTEN__)
+		NativeMemcard_RequestPersistenceSync();
+#endif
 	}
 }
 

@@ -9,6 +9,9 @@
 #if defined(_WIN32) && !defined(__vita__)
 #include "platform/native_http_win32.h"
 #endif
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 #include <SDL3/SDL.h>
 #if defined(__vita__)
@@ -244,6 +247,67 @@ static b32 NativeLeaderboard_HashSha256(const void *data, size_t size, u8 digest
     return SHA256(data, size, digest) != NULL;
 }
 #else
+#if defined(__EMSCRIPTEN__)
+EM_ASYNC_JS(int, NativeLeaderboard_WebRequest,
+            (const char *methodPtr, const char *urlPtr, const char *contentTypePtr,
+             const void *requestData, size_t requestSize, size_t maxResponseSize,
+             u8 **outData, size_t *outSize, int *outStatus, char *outGhostSha256, int ghostSha256Size),
+{
+    HEAPU32[outData >> 2] = 0;
+    HEAPU32[outSize >> 2] = 0;
+    HEAP32[outStatus >> 2] = 0;
+    if (outGhostSha256 && ghostSha256Size > 0) HEAPU8[outGhostSha256] = 0;
+
+    try {
+        const method = UTF8ToString(methodPtr);
+        const url = UTF8ToString(urlPtr);
+        const headers = {};
+        if (contentTypePtr) headers['Content-Type'] = UTF8ToString(contentTypePtr);
+
+        const options = { method, headers, cache: 'no-store', credentials: 'omit' };
+        if (requestData && requestSize) options.body = HEAPU8.slice(requestData, requestData + requestSize);
+
+        const response = await fetch(url, options);
+        HEAP32[outStatus >> 2] = response.status;
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length > maxResponseSize) return 0;
+
+        let dataPtr = 0;
+        if (bytes.length) {
+            dataPtr = _malloc(bytes.length + 1);
+            if (!dataPtr) return 0;
+            HEAPU8.set(bytes, dataPtr);
+            HEAPU8[dataPtr + bytes.length] = 0;
+        }
+        HEAPU32[outData >> 2] = dataPtr;
+        HEAPU32[outSize >> 2] = bytes.length;
+
+        if (outGhostSha256 && ghostSha256Size > 0) {
+            const hash = response.headers.get('X-Ghost-SHA256');
+            if (hash) stringToUTF8(hash, outGhostSha256, ghostSha256Size);
+        }
+        return response.ok ? 1 : 0;
+    } catch (error) {
+        console.error('[CTR Leaderboard] fetch failed', error);
+        return 0;
+    }
+});
+
+EM_ASYNC_JS(int, NativeLeaderboard_WebSha256, (const void *data, size_t size, u8 *digest),
+{
+    try {
+        if (!globalThis.crypto || !globalThis.crypto.subtle) return 0;
+        const input = HEAPU8.slice(data, data + size);
+        const result = await globalThis.crypto.subtle.digest('SHA-256', input);
+        HEAPU8.set(new Uint8Array(result), digest);
+        return 1;
+    } catch (error) {
+        console.error('[CTR Leaderboard] SHA-256 failed', error);
+        return 0;
+    }
+});
+#endif
+
 static b32 NativeLeaderboard_BufferAppend(struct NativeLeaderboardHttpBuffer *buffer, const void *data, size_t size)
 {
     if ((buffer == NULL) || (data == NULL) || (size == 0)) return size == 0;
@@ -267,6 +331,25 @@ static b32 NativeLeaderboard_BufferAppend(struct NativeLeaderboardHttpBuffer *bu
 
 static b32 NativeLeaderboard_HttpGet(const char *url, struct NativeLeaderboardHttpBuffer *buffer, struct NativeLeaderboardGhostHeaders *headers)
 {
+#if defined(__EMSCRIPTEN__)
+    u8 *responseData = NULL;
+    size_t responseSize = 0;
+    int status = 0;
+    char ghostSha256[65] = {0};
+    if (!NativeLeaderboard_WebRequest("GET", url, NULL, NULL, 0, buffer->limit,
+                                      &responseData, &responseSize, &status,
+                                      headers != NULL ? ghostSha256 : NULL, sizeof(ghostSha256)))
+    {
+        free(responseData);
+        return false;
+    }
+    free(buffer->data);
+    buffer->data = responseData;
+    buffer->size = responseSize;
+    buffer->capacity = responseSize + 1;
+    if (headers != NULL) snprintf(headers->sha256, sizeof(headers->sha256), "%s", ghostSha256);
+    return status == 200;
+#else
     NativeWinHttpResponse response;
     if (!NativeWinHttp_Request("GET", url, NULL, NULL, NULL, 0, buffer->limit, &response))
     {
@@ -281,11 +364,48 @@ static b32 NativeLeaderboard_HttpGet(const char *url, struct NativeLeaderboardHt
     if (headers != NULL) snprintf(headers->sha256, sizeof(headers->sha256), "%s", response.ghostSha256);
     NativeWinHttp_FreeResponse(&response);
     return true;
+#endif
+}
+
+static b32 NativeLeaderboard_HttpPost(const char *url, const char *token, const char *contentType,
+                                      const void *requestData, size_t requestSize, size_t maxResponseSize,
+                                      struct NativeLeaderboardHttpBuffer *buffer, int *outStatus)
+{
+#if defined(__EMSCRIPTEN__)
+    (void)token;
+    u8 *responseData = NULL;
+    size_t responseSize = 0;
+    int status = 0;
+    b32 ok = NativeLeaderboard_WebRequest("POST", url, contentType, requestData, requestSize, maxResponseSize,
+                                          &responseData, &responseSize, &status, NULL, 0) != 0;
+    free(buffer->data);
+    buffer->data = responseData;
+    buffer->size = responseSize;
+    buffer->capacity = responseSize + 1;
+    if (outStatus != NULL) *outStatus = status;
+    return ok;
+#else
+    NativeWinHttpResponse response;
+    memset(&response, 0, sizeof(response));
+    b32 ok = NativeWinHttp_Request("POST", url, token, contentType, requestData, requestSize, maxResponseSize, &response) != 0;
+    free(buffer->data);
+    buffer->data = response.data;
+    buffer->size = response.size;
+    buffer->capacity = response.size + 1;
+    response.data = NULL;
+    if (outStatus != NULL) *outStatus = (int)response.status;
+    NativeWinHttp_FreeResponse(&response);
+    return ok;
+#endif
 }
 
 static b32 NativeLeaderboard_HashSha256(const void *data, size_t size, u8 digest[32])
 {
+#if defined(__EMSCRIPTEN__)
+    return NativeLeaderboard_WebSha256(data, size, digest) != 0;
+#else
     return NativeWinHttp_Sha256(data, size, digest) != 0;
+#endif
 }
 #endif
 
@@ -596,7 +716,7 @@ static b32 NativeLeaderboard_ParseAccountJson(const char *data, size_t size, cha
     }
 }
 
-#if defined(_WIN32) && !defined(__vita__)
+#if !defined(__vita__) && (defined(_WIN32) || defined(__EMSCRIPTEN__))
 static void NativeLeaderboard_ProcessAccountVerify(void)
 {
     const char *token = NativePcAccount_GetToken();
@@ -605,14 +725,16 @@ static void NativeLeaderboard_ProcessAccountVerify(void)
     int verifyBodySize = snprintf(verifyBody, sizeof(verifyBody), "account_key=%s", token);
     if ((verifyBodySize <= 0) || ((size_t)verifyBodySize >= sizeof(verifyBody))) return;
 
-    NativeWinHttpResponse response;
+    struct NativeLeaderboardHttpBuffer response;
     memset(&response, 0, sizeof(response));
-    if (!NativeWinHttp_Request("POST", CTR_NATIVE_LEADERBOARD_ME_URL, token,
-                               "application/x-www-form-urlencoded", verifyBody, (size_t)verifyBodySize,
-                               16 * 1024, &response))
+    response.limit = 16 * 1024;
+    int status = 0;
+    if (!NativeLeaderboard_HttpPost(CTR_NATIVE_LEADERBOARD_ME_URL, token,
+                                    "application/x-www-form-urlencoded", verifyBody, (size_t)verifyBodySize,
+                                    response.limit, &response, &status))
     {
-        Platform_Log("[CTR Account] Account key verification failed http=%ld\n", response.status);
-        NativeWinHttp_FreeResponse(&response);
+        Platform_Log("[CTR Account] Account key verification failed http=%d\n", status);
+        free(response.data);
         return;
     }
     char username[18] = {0};
@@ -626,7 +748,7 @@ static void NativeLeaderboard_ProcessAccountVerify(void)
     {
         Platform_Log("[CTR Account] Invalid /api/me response\n");
     }
-    NativeWinHttp_FreeResponse(&response);
+    free(response.data);
 }
 #endif
 
@@ -781,9 +903,34 @@ static void NativeLeaderboard_ProcessVitaLink(void)
 }
 #endif
 
+static void NativeLeaderboard_ProcessRefresh(void);
+static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *upload);
+static void NativeLeaderboard_ProcessGhost(u64 recordId);
+
 static b32 NativeLeaderboard_Enqueue(struct NativeLeaderboardJob *job)
 {
     if (!s_nativeLeaderboard.initialized || (job == NULL)) return false;
+#if defined(__EMSCRIPTEN__)
+    SDL_LockMutex(s_nativeLeaderboard.mutex);
+    if (s_nativeLeaderboard.workerBusy)
+    {
+        SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+        return false;
+    }
+    s_nativeLeaderboard.workerBusy = true;
+    SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+
+    if (job->type == NATIVE_LEADERBOARD_JOB_REFRESH) NativeLeaderboard_ProcessRefresh();
+    else if (job->type == NATIVE_LEADERBOARD_JOB_UPLOAD) NativeLeaderboard_ProcessUpload(&job->upload);
+    else if (job->type == NATIVE_LEADERBOARD_JOB_GHOST) NativeLeaderboard_ProcessGhost(job->recordId);
+    else if (job->type == NATIVE_LEADERBOARD_JOB_VERIFY_ACCOUNT) NativeLeaderboard_ProcessAccountVerify();
+    else NativeLeaderboard_FreeUpload(&job->upload);
+
+    SDL_LockMutex(s_nativeLeaderboard.mutex);
+    s_nativeLeaderboard.workerBusy = false;
+    SDL_UnlockMutex(s_nativeLeaderboard.mutex);
+    return true;
+#else
     SDL_LockMutex(s_nativeLeaderboard.mutex);
     if (s_nativeLeaderboard.jobCount >= NATIVE_LEADERBOARD_JOB_QUEUE_SIZE)
     {
@@ -796,6 +943,7 @@ static b32 NativeLeaderboard_Enqueue(struct NativeLeaderboardJob *job)
     SDL_SignalCondition(s_nativeLeaderboard.condition);
     SDL_UnlockMutex(s_nativeLeaderboard.mutex);
     return true;
+#endif
 }
 
 #if defined(__vita__)
@@ -852,7 +1000,7 @@ static void NativeLeaderboard_AddFormText(struct curl_httppost **first, struct c
 }
 #endif
 
-#if defined(_WIN32) && !defined(__vita__)
+#if !defined(__vita__)
 static b32 NativeLeaderboard_MultipartAppendText(struct NativeLeaderboardHttpBuffer *body, const char *boundary,
                                                  const char *name, const char *value)
 {
@@ -990,14 +1138,16 @@ static void NativeLeaderboard_ProcessUpload(struct NativeLeaderboardUpload *uplo
     {
         char contentType[128];
         snprintf(contentType, sizeof(contentType), "multipart/form-data; boundary=%s", boundary);
-        NativeWinHttpResponse response;
+        struct NativeLeaderboardHttpBuffer response;
         memset(&response, 0, sizeof(response));
-        if (!NativeWinHttp_Request("POST", CTR_NATIVE_LEADERBOARD_UPLOAD_URL, token,
-                                   contentType, body.data, body.size, 64 * 1024, &response))
+        response.limit = 64 * 1024;
+        int status = 0;
+        if (!NativeLeaderboard_HttpPost(CTR_NATIVE_LEADERBOARD_UPLOAD_URL, token,
+                                        contentType, body.data, body.size, response.limit, &response, &status))
         {
-            Platform_Log("[CTR Leaderboard] PC upload failed http=%ld\n", response.status);
+            Platform_Log("[CTR Leaderboard] PC upload failed http=%d\n", status);
         }
-        NativeWinHttp_FreeResponse(&response);
+        free(response.data);
     }
     free(body.data);
 #endif
@@ -1066,7 +1216,7 @@ static int NativeLeaderboard_Worker(void *unused)
         if (job.type == NATIVE_LEADERBOARD_JOB_REFRESH) NativeLeaderboard_ProcessRefresh();
         else if (job.type == NATIVE_LEADERBOARD_JOB_UPLOAD) NativeLeaderboard_ProcessUpload(&job.upload);
         else if (job.type == NATIVE_LEADERBOARD_JOB_GHOST) NativeLeaderboard_ProcessGhost(job.recordId);
-#if defined(_WIN32) && !defined(__vita__)
+#if !defined(__vita__) && (defined(_WIN32) || defined(__EMSCRIPTEN__))
         else if (job.type == NATIVE_LEADERBOARD_JOB_VERIFY_ACCOUNT) NativeLeaderboard_ProcessAccountVerify();
 #endif
 #if defined(__vita__)
@@ -1095,20 +1245,28 @@ int NativeLeaderboard_Init(void)
     NativePcAccount_Init();
 #endif
     s_nativeLeaderboard.mutex = SDL_CreateMutex();
+#if !defined(__EMSCRIPTEN__)
     s_nativeLeaderboard.condition = SDL_CreateCondition();
-    if ((s_nativeLeaderboard.mutex == NULL) || (s_nativeLeaderboard.condition == NULL))
+#endif
+    if (s_nativeLeaderboard.mutex == NULL
+#if !defined(__EMSCRIPTEN__)
+        || (s_nativeLeaderboard.condition == NULL)
+#endif
+       )
     {
         NativeLeaderboard_Shutdown();
         return 0;
     }
     s_nativeLeaderboard.initialized = true;
+#if !defined(__EMSCRIPTEN__)
     s_nativeLeaderboard.thread = SDL_CreateThread(NativeLeaderboard_Worker, "CTR Leaderboard", NULL);
     if (s_nativeLeaderboard.thread == NULL)
     {
         NativeLeaderboard_Shutdown();
         return 0;
     }
-#if defined(_WIN32) && !defined(__vita__)
+#endif
+#if !defined(__vita__) && (defined(_WIN32) || defined(__EMSCRIPTEN__))
     if (NativePcAccount_IsAvailable())
     {
         struct NativeLeaderboardJob verifyJob;

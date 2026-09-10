@@ -18,9 +18,11 @@ if(CMAKE_C_COMPILER_ID STREQUAL "MSVC" OR CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+if(NOT EMSCRIPTEN)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+endif()
 
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
@@ -74,7 +76,11 @@ set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 set(SDL_TRAY OFF CACHE BOOL "" FORCE)
 set(SDL_POWER OFF CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+if(EMSCRIPTEN)
+    set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
+else()
+    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+endif()
 set(SDL_OFFSCREEN OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO_SHARED OFF CACHE BOOL "" FORCE)
@@ -98,10 +104,12 @@ target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
     BUILD=926
-    CTR_INTERNAL
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
 )
+if(NOT EMSCRIPTEN)
+    target_compile_definitions(ctr_native PRIVATE CTR_INTERNAL)
+endif()
 if(CTR_NATIVE_MSVC_FRONTEND)
     target_compile_options(ctr_native PRIVATE
         /W4 #TODO(aalhendi): fix warnings
@@ -115,7 +123,6 @@ if(CTR_NATIVE_MSVC_FRONTEND)
     )
 else()
     target_compile_options(ctr_native PRIVATE
-        -msse
         -Wenum-conversion
         -Wenum-compare
         -Wswitch-enum
@@ -125,6 +132,10 @@ else()
         $<$<CONFIG:Release>:-g>
     )
 
+    if(NOT EMSCRIPTEN)
+        target_compile_options(ctr_native PRIVATE -msse)
+    endif()
+
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
         target_compile_options(ctr_native PRIVATE -Wall -Wextra -Wstrict-aliasing=2)
         ctr_native_add_label_warning_if_supported(ctr_native -Wfree-labels CTR_HAS_WFREE_LABELS)
@@ -133,6 +144,33 @@ else()
     endif()
 endif()
 target_link_libraries(ctr_native SDL3::SDL3)
+if(EMSCRIPTEN)
+    set_target_properties(ctr_native PROPERTIES
+        OUTPUT_NAME "ctr-native"
+        SUFFIX ".html"
+        LINK_DEPENDS "${CMAKE_SOURCE_DIR}/web/shell.html"
+    )
+    target_link_options(ctr_native PRIVATE
+        "--shell-file"
+        "${CMAKE_SOURCE_DIR}/web/shell.html"
+        "--preload-file"
+        "${CMAKE_SOURCE_DIR}/assets/vita.png@/assets/vita.png"
+        "-sUSE_WEBGL2=1"
+        "-sMIN_WEBGL_VERSION=2"
+        "-sMAX_WEBGL_VERSION=2"
+        "-sFULL_ES3=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sINITIAL_MEMORY=134217728"
+        "-sSTACK_SIZE=4194304"
+        "-sASYNCIFY=1"
+        "-sEMULATE_FUNCTION_POINTER_CASTS=1"
+        "-sFORCE_FILESYSTEM=1"
+        "-sINVOKE_RUN=0"
+        "-sEXIT_RUNTIME=0"
+        "-sEXPORTED_RUNTIME_METHODS=['FS','callMain']"
+        "-lidbfs.js"
+    )
+endif()
 if(WIN32)
     target_sources(ctr_native PRIVATE platform/native_http_win32.c)
     target_link_libraries(ctr_native winhttp bcrypt)
@@ -145,7 +183,7 @@ if(MINGW)
 endif()
 
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_test(NAME ctr_native_version COMMAND $<TARGET_FILE:ctr_native> --version)
     set_tests_properties(ctr_native_version PROPERTIES PASS_REGULAR_EXPRESSION "^CTR Native ")
 endif()

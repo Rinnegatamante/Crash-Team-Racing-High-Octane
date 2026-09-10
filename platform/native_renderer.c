@@ -11,7 +11,11 @@
 #include "platform/native_assets.h"
 #include "platform/native_gpu.h"
 #include "platform/native_adhoc.h"
+#if defined(__EMSCRIPTEN__)
+#include <GLES3/gl3.h>
+#else
 #include "platform/native_glad.h"
+#endif
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
@@ -428,8 +432,13 @@ internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen
 	}
 
 	int major_version = 3;
+#ifdef __EMSCRIPTEN__
+	int minor_version = 0;
+	int profile = SDL_GL_CONTEXT_PROFILE_ES;
+#else
 	int minor_version = 3;
 	int profile = SDL_GL_CONTEXT_PROFILE_CORE;
+#endif
 
 	// find best OpenGL version
 	do
@@ -458,8 +467,8 @@ internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen
 
 internal int NativeRenderer_InitialiseGLExt(void)
 {
-#ifndef __vita__
-	GLenum err = gladLoadGL();
+	#if !defined(__vita__) && !defined(__EMSCRIPTEN__)
+		GLenum err = gladLoadGL();
 
 	if (err == 0)
 	{
@@ -1493,7 +1502,12 @@ internal int NativeRenderer_Shader_CheckProgramStatus(GLuint program)
 
 internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader, const char *fragmentDefines)
 {
-	const char *GLSL_HEADER_VERT = "	#version 140\n"
+	const char *GLSL_HEADER_VERT =
+#ifdef __EMSCRIPTEN__
+	                               "	#version 300 es\n"
+#else
+	                               "	#version 140\n"
+#endif
 	                               "	precision lowp  int;\n"
 	                               "	precision highp float;\n"
 #ifndef __vita__								   
@@ -1503,13 +1517,21 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 #endif
 								   ;
 
-	const char *GLSL_HEADER_FRAG = "	#version 140\n"
+	const char *GLSL_HEADER_FRAG =
+#ifdef __EMSCRIPTEN__
+	                               "	#version 300 es\n"
+#else
+	                               "	#version 140\n"
+#endif
 	                               "	precision lowp  int;\n"
 	                               "	precision highp float;\n"
 #ifndef __vita__
 	                               "	#define varying     in\n"
 	                               "	#define texture2D   texture\n"
 	                               "	out vec4 fragColor;\n"
+#ifdef __EMSCRIPTEN__
+	                               "\t#define gl_FragColor fragColor\n"
+#endif
 #endif
 								   ;
 
@@ -3940,7 +3962,11 @@ internal void NativeRenderer_SetViewPort(int x, int y, int width, int height)
 
 internal void NativeRenderer_SetWireframe(int enable)
 {
+#ifdef __EMSCRIPTEN__
+	(void)enable;
+#else
 	glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
+#endif
 }
 
 void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int num_vertices)
@@ -4003,7 +4029,7 @@ void NativeRenderer_DrawTriangles(int start_vertex, int triangles)
 
 void NativeRenderer_PushDebugLabel(const char *label)
 {
-#ifndef __vita__
+#if !defined(__vita__) && !defined(__EMSCRIPTEN__)
 	if (!GLAD_GL_KHR_debug)
 	{
 		return;
@@ -4014,7 +4040,7 @@ void NativeRenderer_PushDebugLabel(const char *label)
 
 void NativeRenderer_PopDebugLabel(void)
 {
-#ifndef __vita__
+#if !defined(__vita__) && !defined(__EMSCRIPTEN__)
 	if (!GLAD_GL_KHR_debug)
 	{
 		return;
