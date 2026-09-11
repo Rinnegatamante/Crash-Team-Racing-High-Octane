@@ -419,6 +419,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			}
 		}
 
+#if defined(CTR_NATIVE)
+		NativeAIRandomizer_FinalizeModels();
+#endif
+
 		// == banks are done parsing ===
 
 		// If this world is made of multiple LEVs

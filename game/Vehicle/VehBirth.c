@@ -541,6 +541,17 @@ internal b32 VehBirth_ModelNameEquals(const struct Model *model, const char *nam
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80058948-0x80058a60.
 struct Model *VehBirth_GetModelByName(char *searchName)
 {
+#if defined(CTR_NATIVE)
+	for (int i = 0; i < LOAD_CHARACTER_ID_COUNT; i++)
+	{
+		struct Model *m = NativeAIRandomizer_GetDriverModel(i);
+		if ((m != NULL) && VehBirth_ModelNameEquals(m, searchName))
+		{
+			return m;
+		}
+	}
+#endif
+
 	// array to character models loaded,
 	// maximum of 4, used in VS mode
 	for (int i = 0; i < VEH_EXTRA_DRIVER_MODEL_COUNT; i++)

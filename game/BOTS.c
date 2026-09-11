@@ -4,6 +4,20 @@
 #include "platform/native_adhoc.h"
 #endif
 
+force_inline b32 BOTS_IsOxideBoss(const struct Driver *driver)
+{
+	if (data.characterIDs[driver->driverID] != NITROS_OXIDE)
+	{
+		return false;
+	}
+
+#if defined(CTR_NATIVE)
+	return IS_BOSS_RACE(sdata->gGT->gameMode1);
+#else
+	return true;
+#endif
+}
+
 enum
 {
 	BOTS_ADV_MAX_LOSS_DIFFICULTY_INDEX = 10,
@@ -1117,7 +1131,7 @@ UpdateTireColorTimer:
 	{
 		int trafficLightsTimer = gGT->trafficLightsTimer;
 
-		if (data.characterIDs[botDriver->driverID] == NITROS_OXIDE) // check is oxide
+		if (BOTS_IsOxideBoss(botDriver)) // check is oxide
 		{
 			// Pretend there is less time (oxide is a cheater)
 			trafficLightsTimer = CTR_MipsSubLo(trafficLightsTimer, 0x1e0);
@@ -1139,14 +1153,14 @@ UpdateTireColorTimer:
 			// first frame of race
 			botDriver->botData.botFlags |= BOT_FLAG_STARTLINE_INIT_DONE;
 
-			if (data.characterIDs[botDriver->driverID] == NITROS_OXIDE)
+			if (BOTS_IsOxideBoss(botDriver))
 			{ // if oxide, then talk
 				Voiceline_RequestPlay(0, 0xf, 0x10);
 			}
 
 			if (( // if in front row & 25% chance
 			        (sdata->kartSpawnOrderArray[botDriver->driverID] < 3) && ((RngDeadCoed(&sdata->advRng) & 0xFF) < 0x40)) ||
-			    (data.characterIDs[botDriver->driverID] == NITROS_OXIDE))
+			    (BOTS_IsOxideBoss(botDriver)))
 			{ // start the race with a boost
 				VehFire_Increment(botDriver, 0x2d0, 1, 0x180);
 
@@ -1535,7 +1549,7 @@ UpdateTireColorTimer:
 			{
 				botDriver->botData.aiPhysics.turboMeter = 0;
 
-				if (data.characterIDs[botDriver->driverID] == NITROS_OXIDE)
+				if (BOTS_IsOxideBoss(botDriver))
 				{
 					int damagedVelocityPenalty = CTR_MipsSra(botDriver->const_DamagedSpeed, 2); // iVar4
 
@@ -2487,13 +2501,13 @@ UpdateTireColorTimer:
 	}
 
 	if (((navFrameSpecialBits & BOTS_NAV_SPECIAL_RAMP_PHYS) != 0) &&
-	    ((0x1c1f < botDriver->botData.aiPhysics.speedLinear) || (data.characterIDs[botDriver->driverID] == NITROS_OXIDE)))
+	    ((0x1c1f < botDriver->botData.aiPhysics.speedLinear) || (BOTS_IsOxideBoss(botDriver))))
 	{
 		int iVar4 = (local_3c & BOTS_NAV_SPECIAL_INDEX_MASK);
 		botDriver->botData.aiPhysics.speedY = sdata->NavPath_ptrHeader[botDriver->botData.botPath]->rampPhys2[iVar4];
 		botDriver->botData.aiPhysics.speedLinear = sdata->NavPath_ptrHeader[botDriver->botData.botPath]->rampPhys1[iVar4];
 
-		if (data.characterIDs[botDriver->driverID] == NITROS_OXIDE)
+		if (BOTS_IsOxideBoss(botDriver))
 		{
 			botDriver->botData.aiPhysics.squishCooldown = 0;
 			botDriver->botData.aiPhysics.mulDrift = 0;
@@ -2904,7 +2918,7 @@ u32 BOTS_ChangeState(struct Driver *driverVictim, int damageType, struct Driver 
 			driverVictim->botData.aiDamageState = BOTS_DAMAGE_STATE_SPIN;
 			driverVictim->botData.aiPhysics.turboMeter = 0;
 
-			if ((data.characterIDs[driverVictim->driverID] != NITROS_OXIDE) || ((driverVictim->actionsFlagSet & ACTION_TOUCH_GROUND) != 0))
+			if ((!BOTS_IsOxideBoss(driverVictim)) || ((driverVictim->actionsFlagSet & ACTION_TOUCH_GROUND) != 0))
 			{
 				driverVictim->reserves = 0;
 				driverVictim->turbo_outsideTimer = 0;
@@ -2912,7 +2926,7 @@ u32 BOTS_ChangeState(struct Driver *driverVictim, int damageType, struct Driver 
 
 				int newSpeed;
 
-				if (data.characterIDs[driverVictim->driverID] == NITROS_OXIDE)
+				if (BOTS_IsOxideBoss(driverVictim))
 				{
 					newSpeed = CTR_MipsSra(driverVictim->botData.aiPhysics.speedLinear, 1);
 				}

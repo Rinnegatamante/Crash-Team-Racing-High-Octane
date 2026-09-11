@@ -4,6 +4,223 @@
 #include <platform/native_checkpoint.h>
 #endif
 
+#if defined(CTR_NATIVE)
+enum
+{
+	NATIVE_AI_RANDOMIZER_DRIVER_COUNT = LOAD_CHARACTER_ID_COUNT,
+	NATIVE_AI_RANDOMIZER_CHARACTER_COUNT = NITROS_OXIDE + 1,
+	NATIVE_AI_RANDOMIZER_2P_AI_COUNT = LOAD_2P_AI_SET_RACER_COUNT,
+};
+
+static DriverModelExtraSlot s_nativeAIRandomizerModels[NATIVE_AI_RANDOMIZER_DRIVER_COUNT];
+static void *s_nativeAIRandomizer2PBuffers[NATIVE_AI_RANDOMIZER_2P_AI_COUNT];
+static struct Model *s_nativeAIRandomizer2PModels[NATIVE_AI_RANDOMIZER_2P_AI_COUNT];
+
+static b32 NativeAIRandomizer_ShouldUse(const struct GameTracker *gGT)
+{
+	if ((gGT == NULL) || (gNativeBossFightMode != 0) || (gGT->boolDemoMode != 0))
+	{
+		return false;
+	}
+
+	if ((gGT->levelID >= GEM_STONE_VALLEY) || (gGT->numPlyrCurrGame < 1) || (gGT->numPlyrCurrGame > 2))
+	{
+		return false;
+	}
+
+	if ((gGT->gameMode1 &
+	     (ADVENTURE_MODE | ADVENTURE_ARENA | ADVENTURE_BOSS | ADVENTURE_CUP | BATTLE_MODE | TIME_TRIAL | RELIC_RACE | CRYSTAL_CHALLENGE |
+	      MAIN_MENU | GAME_CUTSCENE)) != 0)
+	{
+		return false;
+	}
+
+	if ((gGT->gameMode2 & (CREDITS | TOKEN_RACE)) != 0)
+	{
+		return false;
+	}
+
+#if defined(__vita__)
+	if (NativeAdhoc_IsActive())
+	{
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+static b32 NativeAIRandomizer_ShouldPreserveCupLineup(const struct GameTracker *gGT)
+{
+	return NativeAIRandomizer_ShouldUse(gGT) && ((gGT->gameMode2 & CUP_ANY_KIND) != 0) && (gGT->cup.trackIndex != 0);
+}
+
+static u32 NativeAIRandomizer_Next(u32 *state)
+{
+	*state = (*state * 1664525u) + 1013904223u;
+	return *state;
+}
+
+static u32 NativeAIRandomizer_Seed(const struct GameTracker *gGT, int humanCount)
+{
+	u32 state = (u32)Timer_GetTime_Total() ^ (u32)sdata->randomNumber;
+	state ^= (u32)gGT->currLEV * 0x9e3779b9u;
+	state ^= (u32)gGT->numLaps * 0x85ebca6bu;
+
+	for (int i = 0; i < humanCount; i++)
+	{
+		state = (state * 33u) ^ (u32)data.characterIDs[i];
+	}
+
+	return state != 0 ? state : 0x4354524eu;
+}
+
+static b32 NativeAIRandomizer_CharacterIsTaken(int driverIndex, int characterID)
+{
+	for (int i = 0; i < driverIndex; i++)
+	{
+		if (data.characterIDs[i] == characterID)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static void NativeAIRandomizer_SetCharacters(struct GameTracker *gGT, int firstAI, int driverCount)
+{
+	if (NativeAIRandomizer_ShouldPreserveCupLineup(gGT))
+	{
+		return;
+	}
+
+	u32 state = NativeAIRandomizer_Seed(gGT, firstAI);
+	for (int driverIndex = firstAI; driverIndex < driverCount; driverIndex++)
+	{
+		int characterID;
+		do
+		{
+			characterID = (int)(NativeAIRandomizer_Next(&state) % NATIVE_AI_RANDOMIZER_CHARACTER_COUNT);
+		} while (NativeAIRandomizer_CharacterIsTaken(driverIndex, characterID));
+
+		data.characterIDs[driverIndex] = characterID;
+	}
+}
+
+static void NativeAIRandomizer_2PModelLoaded(struct LoadQueueSlot *lqs)
+{
+	int characterID = lqs->subfileIndex - BI_RACERMODELMED;
+
+	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
+	{
+		int driverIndex = 2 + i;
+		if (data.characterIDs[driverIndex] == characterID)
+		{
+			s_nativeAIRandomizer2PModels[i] = (struct Model *)lqs->ptrDestination;
+			return;
+		}
+	}
+}
+
+static b32 NativeAIRandomizer_Queue2PModels(struct BigHeader *bigfile)
+{
+	struct BigEntry *entries = BIG_GETENTRY(bigfile);
+
+	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
+	{
+		int driverIndex = 2 + i;
+		int fileIndex = BI_RACERMODELMED + data.characterIDs[driverIndex];
+		u32 readSize = (entries[fileIndex].size + LOAD_CD_DATA_SECTOR_ROUND_MASK) & ~LOAD_CD_DATA_SECTOR_ROUND_MASK;
+
+		s_nativeAIRandomizer2PBuffers[i] = malloc((size_t)readSize);
+		if (s_nativeAIRandomizer2PBuffers[i] == NULL)
+		{
+			for (int j = 0; j < i; j++)
+			{
+				free(s_nativeAIRandomizer2PBuffers[j]);
+				s_nativeAIRandomizer2PBuffers[j] = NULL;
+			}
+			return false;
+		}
+	}
+
+	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
+	{
+		int driverIndex = 2 + i;
+		int fileIndex = BI_RACERMODELMED + data.characterIDs[driverIndex];
+		LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, s_nativeAIRandomizer2PBuffers[i], NativeAIRandomizer_2PModelLoaded);
+	}
+
+	return true;
+}
+
+static void NativeAIRandomizer_ResetModels(void)
+{
+	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
+	{
+		if (s_nativeAIRandomizer2PBuffers[i] != NULL)
+		{
+			free(s_nativeAIRandomizer2PBuffers[i]);
+			s_nativeAIRandomizer2PBuffers[i] = NULL;
+		}
+		s_nativeAIRandomizer2PModels[i] = NULL;
+	}
+
+	memset(s_nativeAIRandomizerModels, 0, sizeof(s_nativeAIRandomizerModels));
+}
+
+static void NativeAIRandomizer_QueueDriverModel(struct BigHeader *bigfile, int driverIndex, int bigfileIndex)
+{
+	LOAD_AppendQueue(bigfile, LT_GETADDR, bigfileIndex,
+	                 &s_nativeAIRandomizerModels[driverIndex].fileBase, LOAD_QUEUE_CALLBACK_SET_POINTER);
+}
+
+static void NativeAIRandomizer_QueueCPUModels(struct BigHeader *bigfile, int firstAI, int driverCount, int packDriverIndex, int modelBaseIndex)
+{
+	for (int driverIndex = firstAI; driverIndex < driverCount; driverIndex++)
+	{
+		if (driverIndex == packDriverIndex)
+		{
+			continue;
+		}
+
+		NativeAIRandomizer_QueueDriverModel(bigfile, driverIndex, modelBaseIndex + data.characterIDs[driverIndex]);
+	}
+}
+
+void NativeAIRandomizer_FinalizeModels(void)
+{
+	for (int driverIndex = 0; driverIndex < NATIVE_AI_RANDOMIZER_DRIVER_COUNT; driverIndex++)
+	{
+		if (s_nativeAIRandomizerModels[driverIndex].fileBase != NULL)
+		{
+			s_nativeAIRandomizerModels[driverIndex].model =
+			    (struct Model *)((u8 *)s_nativeAIRandomizerModels[driverIndex].fileBase + LOAD_MODEL_FILE_HEADER_BYTES);
+		}
+	}
+}
+
+struct Model *NativeAIRandomizer_GetDriverModel(int driverIndex)
+{
+	if ((u32)driverIndex >= NATIVE_AI_RANDOMIZER_DRIVER_COUNT)
+	{
+		return NULL;
+	}
+
+	if ((driverIndex >= 2) && (driverIndex < 2 + NATIVE_AI_RANDOMIZER_2P_AI_COUNT))
+	{
+		struct Model *model = s_nativeAIRandomizer2PModels[driverIndex - 2];
+		if (model != NULL)
+		{
+			return model;
+		}
+	}
+
+	return s_nativeAIRandomizerModels[driverIndex].model;
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800326b4-0x80032700.
 void LOAD_RunPtrMap(char *origin, int *patchArr, int numPtrs)
 {
@@ -52,6 +269,24 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 		return;
 	}
 
+#if defined(CTR_NATIVE)
+	if (NativeAIRandomizer_ShouldUse(sdata->gGT))
+	{
+		NativeAIRandomizer_SetCharacters(sdata->gGT, 2, 2 + LOAD_2P_AI_SET_RACER_COUNT);
+
+		if (!NativeAIRandomizer_Queue2PModels(bigfile))
+		{
+			for (int i = 0; i < LOAD_2P_AI_SET_RACER_COUNT; i++)
+			{
+				data.characterIDs[2 + i] = robotSet[i];
+			}
+		}
+
+		LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + setIndex, NULL, callback);
+		return;
+	}
+#endif
+
 	data.characterIDs[2] = robotSet[0];
 	data.characterIDs[3] = robotSet[1];
 	data.characterIDs[4] = robotSet[2];
@@ -67,6 +302,13 @@ void LOAD_Robots1P(int characterID)
 
 	data.characterIDs[0] = characterID;
 
+#if defined(CTR_NATIVE)
+	if (NativeAIRandomizer_ShouldPreserveCupLineup(sdata->gGT))
+	{
+		return;
+	}
+#endif
+
 	for (int i = 1; i < LOAD_CHARACTER_ID_COUNT; i++, newCharacterID++)
 	{
 		if (newCharacterID == characterID)
@@ -76,6 +318,13 @@ void LOAD_Robots1P(int characterID)
 
 		data.characterIDs[i] = newCharacterID;
 	}
+
+#if defined(CTR_NATIVE)
+	if (NativeAIRandomizer_ShouldUse(sdata->gGT))
+	{
+		NativeAIRandomizer_SetCharacters(sdata->gGT, 1, LOAD_CHARACTER_ID_COUNT);
+	}
+#endif
 }
 
 static void (*const LOAD_DriverMPK_SetPointer)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
@@ -87,6 +336,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	int gameMode1;
 
 	struct GameTracker *gGT = sdata->gGT;
+#if defined(CTR_NATIVE)
+	NativeAIRandomizer_ResetModels();
+#endif
 #if defined(__vita__)
 	if (NativeAdhoc_EnforcePreparedRaceConfig(gGT))
 	{
@@ -162,8 +414,21 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_Robots1P(data.characterIDs[0]);
 		}
 
-		// arcade mpk
-		lastFileIndexMPK = BI_1PARCADEPACK + data.characterIDs[0];
+#if defined(CTR_NATIVE)
+		if (NativeAIRandomizer_ShouldUse(gGT))
+		{
+			int packDriverIndex = LOAD_CHARACTER_ID_COUNT - 1;
+
+			NativeAIRandomizer_QueueDriverModel(bigfile, 0, BI_RACERMODELHI + data.characterIDs[0]);
+			NativeAIRandomizer_QueueCPUModels(bigfile, 1, LOAD_CHARACTER_ID_COUNT, packDriverIndex, BI_RACERMODELHI);
+			lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[packDriverIndex];
+		}
+		else
+#endif
+		{
+			// arcade mpk
+			lastFileIndexMPK = BI_1PARCADEPACK + data.characterIDs[0];
+		}
 	}
 
 	else if ((levelLOD == LOAD_LEVEL_LOD_RELIC) || ((gameMode1 & TIME_TRIAL) != 0))
