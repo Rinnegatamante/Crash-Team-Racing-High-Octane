@@ -1098,7 +1098,11 @@ LAB_80045e94:
 	}
 	if ((menu->state & DRAW_NEXT_MENU_IN_HIERARCHY) != 0)
 	{
-		RECTMENU_DrawSelf(menu->ptrNextBox_InHierarchy, posX + menu->posX_prev, local_38 + offsetY + menu->posY_prev + sVar7 + 0xc, menuWidth);
+		int hierarchyGap = 0xc;
+#if defined(CTR_NATIVE)
+		hierarchyGap += 2;
+#endif
+		RECTMENU_DrawSelf(menu->ptrNextBox_InHierarchy, posX + menu->posX_prev, local_38 + offsetY + menu->posY_prev + sVar7 + hierarchyGap, menuWidth);
 	}
 	posX_prev = menu->posX_prev;
 	posY_prev = menu->posY_prev;
