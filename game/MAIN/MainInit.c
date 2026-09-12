@@ -385,6 +385,8 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	int gameMode = gGT->gameMode1;
 
 #if defined(CTR_NATIVE)
+	UI_NativeLapTime_Reset();
+
 	// Triangle can still toggle this at runtime; this only establishes the
 	// preferred HUD when a fresh race starts. Adventure Hub owns this bit.
 	if ((gameMode & (MAIN_MENU | GAME_CUTSCENE | ADVENTURE_ARENA)) == 0)

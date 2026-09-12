@@ -7,6 +7,9 @@
 enum
 {
 	UI_LAP_TIME_LAPS_PER_PLAYER = 7,
+	UI_NATIVE_LAP_TIME_MAX_LAPS = 9,
+	UI_NATIVE_LAP_TIME_MAX_PLAYERS = 8,
+	UI_LAP_TIME_RETAIL_PLAYER_COUNT = 2,
 	UI_LAP_TIME_TICKS_PER_SECOND = 0x3c0,
 	UI_LAP_TIME_TICKS_PER_TEN_SECONDS = 0x2580,
 	UI_LAP_TIME_TICKS_PER_MINUTE = 0xe100,
@@ -30,9 +33,80 @@ enum
 
 static const u32 UI_REWARD_PICKUP_COLOR = 0xffff0000u;
 
+#if defined(CTR_NATIVE)
+static int s_nativeLapTimes[UI_NATIVE_LAP_TIME_MAX_PLAYERS][UI_NATIVE_LAP_TIME_MAX_LAPS];
+
+void UI_NativeLapTime_Reset(void)
+{
+	memset(s_nativeLapTimes, 0, sizeof(s_nativeLapTimes));
+}
+
+int UI_NativeLapTime_Get(int lapIndex, s16 driverID)
+{
+	if ((driverID < 0) || (driverID >= UI_NATIVE_LAP_TIME_MAX_PLAYERS) ||
+	    (lapIndex < 0) || (lapIndex >= UI_NATIVE_LAP_TIME_MAX_LAPS))
+	{
+		return 0;
+	}
+
+	return s_nativeLapTimes[driverID][lapIndex];
+}
+
+void UI_NativeLapTime_Format(char *text, int lapTime)
+{
+	int minutes = lapTime / UI_LAP_TIME_TICKS_PER_MINUTE;
+	int secondsTens;
+	int secondsOnes;
+	int centisecondsTens;
+	int centisecondsOnes;
+
+	if (minutes > UI_LAP_TIME_MAX_MINUTES)
+	{
+		minutes = UI_LAP_TIME_MAX_MINUTES;
+		secondsTens = UI_LAP_TIME_SECONDS_TENS_MOD - 1;
+		secondsOnes = UI_LAP_TIME_DECIMAL_BASE - 1;
+		centisecondsTens = UI_LAP_TIME_DECIMAL_BASE - 1;
+		centisecondsOnes = UI_LAP_TIME_DECIMAL_BASE - 1;
+	}
+	else
+	{
+		secondsTens = (lapTime / UI_LAP_TIME_TICKS_PER_TEN_SECONDS) % UI_LAP_TIME_SECONDS_TENS_MOD;
+		secondsOnes = (lapTime / UI_LAP_TIME_TICKS_PER_SECOND) % UI_LAP_TIME_DECIMAL_BASE;
+		centisecondsTens = (CTR_MipsMulLo(lapTime, UI_LAP_TIME_DECIMAL_BASE) / UI_LAP_TIME_TICKS_PER_SECOND) % UI_LAP_TIME_DECIMAL_BASE;
+		centisecondsOnes = (CTR_MipsMulLo(lapTime, UI_LAP_TIME_CENTISECOND_SCALE) / UI_LAP_TIME_TICKS_PER_SECOND) % UI_LAP_TIME_DECIMAL_BASE;
+	}
+
+	text[0] = ' ';
+	text[1] = (char)(minutes + '0');
+	text[2] = ':';
+	text[3] = (char)(secondsTens + '0');
+	text[4] = (char)(secondsOnes + '0');
+	text[5] = ':';
+	text[6] = (char)(centisecondsTens + '0');
+	text[7] = (char)(centisecondsOnes + '0');
+	text[8] = '\0';
+}
+#endif
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004c55c-0x8004c718.
 void UI_SaveLapTime(int numLaps, int lapTime, s16 driverID)
 {
+#if defined(CTR_NATIVE)
+	if ((driverID >= 0) && (driverID < UI_NATIVE_LAP_TIME_MAX_PLAYERS) &&
+	    (numLaps >= 0) && (numLaps < UI_NATIVE_LAP_TIME_MAX_LAPS))
+	{
+		s_nativeLapTimes[driverID][numLaps] = lapTime;
+	}
+
+	// Retail storage has room for only two players and seven laps. Keep its
+	// layout untouched and use the native sidecar for the extended cases.
+	if ((driverID < 0) || (driverID >= UI_LAP_TIME_RETAIL_PLAYER_COUNT) ||
+	    (numLaps < 0) || (numLaps >= UI_LAP_TIME_LAPS_PER_PLAYER))
+	{
+		return;
+	}
+#endif
+
 	int playerLapIndex = ((int)driverID * UI_LAP_TIME_LAPS_PER_PLAYER) + numLaps;
 	int numMinutes = lapTime / UI_LAP_TIME_TICKS_PER_MINUTE;
 

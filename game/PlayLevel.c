@@ -147,7 +147,10 @@ void PlayLevel_UpdateLapStats(void)
 				{
 					UI_SaveLapTime(currDriver->lapIndex, gGT->elapsedEventTime - currDriver->lapTime, currDriver->driverID);
 
-					gGT->lapTime[currDriver->lapIndex] = gGT->elapsedEventTime - currDriver->lapTime;
+					if ((u32)currDriver->lapIndex < (sizeof(gGT->lapTime) / sizeof(gGT->lapTime[0])))
+					{
+						gGT->lapTime[currDriver->lapIndex] = gGT->elapsedEventTime - currDriver->lapTime;
+					}
 				}
 
 				// time on the clock

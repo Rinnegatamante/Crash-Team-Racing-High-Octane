@@ -46,6 +46,10 @@ enum ArcadeAdventureEndMenuConstants
 	AA_TIME_BOX_HEIGHT_7_LAPS = 0x49,
 	AA_TIME_BOX_HEIGHT_5_LAPS = 0x39,
 	AA_TIME_BOX_HEIGHT_DEFAULT = 0x44,
+#if defined(CTR_NATIVE)
+	AA_TIME_BOX_TWO_COLUMN_LAPS = 7,
+	AA_TIME_BOX_TWO_COLUMN_PADDING = 6,
+#endif
 };
 
 global_variable s32 s_driverRankString222 = 0x20; // " \0"
@@ -596,6 +600,14 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 
 	// Lap time box height
 	RECT timeBoxRect;
+#if defined(CTR_NATIVE)
+	b32 twoColumnLapTimes = gGT->numLaps >= AA_TIME_BOX_TWO_COLUMN_LAPS;
+	if (twoColumnLapTimes)
+	{
+		timeBoxRect.h = AA_TIME_BOX_HEIGHT_5_LAPS;
+	}
+	else
+#endif
 	switch (gGT->numLaps)
 	{
 	// based on number of laps
@@ -738,6 +750,23 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 	timeBoxRect.x = (pos.x - totalTextWidth) + -6;
 	timeBoxRect.y = (pos.y - timeBoxRect.h) + 0xd;
 	timeBoxRect.w = totalTextWidth + 0x94;
+#if defined(CTR_NATIVE)
+	if (twoColumnLapTimes)
+	{
+		int lapContentX;
+		int lapContentWidth;
+		UI_NativeRaceClock_GetTwoColumnLayout(pos.x, NULL, NULL, &lapContentX, &lapContentWidth);
+
+		int defaultRight = timeBoxRect.x + timeBoxRect.w;
+		int lapBoxLeft = lapContentX - AA_TIME_BOX_TWO_COLUMN_PADDING;
+		int lapBoxRight = lapContentX + lapContentWidth + AA_TIME_BOX_TWO_COLUMN_PADDING;
+		int boxLeft = lapBoxLeft < timeBoxRect.x ? lapBoxLeft : timeBoxRect.x;
+		int boxRight = lapBoxRight > defaultRight ? lapBoxRight : defaultRight;
+
+		timeBoxRect.x = boxLeft;
+		timeBoxRect.w = boxRight - boxLeft;
+	}
+#endif
 	timeBoxRect.h += 6;
 
 	// Draw 2D Menu rectangle background

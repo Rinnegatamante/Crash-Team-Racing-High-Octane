@@ -29,6 +29,8 @@ enum
 	UI_RACE_CLOCK_PB_ROW_Y_STEP = 8,
 	UI_RACE_CLOCK_PB_SLOW_ONE_SECOND = UI_RACE_CLOCK_TICKS_PER_SECOND,
 	UI_RACE_CLOCK_PB_SLOW_TWO_SECONDS = UI_RACE_CLOCK_TICKS_PER_SECOND * 2,
+	UI_RACE_CLOCK_RESULTS_TWO_COLUMN_LAPS = 7,
+	UI_RACE_CLOCK_RESULTS_COLUMN_GAP = 6,
 #endif
 };
 
@@ -42,6 +44,35 @@ CTR_STATIC_ASSERT(UI_LIMIT_CLOCK_FLASH_THRESHOLD == 0x3840);
 #if defined(CTR_NATIVE)
 static const char s_timeTrialPbRaceLabel[] = "PB 3L";
 static const char s_timeTrialPbLapLabel[] = "PB L";
+static const char s_resultsMaxLapTime[] = " 9:59:99";
+
+void UI_NativeRaceClock_GetTwoColumnLayout(int centerX, int *leftAnchorX, int *rightAnchorX, int *contentLeftX, int *contentWidth)
+{
+	int labelWidth = DecalFont_GetLineWidth(sdata->lngStrings[LNG_LAP], FONT_SMALL);
+	int digitWidth = data.font_charPixWidth[FONT_SMALL];
+	int timeWidth = DecalFont_GetLineWidth((char *)s_resultsMaxLapTime, FONT_SMALL);
+	int labelExtent = labelWidth + digitWidth;
+	int columnWidth = labelExtent + timeWidth;
+	int width = columnWidth * 2 + UI_RACE_CLOCK_RESULTS_COLUMN_GAP;
+	int left = centerX - width / 2;
+
+	if (leftAnchorX != NULL)
+	{
+		*leftAnchorX = left + labelExtent;
+	}
+	if (rightAnchorX != NULL)
+	{
+		*rightAnchorX = left + labelExtent + columnWidth + UI_RACE_CLOCK_RESULTS_COLUMN_GAP;
+	}
+	if (contentLeftX != NULL)
+	{
+		*contentLeftX = left;
+	}
+	if (contentWidth != NULL)
+	{
+		*contentWidth = width;
+	}
+}
 
 static int UI_TimeTrialLapColor(struct GameTracker *gGT, struct Driver *driver, int lapIndex)
 {
@@ -58,7 +89,7 @@ static int UI_TimeTrialLapColor(struct GameTracker *gGT, struct Driver *driver, 
 	}
 	else if (lapIndex < driver->lapIndex)
 	{
-		lapTime = gGT->lapTime[lapIndex];
+		lapTime = UI_NativeLapTime_Get(lapIndex, driver->driverID);
 	}
 	else
 	{
@@ -182,7 +213,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 	// Race timer units elapsed.
 	timeElapsed = driver->timeElapsedInRace;
 
-	if (gGT->numLaps == UI_RACE_CLOCK_EXTENDED_MINUTE_LAP_COUNT)
+	if (gGT->numLaps >= UI_RACE_CLOCK_EXTENDED_MINUTE_LAP_COUNT)
 	{
 		// less than 99:59:99
 		if (timeElapsed / UI_RACE_CLOCK_TICKS_PER_TEN_MINUTES < UI_RACE_CLOCK_MAX_DISPLAY_DIGIT)
@@ -271,7 +302,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 		timeColor = (u16)((FPS_HALF(gGT->timer) & 2) == 0) << 2;
 	}
 
-	if (gGT->numLaps == UI_RACE_CLOCK_EXTENDED_MINUTE_LAP_COUNT)
+	if (gGT->numLaps >= UI_RACE_CLOCK_EXTENDED_MINUTE_LAP_COUNT)
 	{
 		// String for amount of time in total race
 		totalTimeString = rdata.s_timeString_empty;
@@ -351,6 +382,9 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 			{
 				UI_SaveLapTime(lapIndex, gGT->elapsedEventTime - driver->lapTime, (u32)driver->driverID);
 
+#if defined(CTR_NATIVE)
+				UI_NativeLapTime_Format(rdata.s_timeString_empty, UI_NativeLapTime_Get(numLaps, driver->driverID));
+#else
 				// custom code for optimization using this unrelated variable
 				iVar5 = (u32)driver->driverID * UI_RACE_CLOCK_LAP_TIME_SLOTS_PER_PLAYER + numLaps;
 
@@ -365,6 +399,7 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 				rdata.s_timeString_empty[4] = sdata->LapTimes.p1_Sec1s[iVar5] + '0';
 				rdata.s_timeString_empty[6] = sdata->LapTimes.p1_Ms10s[iVar5] + '0';
 				rdata.s_timeString_empty[7] = sdata->LapTimes.p1_Ms1s[iVar5] + '0';
+#endif
 
 				// default
 				lapOrRelicColor = PERIWINKLE;
@@ -428,19 +463,32 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 
 					sprintf(lapNumberString, &sdata->s_int[0], numParamY);
 					lapTextHeight = (s16 *)(&data.font_charPixHeight[lapFontType]);
+					int lapDrawX = unbitshiftTextPosX;
+					int lapDrawY = (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10;
+
+#if defined(CTR_NATIVE)
+					if (gGT->numLaps >= UI_RACE_CLOCK_RESULTS_TWO_COLUMN_LAPS)
+					{
+						int leftColumnCount = (gGT->numLaps + 1) / 2;
+						int column = numLaps >= leftColumnCount;
+						int row = column ? numLaps - leftColumnCount : numLaps;
+						int leftAnchorX;
+						int rightAnchorX;
+
+						UI_NativeRaceClock_GetTwoColumnLayout((int)(s16)textPosX, &leftAnchorX, &rightAnchorX, NULL, NULL);
+						lapDrawX = column ? rightAnchorX : leftAnchorX;
+						lapDrawY = (int)(s16)textPosY - leftColumnCount * (int)*lapTextHeight + row * (int)*lapTextHeight;
+					}
+#endif
 
 					// draw string
-					DecalFont_DrawLine(lapNumberString, unbitshiftTextPosX,
-					                   (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10, lapFontType,
-					                   (JUSTIFY_RIGHT | RED));
+					DecalFont_DrawLine(lapNumberString, lapDrawX, lapDrawY, lapFontType, (JUSTIFY_RIGHT | RED));
 
-					DecalFont_DrawLine(sdata->lngStrings[LNG_LAP], (int)(((u32)textPosX - (u32)data.font_charPixWidth[lapFontType])),
-					                   (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10, lapFontType,
-					                   (JUSTIFY_RIGHT | RED));
+					DecalFont_DrawLine(sdata->lngStrings[LNG_LAP], lapDrawX - (int)data.font_charPixWidth[lapFontType], lapDrawY, lapFontType, (JUSTIFY_RIGHT | RED));
 
 					stringColor = (int)(s16)lapOrRelicColor;
-					iVar7 = (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10;
-					iVar5 = unbitshiftTextPosX;
+					iVar7 = lapDrawY;
+					iVar5 = lapDrawX;
 				}
 
 				// draw string for total amount of time in race

@@ -757,6 +757,12 @@ void UI_CupStandings_UpdateCupRanks(void);
 void UI_CupStandings_InputAndDraw(void);
 
 void UI_SaveLapTime(int numLaps, int lapTime, s16 driverID);
+#if defined(CTR_NATIVE)
+void UI_NativeLapTime_Reset(void);
+int UI_NativeLapTime_Get(int lapIndex, s16 driverID);
+void UI_NativeLapTime_Format(char *text, int lapTime);
+void UI_NativeRaceClock_GetTwoColumnLayout(int centerX, int *leftAnchorX, int *rightAnchorX, int *contentLeftX, int *contentWidth);
+#endif
 
 void UI_Map_GetIconPos(struct UIMap *map, int *posX, int *posY);
 void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *otMem, u32 colorID);
