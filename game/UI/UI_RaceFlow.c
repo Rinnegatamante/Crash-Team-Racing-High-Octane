@@ -393,6 +393,45 @@ void UI_RaceEnd_MenuProc(struct RectMenu *menu)
 	}
 
 	option = menu->rows[row].stringIndex;
+	if ((gNativeGhostReplayMode != 0) && (option == NATIVE_MENU_STRING_CHALLENGE_GHOST))
+	{
+		s16 logicalTrackId = NativeReverseTrack_GetCurrentLogicalTrackId();
+		struct GhostHeader *challengeGhost = sdata->GhostRecording.ptrGhost;
+
+		if ((challengeGhost == NULL) || (sdata->boolGhostTooBigToSave != 0) || (challengeGhost->size == 0))
+		{
+			OtherFX_Play(5, 1);
+			return;
+		}
+
+		if (sdata->ptrGhostTapePlaying == NULL)
+		{
+			sdata->ptrGhostTapePlaying = MEMPACK_AllocHighMem(GHOST_RECORD_BUFFER_SIZE);
+			if (sdata->ptrGhostTapePlaying == NULL)
+			{
+				OtherFX_Play(5, 1);
+				return;
+			}
+		}
+		memcpy(sdata->ptrGhostTapePlaying, challengeGhost, GHOST_RECORD_BUFFER_SIZE);
+
+		gNativeGhostReplayMode = 0;
+		gNativeRelicRaceMode = 0;
+		gNativeRelicRaceResultTier = -1;
+		NativeGhostInput_ClearSelection();
+
+		NativeReverseTrack_SelectLogical(logicalTrackId);
+		gGT->currLEV = logicalTrackId;
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 &= ~RELIC_RACE;
+		gGT->gameMode1 |= TIME_TRIAL;
+		gGT->gameModeEnd &= ~PLAYER_GHOST_BEAT;
+		sdata->boolReplayHumanGhost = 1;
+		data.characterIDs[1] = sdata->ptrGhostTapePlaying->characterID;
+		sdata->boolGhostsDrawing = 0;
+
+		option = UI_RACE_END_OPTION_RETRY;
+	}
 	if (((gNativeGhostReplayMode != 0)
 	     || (gNativeBossFightMode != 0)
 	    ) && (option == LNG_RESTART))

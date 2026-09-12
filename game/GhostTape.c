@@ -55,9 +55,9 @@ void GhostTape_Start(void)
 	GhostTape_StartInternal(true);
 }
 
-void GhostTape_StartLeaderboardReplayCapture(void)
+void GhostTape_StartReplayCapture(void)
 {
-	if (!NativeGhostInput_IsLeaderboardReplay())
+	if (gNativeGhostReplayMode == 0)
 	{
 		return;
 	}
@@ -88,7 +88,7 @@ void GhostTape_End(void)
 	// quit, if ghost cant be saved
 	if (sdata->boolCanSaveGhost == 0)
 	{
-		if (!NativeGhostInput_IsLeaderboardReplay())
+		if (gNativeGhostReplayMode == 0)
 		{
 			NativeGhostInput_DiscardRecording();
 		}

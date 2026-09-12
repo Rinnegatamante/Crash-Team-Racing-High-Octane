@@ -566,20 +566,27 @@ struct RectMenu menu224NoSave = {
 
     // rest of variables all default zero
 };
-struct MenuRow rowsGhostReplay[3] = {
+struct MenuRow rowsGhostReplay[4] = {
     {
         .stringIndex = LNG_RESTART,
-        .rowOnPressUp = 1,
+        .rowOnPressUp = 2,
         .rowOnPressDown = 1,
         .rowOnPressLeft = 0,
         .rowOnPressRight = 0,
     },
     {
-        .stringIndex = LNG_QUIT,
+        .stringIndex = NATIVE_MENU_STRING_CHALLENGE_GHOST,
         .rowOnPressUp = 0,
-        .rowOnPressDown = 0,
+        .rowOnPressDown = 2,
         .rowOnPressLeft = 1,
         .rowOnPressRight = 1,
+    },
+    {
+        .stringIndex = LNG_QUIT,
+        .rowOnPressUp = 1,
+        .rowOnPressDown = 0,
+        .rowOnPressLeft = 2,
+        .rowOnPressRight = 2,
     },
     {
         .stringIndex = RECTMENU_STRING_NONE,
@@ -600,27 +607,34 @@ struct RectMenu menu224GhostReplay = {
     .drawStyle = 4,
 };
 
-struct MenuRow rowsLeaderboardGhostReplay[4] = {
+struct MenuRow rowsLeaderboardGhostReplay[5] = {
     {
         .stringIndex = LNG_RESTART,
-        .rowOnPressUp = 2,
+        .rowOnPressUp = 3,
         .rowOnPressDown = 1,
         .rowOnPressLeft = 0,
         .rowOnPressRight = 0,
     },
     {
-        .stringIndex = LNG_SAVE_GHOST,
+        .stringIndex = NATIVE_MENU_STRING_CHALLENGE_GHOST,
         .rowOnPressUp = 0,
         .rowOnPressDown = 2,
         .rowOnPressLeft = 1,
         .rowOnPressRight = 1,
     },
     {
-        .stringIndex = LNG_QUIT,
+        .stringIndex = LNG_SAVE_GHOST,
         .rowOnPressUp = 1,
-        .rowOnPressDown = 0,
+        .rowOnPressDown = 3,
         .rowOnPressLeft = 2,
         .rowOnPressRight = 2,
+    },
+    {
+        .stringIndex = LNG_QUIT,
+        .rowOnPressUp = 2,
+        .rowOnPressDown = 0,
+        .rowOnPressLeft = 3,
+        .rowOnPressRight = 3,
     },
     {
         .stringIndex = RECTMENU_STRING_NONE,

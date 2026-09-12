@@ -135,7 +135,7 @@ void GhostReplay_ThTick(struct Thread *t);
 void GhostTape_Destroy(void);
 void GhostTape_End(void);
 void GhostTape_Start(void);
-void GhostTape_StartLeaderboardReplayCapture(void);
+void GhostTape_StartReplayCapture(void);
 void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap);
 void GhostTape_WriteMoves(s16 raceFinished);
 

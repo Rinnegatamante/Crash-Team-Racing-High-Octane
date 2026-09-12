@@ -152,6 +152,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"VER FANTASMA",
 		"SPOOK BEKIJKEN",
 	};
+	static const char *challengeGhost[6] =
+	{
+		"CHALLENGE GHOST",
+		"DEFIER FANTOME",
+		"GEIST HERAUSF.",
+		"SFIDA FANTASMA",
+		"DESAFIA FANTASMA",
+		"DAAG SPOOK UIT",
+	};
 	static const char *trackNormal[6] =
 	{
 		"NORMAL",
@@ -332,6 +341,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)onlineLeaderboard[languageRow];
 	case NATIVE_MENU_STRING_WATCH_GHOST:
 		return (char *)watchGhost[languageRow];
+	case NATIVE_MENU_STRING_CHALLENGE_GHOST:
+		return (char *)challengeGhost[languageRow];
 	case NATIVE_MENU_STRING_TRACK_NORMAL:
 		return (char *)trackNormal[languageRow];
 	case NATIVE_MENU_STRING_TRACK_REVERSE:
