@@ -147,7 +147,11 @@ static b32 NativeLeaderboard_InitClientVersion(void)
     s_nativeLeaderboard.clientVersion[sizeof(s_nativeLeaderboard.clientVersion) - 1] = '\0';
     return true;
 #else
+#if defined(__EMSCRIPTEN__)
+    snprintf(s_nativeLeaderboard.clientVersion, sizeof(s_nativeLeaderboard.clientVersion), "WEB:%s:%s", CTR_NATIVE_VERSION, CTR_NATIVE_BUILD_ID);
+#else
     snprintf(s_nativeLeaderboard.clientVersion, sizeof(s_nativeLeaderboard.clientVersion), "PC:%s:%s", CTR_NATIVE_VERSION, CTR_NATIVE_BUILD_ID);
+#endif
     return true;
 #endif
 }
