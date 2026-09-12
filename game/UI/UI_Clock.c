@@ -23,6 +23,13 @@ enum
 	UI_RACE_CLOCK_RELIC_HUD_TIME_Y_OFFSET = 0x20,
 	UI_RACE_CLOCK_RELIC_RESULTS_Y_OFFSET = 0x11,
 	UI_LIMIT_CLOCK_FLASH_THRESHOLD = 0x3840,
+#if defined(CTR_NATIVE)
+	UI_RACE_CLOCK_PB_TIME_X_OFFSET = 0x38,
+	UI_RACE_CLOCK_PB_TOP_GAP = 4,
+	UI_RACE_CLOCK_PB_ROW_Y_STEP = 8,
+	UI_RACE_CLOCK_PB_SLOW_ONE_SECOND = UI_RACE_CLOCK_TICKS_PER_SECOND,
+	UI_RACE_CLOCK_PB_SLOW_TWO_SECONDS = UI_RACE_CLOCK_TICKS_PER_SECOND * 2,
+#endif
 };
 
 CTR_STATIC_ASSERT(UI_RACE_CLOCK_TICKS_PER_SECOND == 0x3c0);
@@ -31,6 +38,85 @@ CTR_STATIC_ASSERT(UI_RACE_CLOCK_TICKS_PER_MINUTE == 0xe100);
 CTR_STATIC_ASSERT(UI_RACE_CLOCK_TICKS_PER_TEN_MINUTES == 0x8ca00);
 CTR_STATIC_ASSERT(UI_RACE_CLOCK_LAP_TIME_SLOTS_PER_PLAYER == 7);
 CTR_STATIC_ASSERT(UI_LIMIT_CLOCK_FLASH_THRESHOLD == 0x3840);
+
+#if defined(CTR_NATIVE)
+static const char s_timeTrialPbRaceLabel[] = "PB 3L";
+static const char s_timeTrialPbLapLabel[] = "PB L";
+
+static int UI_TimeTrialLapColor(struct GameTracker *gGT, struct Driver *driver, int lapIndex)
+{
+	if ((sdata->ptrActiveHighScoreEntry == NULL) ||
+	    (sdata->ptrActiveHighScoreEntry[0].time >= MEMCARD_HIGH_SCORE_DEFAULT_TIME))
+	{
+		return PERIWINKLE;
+	}
+
+	int lapTime;
+	if (lapIndex == driver->lapIndex)
+	{
+		lapTime = gGT->elapsedEventTime - driver->lapTime;
+	}
+	else if (lapIndex < driver->lapIndex)
+	{
+		lapTime = gGT->lapTime[lapIndex];
+	}
+	else
+	{
+		return PERIWINKLE;
+	}
+
+	int delta = lapTime - (s32)sdata->ptrActiveHighScoreEntry[0].time;
+	if (delta <= 0)
+	{
+		return PAPU_YELLOW;
+	}
+
+	if (delta <= UI_RACE_CLOCK_PB_SLOW_ONE_SECOND)
+	{
+		return LIGHT_GREEN;
+	}
+
+	if (delta < UI_RACE_CLOCK_PB_SLOW_TWO_SECONDS)
+	{
+		return ORANGE;
+	}
+
+	return RED;
+}
+
+static void UI_DrawTimeTrialPersonalBests(u16 labelPosX, u16 labelPosY, struct GameTracker *gGT)
+{
+	if (sdata->ptrActiveHighScoreEntry == NULL)
+	{
+		return;
+	}
+
+	int pbRaceY = (int)labelPosY + UI_RACE_CLOCK_LAP_ROW_Y_OFFSET +
+	              (gGT->numLaps + 1) * UI_RACE_CLOCK_LAP_ROW_Y_STEP + UI_RACE_CLOCK_PB_TOP_GAP;
+	int pbLapY = pbRaceY + UI_RACE_CLOCK_PB_ROW_Y_STEP;
+	int timeX = (int)labelPosX + UI_RACE_CLOCK_PB_TIME_X_OFFSET;
+
+	DecalFont_DrawLine((char *)s_timeTrialPbRaceLabel, (int)(s16)labelPosX, pbRaceY, FONT_SMALL, ORANGE);
+	if (sdata->ptrActiveHighScoreEntry[1].time < MEMCARD_HIGH_SCORE_DEFAULT_TIME)
+	{
+		DecalFont_DrawLine(RECTMENU_DrawTime(sdata->ptrActiveHighScoreEntry[1].time), timeX, pbRaceY, FONT_SMALL, PERIWINKLE);
+	}
+	else
+	{
+		DecalFont_DrawLine("--:--:--", timeX, pbRaceY, FONT_SMALL, PERIWINKLE);
+	}
+
+	DecalFont_DrawLine((char *)s_timeTrialPbLapLabel, (int)(s16)labelPosX, pbLapY, FONT_SMALL, ORANGE);
+	if (sdata->ptrActiveHighScoreEntry[0].time < MEMCARD_HIGH_SCORE_DEFAULT_TIME)
+	{
+		DecalFont_DrawLine(RECTMENU_DrawTime(sdata->ptrActiveHighScoreEntry[0].time), timeX, pbLapY, FONT_SMALL, PERIWINKLE);
+	}
+	else
+	{
+		DecalFont_DrawLine("--:--:--", timeX, pbLapY, FONT_SMALL, PERIWINKLE);
+	}
+}
+#endif
 
 // used for both finished lap time and current race time
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8004edac-0x8004f894
@@ -247,6 +333,12 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 
 		if (lapIndex == 0xffffffff)
 		{
+#if defined(CTR_NATIVE)
+			if (((flags & UI_RACE_CLOCK_SHOW_RESULTS) == 0) && ((gGT->gameMode1 & TIME_TRIAL) != 0))
+			{
+				UI_DrawTimeTrialPersonalBests(labelPosX, labelPosY, gGT);
+			}
+#endif
 			return;
 		}
 
@@ -311,6 +403,12 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 
 					lapFontType = FONT_SMALL;
 					stringColor = PERIWINKLE;
+#if defined(CTR_NATIVE)
+					if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+					{
+						stringColor = UI_TimeTrialLapColor(gGT, driver, numLaps);
+					}
+#endif
 					iVar5 = (int)(((u32)textPosX + UI_RACE_CLOCK_LAP_TIME_X_OFFSET) * 0x10000) >> 0x10;
 				}
 				else
@@ -356,6 +454,12 @@ void UI_DrawRaceClock(u16 labelPosX, u16 labelPosY, u32 flags, struct Driver *dr
 			numParamY = numParamY + 1;
 			if ((int)(lapIndex + 1) <= numLaps)
 			{
+#if defined(CTR_NATIVE)
+				if (((flags & UI_RACE_CLOCK_SHOW_RESULTS) == 0) && ((gGT->gameMode1 & TIME_TRIAL) != 0))
+				{
+					UI_DrawTimeTrialPersonalBests(labelPosX, labelPosY, gGT);
+				}
+#endif
 				return;
 			}
 		} while (1);
