@@ -1,6 +1,8 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+
 extern u32 gNativeCheatConfigMask;
 
 static const u32 s_nativeCheatMenuBits[] =
@@ -38,7 +40,13 @@ void NativeCheat_ApplyConfigured(void)
 b32 NativeCheat_DisablesRecords(void)
 {
 #if defined(CTR_NATIVE)
-	return (sdata != NULL) && (sdata->gGT != NULL) && ((sdata->gGT->gameMode2 & CHEAT_ALL) != 0);
+	if ((sdata == NULL) || (sdata->gGT == NULL))
+		return 0;
+
+	if ((sdata->gGT->gameMode2 & CHEAT_ALL) != 0)
+		return 1;
+
+	return ((sdata->gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0) && NativeCustomRacer_DisablesRecords();
 #else
 	return 0;
 #endif

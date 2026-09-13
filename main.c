@@ -25,6 +25,7 @@
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
 #include "platform/native_adhoc.h"
+#include "platform/native_custom_racer.h"
 #include "platform/native_leaderboard.h"
 #include "platform/native_network.h"
 #include "platform/native_user_id.h"
@@ -86,6 +87,7 @@ int gNativeRelicRaceResultTier = -1;
 #include "platform/native_checkpoint.c"
 #include "platform/native_checkpoint_file.c"
 #include "platform/native_cd.c"
+#include "platform/native_custom_racer.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
@@ -434,6 +436,8 @@ int main(int argc, char *argv[])
 	{
 		return NativeConsole_Return(1);
 	}
+
+	NativeCustomRacer_Scan();
 
 #if defined(CTR_INTERNAL)
 	if (NativeReplayScheduler_PrepareReportFromArgs(argc, argv) != 0)

@@ -2,6 +2,7 @@
 
 #if defined(CTR_NATIVE)
 #include "platform/native_adhoc.h"
+#include <platform/native_custom_racer.h>
 #endif
 
 // budget: 4624
@@ -2355,6 +2356,16 @@ void VehPhysProc_SlamWall_Animate(struct Thread *t, struct Driver *d)
 		d->matrixArray = BAKED_GTE_MATRIX_NONE;
 		d->matrixIndex = 0;
 	}
+#if defined(CTR_NATIVE)
+	else if (NativeCustomRacer_GetPlayerSelection(d->driverID) >= 0)
+	{
+		// Restore the normal driving pose after custom-racer wall impacts.
+		inst->animIndex = 0;
+		inst->animFrame = VehFrameInst_GetStartFrame(0, (int)VehFrameInst_GetNumAnimFrames(inst, 0));
+		d->matrixArray = BAKED_GTE_MATRIX_NONE;
+		d->matrixIndex = 0;
+	}
+#endif
 
 	d->funcPtrs[DRIVER_FUNC_INIT] = VehPhysProc_Driving_Init;
 }

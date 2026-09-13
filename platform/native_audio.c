@@ -1,6 +1,7 @@
 #include <macros.h>
 #include <platform/native_audio.h>
 #include <platform/native_assets.h>
+#include <platform/native_custom_racer.h>
 #include <platform/native_disc_image.h>
 #include <platform/native_path.h>
 #include <platform/native_perf.h>
@@ -321,6 +322,7 @@ struct NativeAudioXaSource
 {
 	struct NativeAudioReadFile file;
 	struct NativeDiscImageFile discFile;
+	u64 fileBaseOffset;
 	int kind;
 	int sectorSize;
 	int sectorBase;
@@ -2604,6 +2606,28 @@ internal int NativeAudio_XaSourceOpenHostPath(const char *path, struct NativeAud
 		return 0;
 	}
 	src->kind = NATIVE_AUDIO_XA_SOURCE_HOST_FILE;
+	src->fileBaseOffset = 0;
+	src->nextSector = -1;
+	return 1;
+}
+
+internal int NativeAudio_XaSourceOpenHostSlice(const char *path, u64 offset, u32 size, struct NativeAudioXaSource *src)
+{
+	memset(src, 0, sizeof(*src));
+	NativeAudio_ReadFileInit(&src->file);
+	if ((size == 0) || !NativeAudio_ReadFileOpen(&src->file, path))
+		return 0;
+
+	const s64 fileSize = NativeAudio_ReadFileSize(&src->file);
+	if ((fileSize <= 0) || (offset > (u64)fileSize) || ((u64)size > (u64)fileSize - offset) ||
+	    !NativeAudio_GetXASectorLayout((int)size, &src->sectorSize, &src->sectorBase, &src->totalSectors))
+	{
+		NativeAudio_XaSourceClose(src);
+		return 0;
+	}
+
+	src->kind = NATIVE_AUDIO_XA_SOURCE_HOST_FILE;
+	src->fileBaseOffset = offset;
 	src->nextSector = -1;
 	return 1;
 }
@@ -2652,7 +2676,8 @@ internal int NativeAudio_XaSourceReadSector(struct NativeAudioXaSource *src, int
 
 	if (src->kind == NATIVE_AUDIO_XA_SOURCE_HOST_FILE)
 	{
-		if (!NativeAudio_ReadFileAt(&src->file, dst, (size_t)src->sectorSize, (u64)(u32)sector * (u32)src->sectorSize))
+		if (!NativeAudio_ReadFileAt(&src->file, dst, (size_t)src->sectorSize,
+		                            src->fileBaseOffset + (u64)(u32)sector * (u32)src->sectorSize))
 		{
 			return 0;
 		}
@@ -2865,6 +2890,26 @@ internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeA
 	int palXaID = NativeAudio_ResolvePalVoiceXaID(categoryID, xaID);
 
 	memset(prepared, 0, sizeof(*prepared));
+
+	// Custom racers can override template voice XA data from their .ctrr package.
+	{
+		const char *packagePath = NULL;
+		u64 packageOffset = 0;
+		u32 packageSize = 0;
+		if (NativeCustomRacer_GetVoiceTrack(categoryID, xaID, &info.channelFilter, &info.numSectors,
+		                                    &packagePath, &packageOffset, &packageSize) &&
+		    NativeAudio_XaSourceOpenHostSlice(packagePath, packageOffset, packageSize, &source))
+		{
+			if (NativeAudio_PrepareXAStream(&source, info.channelFilter, info.numSectors, prepared))
+			{
+				NativeAudio_XaSourceClose(&source);
+				return 1;
+			}
+			NativeAudio_XaSourceClose(&source);
+			NativeAudio_XaPreparedStreamClose(prepared);
+		}
+	}
+
 	if ((palXaID >= 0) && NativeAudio_LookupPalVoiceTrackInfo(categoryID, palXaID, &info, path, sizeof(path)) &&
 	    NativeAudio_XaSourceOpenHostPath(path, &source))
 	{

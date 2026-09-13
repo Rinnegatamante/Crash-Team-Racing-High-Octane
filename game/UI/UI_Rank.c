@@ -263,7 +263,7 @@ void UI_DrawRankedDrivers(void)
 					pos.y = iconPos.y;
 				}
 
-				UI_DrawDriverIcon(
+				UI_DrawDriverIconForDriver(driverIndex,
 
 				    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID],
 
@@ -378,18 +378,11 @@ void UI_DrawRankedDrivers(void)
 			int posX = nextTrackX + UI_RANK_TRACK_ICON_POS_X_OFFSET;
 			int posY = UI_RANK_TRACK_ICON_POS_Y;
 
-			DecalHUD_DrawPolyGT4(gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID], posX, posY,
-
-			                     // pointer to PrimMem struct
-			                     &gGT->backBuffer->primMem,
-
-			                     // pointer to OT memory
-			                     gGT->pushBuffer_UI.ptrOT,
-
-			                     // color data
-			                     damageColor, damageColor, damageColor, damageColor,
-
-			                     TRANS_50_DECAL, UI_RANK_TRACK_ICON_SCALE);
+			UI_DrawDriverIconGT4ForDriver(driverIndex,
+			    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID],
+			    posX, posY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
+			    damageColor, damageColor, damageColor, damageColor,
+			    TRANS_50_DECAL, UI_RANK_TRACK_ICON_SCALE);
 
 			*trackIconX = nextTrackX;
 			trackIconX = trackIconX + 1;

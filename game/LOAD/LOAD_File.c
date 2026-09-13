@@ -196,6 +196,14 @@ void LOAD_VramFileCallback(struct LoadQueueSlot *lqs)
 {
 	int *vramBuf = lqs->ptrDestination;
 
+#if defined(CTR_NATIVE)
+	if ((vramBuf != NULL) && (lqs->subfileIndex == BI_SHAREDMPKVRM) &&
+	    !NativeCustomRacer_IsBigHeader(lqs->ptrBigfileCdPos_UNUSED))
+	{
+		NativeCustomRacer_CaptureRetailSharedVram(vramBuf, lqs->size_UNUSED);
+	}
+#endif
+
 	struct VramHeader *vh = (struct VramHeader *)vramBuf;
 
 	// if just one TIM

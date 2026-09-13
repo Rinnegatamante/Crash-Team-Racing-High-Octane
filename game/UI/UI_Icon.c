@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+#endif
+
 enum
 {
 	UI_ICON_FIXED_SHIFT = 0xc,
@@ -377,4 +381,193 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 
 	AddPrimitive(p, ot);
 	primMem->cursor = p + 1;
+}
+
+#if defined(CTR_NATIVE)
+internal u32 UI_NativeResolveDriverPortraitTexture(int driverID, struct Icon *icon, int *textureWidth, int *textureHeight)
+{
+	if ((driverID < 0) || (driverID >= LOAD_CHARACTER_ID_COUNT) || (icon == NULL))
+		return 0;
+
+	const int customIndex = NativeCustomRacer_GetPlayerSelection(driverID);
+	if (customIndex >= 0)
+		return NativeCustomRacer_GetPortraitTexture(customIndex, icon, textureWidth, textureHeight);
+
+	return 0;
+}
+
+internal void UI_NativeDrawDriverIconTexture(u32 texture, int textureWidth, int textureHeight,
+	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot,
+	s16 scale, u32 color)
+{
+	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
+	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
+		return;
+
+	u32 oldTag = *ot;
+	DR_PSYX_TEX *setTexture = (DR_PSYX_TEX *)primMem->cursor;
+	PolyFT4 *poly = (PolyFT4 *)(setTexture + 1);
+	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
+	struct Icon nativeIcon = *templateIcon;
+
+	nativeIcon.texLayout.u0 = 0;
+	nativeIcon.texLayout.v0 = 0;
+	nativeIcon.texLayout.u1 = (u8)textureWidth;
+	nativeIcon.texLayout.v1 = 0;
+	nativeIcon.texLayout.u2 = 0;
+	nativeIcon.texLayout.v2 = (u8)textureHeight;
+	nativeIcon.texLayout.u3 = (u8)textureWidth;
+	nativeIcon.texLayout.v3 = (u8)textureHeight;
+	nativeIcon.texLayout.clut = 0;
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	primMem->cursor = poly;
+	// The RGBA cache only stores transparent/opaque pixels, not the PS1 STP bit.
+	UI_DrawDriverIcon(&nativeIcon, posX, posY, primMem, ot, 0, scale, color);
+
+	SetPsyXTexture(resetTexture, 0, 0, 0);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+	poly->tag.self = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
+	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
+	*ot = CtrGpu_PrimToOTLink24(setTexture);
+	primMem->cursor = resetTexture + 1;
+}
+
+internal void UI_NativeDrawDriverIconDecalTexture(u32 texture, int textureWidth, int textureHeight,
+	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, s16 scale)
+{
+	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
+	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
+		return;
+
+	u32 oldTag = *ot;
+	DR_PSYX_TEX *setTexture = (DR_PSYX_TEX *)primMem->cursor;
+	POLY_FT4 *poly = (POLY_FT4 *)(setTexture + 1);
+	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
+	struct Icon nativeIcon = *templateIcon;
+
+	nativeIcon.texLayout.u0 = 0;
+	nativeIcon.texLayout.v0 = 0;
+	nativeIcon.texLayout.u1 = (u8)textureWidth;
+	nativeIcon.texLayout.v1 = 0;
+	nativeIcon.texLayout.u2 = 0;
+	nativeIcon.texLayout.v2 = (u8)textureHeight;
+	nativeIcon.texLayout.u3 = (u8)textureWidth;
+	nativeIcon.texLayout.v3 = (u8)textureHeight;
+	nativeIcon.texLayout.clut = 0;
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	primMem->cursor = poly;
+	DecalHUD_DrawPolyFT4(&nativeIcon, posX, posY, primMem, ot, 0, scale);
+
+	SetPsyXTexture(resetTexture, 0, 0, 0);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
+	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
+	*ot = CtrGpu_PrimToOTLink24(setTexture);
+	primMem->cursor = resetTexture + 1;
+}
+
+internal void UI_NativeDrawDriverIconGT4Texture(u32 texture, int textureWidth, int textureHeight,
+	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot,
+	u32 color0, u32 color1, u32 color2, u32 color3, s16 scale)
+{
+	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
+	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
+		return;
+
+	u32 oldTag = *ot;
+	DR_PSYX_TEX *setTexture = (DR_PSYX_TEX *)primMem->cursor;
+	POLY_GT4 *poly = (POLY_GT4 *)(setTexture + 1);
+	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
+	struct Icon nativeIcon = *templateIcon;
+
+	nativeIcon.texLayout.u0 = 0;
+	nativeIcon.texLayout.v0 = 0;
+	nativeIcon.texLayout.u1 = (u8)textureWidth;
+	nativeIcon.texLayout.v1 = 0;
+	nativeIcon.texLayout.u2 = 0;
+	nativeIcon.texLayout.v2 = (u8)textureHeight;
+	nativeIcon.texLayout.u3 = (u8)textureWidth;
+	nativeIcon.texLayout.v3 = (u8)textureHeight;
+	nativeIcon.texLayout.clut = 0;
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	primMem->cursor = poly;
+	DecalHUD_DrawPolyGT4(&nativeIcon, posX, posY, primMem, ot,
+		color0, color1, color2, color3, 0, scale);
+
+	SetPsyXTexture(resetTexture, 0, 0, 0);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x0c000000);
+	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
+	*ot = CtrGpu_PrimToOTLink24(setTexture);
+	primMem->cursor = resetTexture + 1;
+}
+#endif
+
+void UI_DrawDriverIconForDriver(int driverID, struct Icon *icon, s16 posX, s16 posY,
+	struct PrimMem *primMem, uint32_t *ot, char transparency, s16 scale, u32 color)
+{
+#if defined(CTR_NATIVE)
+	if ((driverID >= 0) && (driverID < LOAD_CHARACTER_ID_COUNT) && (icon != NULL))
+	{
+		int textureWidth = 0;
+		int textureHeight = 0;
+		const u32 texture = UI_NativeResolveDriverPortraitTexture(driverID, icon, &textureWidth, &textureHeight);
+
+		if (texture != 0)
+		{
+			UI_NativeDrawDriverIconTexture(texture, textureWidth, textureHeight, icon,
+				posX, posY, primMem, ot, scale, color);
+			return;
+		}
+	}
+#endif
+
+	UI_DrawDriverIcon(icon, posX, posY, primMem, ot, transparency, scale, color);
+}
+
+void UI_DrawDriverIconDecalForDriver(int driverID, struct Icon *icon, s16 posX, s16 posY,
+	struct PrimMem *primMem, uint32_t *ot, char transparency, s16 scale)
+{
+#if defined(CTR_NATIVE)
+	if ((driverID >= 0) && (driverID < LOAD_CHARACTER_ID_COUNT) && (icon != NULL))
+	{
+		int textureWidth = 0;
+		int textureHeight = 0;
+		const u32 texture = UI_NativeResolveDriverPortraitTexture(driverID, icon, &textureWidth, &textureHeight);
+		if (texture != 0)
+		{
+			UI_NativeDrawDriverIconDecalTexture(texture, textureWidth, textureHeight, icon,
+				posX, posY, primMem, ot, scale);
+			return;
+		}
+	}
+#endif
+
+	DecalHUD_DrawPolyFT4(icon, posX, posY, primMem, ot, transparency, scale);
+}
+
+void UI_DrawDriverIconGT4ForDriver(int driverID, struct Icon *icon, s16 posX, s16 posY,
+	struct PrimMem *primMem, uint32_t *ot, u32 color0, u32 color1, u32 color2, u32 color3,
+	char transparency, s16 scale)
+{
+#if defined(CTR_NATIVE)
+	if ((driverID >= 0) && (driverID < LOAD_CHARACTER_ID_COUNT) && (icon != NULL))
+	{
+		int textureWidth = 0;
+		int textureHeight = 0;
+		const u32 texture = UI_NativeResolveDriverPortraitTexture(driverID, icon, &textureWidth, &textureHeight);
+		if (texture != 0)
+		{
+			UI_NativeDrawDriverIconGT4Texture(texture, textureWidth, textureHeight, icon,
+				posX, posY, primMem, ot, color0, color1, color2, color3, scale);
+			return;
+		}
+	}
+#endif
+
+	DecalHUD_DrawPolyGT4(icon, posX, posY, primMem, ot,
+		color0, color1, color2, color3, transparency, scale);
 }

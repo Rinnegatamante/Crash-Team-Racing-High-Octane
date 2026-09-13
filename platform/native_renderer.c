@@ -1413,6 +1413,7 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
                                  "	void main() {\n"
                                  "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
+                                 "		if (color.a < 0.5) { discard; }\n"
                                  GPU_RGBA_FRAGMENT_OUTPUT
                                  GPU_PSX_BLEND_APPLY
                                  "	}\n";

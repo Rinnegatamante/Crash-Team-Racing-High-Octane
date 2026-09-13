@@ -5,6 +5,8 @@
 #endif
 
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+
 enum
 {
 	NATIVE_AI_RANDOMIZER_DRIVER_COUNT = LOAD_CHARACTER_ID_COUNT,
@@ -19,6 +21,11 @@ static struct Model *s_nativeAIRandomizer2PModels[NATIVE_AI_RANDOMIZER_2P_AI_COU
 static b32 NativeAIRandomizer_ShouldUse(const struct GameTracker *gGT)
 {
 	if ((gGT == NULL) || (gNativeBossFightMode != 0) || (gGT->boolDemoMode != 0))
+	{
+		return false;
+	}
+
+	if (NativeCustomRacer_GetPlayerSelection(0) >= 0)
 	{
 		return false;
 	}
@@ -338,6 +345,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	struct GameTracker *gGT = sdata->gGT;
 #if defined(CTR_NATIVE)
 	NativeAIRandomizer_ResetModels();
+	NativeCustomRacer_QueueSharedVramForSelections(bigfile);
 #endif
 #if defined(__vita__)
 	if (NativeAdhoc_EnforcePreparedRaceConfig(gGT))
@@ -355,8 +363,15 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		for (i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			// low lod CTR model
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+#if defined(CTR_NATIVE)
+			if (!NativeCustomRacer_QueueSelectedModel(i, &data.driverModelExtras[i].fileBase))
+#endif
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 		}
+
+#if defined(CTR_NATIVE)
+		NativeCustomRacer_QueueSelectedModel(3, NULL);
+#endif
 
 		// load 4P MPK of fourth player
 		lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[3];
@@ -415,6 +430,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		}
 
 #if defined(CTR_NATIVE)
+		NativeCustomRacer_QueueSelectedModel(0, &data.driverModelExtras[0].fileBase);
+#endif
+
+#if defined(CTR_NATIVE)
 		if (NativeAIRandomizer_ShouldUse(gGT))
 		{
 			int packDriverIndex = LOAD_CHARACTER_ID_COUNT - 1;
@@ -440,7 +459,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		// on Hot Air Skyway (except Crash Bandicoot)
 
 		// Load Player 1 [0]
-		LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+#if defined(CTR_NATIVE)
+		if (!NativeCustomRacer_QueueSelectedModel(0, &data.driverModelExtras[0].fileBase))
+#endif
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 
 		// Load boss or ghost [1]
 		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
@@ -453,7 +475,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		for (i = 0; i < LOAD_MED_LOD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			// med lod CTR model
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+#if defined(CTR_NATIVE)
+			if (!NativeCustomRacer_QueueSelectedModel(i, &data.driverModelExtras[i].fileBase))
+#endif
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
 		LOAD_Robots2P(bigfile, data.characterIDs[0], data.characterIDs[1], callback);

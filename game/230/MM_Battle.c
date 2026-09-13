@@ -901,11 +901,11 @@ LAB_800b25f0:
 				s16 iconX = (s16)playerIconX;
 				playerIconX = playerIconX + BATTLE_TEAM_PLAYER_WIDTH;
 
-				MM_Battle_DrawIcon_Character(gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[playerIndex]].iconID],
-				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (int)iconX,
-				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + (int)afterLengthY + BATTLE_TEAM_PLAYER_ICON_Y_OFFSET,
-
-				                             &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, 1, BATTLE_ICON_SCALE);
+				UI_DrawDriverIconDecalForDriver(playerIndex,
+				    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[playerIndex]].iconID],
+				    (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (int)iconX,
+				    (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + (int)afterLengthY + BATTLE_TEAM_PLAYER_ICON_Y_OFFSET,
+				    &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, 1, BATTLE_ICON_SCALE);
 			}
 		}
 

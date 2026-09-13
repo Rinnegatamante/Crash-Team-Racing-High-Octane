@@ -2,6 +2,7 @@
 
 #ifdef CTR_NATIVE
 #include <platform/native_cd.h>
+#include <platform/native_custom_racer.h>
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80032d30-0x80032d8c.
@@ -62,6 +63,13 @@ void LOAD_NextQueuedFile()
 			}
 		}
 
+	#ifdef CTR_NATIVE
+		if (NativeCustomRacer_IsBigHeader(curr->ptrBigfileCdPos_UNUSED))
+		{
+			NativeCustomRacer_LoadQueueSlot(curr);
+		}
+		else
+	#endif
 		switch (curr->type_UNUSED)
 		{
 		case LT_RAW:
@@ -95,6 +103,7 @@ void LOAD_NextQueuedFile()
 			sdata->frameFinishedVRAM = 0;
 
 #if defined(CTR_NATIVE)
+			NativeCustomRacer_FinishQueueSlot(curr);
 			// NOTE(aalhendi): CTR_NATIVE marks Mempack allocations with a host-only
 			// flag while the retail path uses LT_SETADDR for the same ownership.
 			if ((curr->flags & (LT_SETADDR | LT_MEMPACK)) != 0)

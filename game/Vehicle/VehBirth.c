@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+#endif
+
 enum
 {
 	VEH_BIRTH_ADV_RETURN_LEVEL_COUNT = 0x14,
@@ -558,6 +562,13 @@ struct Model *VehBirth_GetModelByName(char *searchName)
 	{
 		struct Model *m = data.driverModelExtras[i].model;
 
+#if defined(CTR_NATIVE)
+		if (NativeCustomRacer_GetPlayerSelection(i) >= 0)
+		{
+			continue;
+		}
+#endif
+
 		if ((m != NULL) && VehBirth_ModelNameEquals(m, searchName))
 		{
 			// character found, return pointer
@@ -726,7 +737,15 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 		id = data.characterIDs[index];
 	}
 
-	struct Model *m = VehBirth_GetModelByName(data.MetaDataCharacters[id].name_Debug);
+	struct Model *m = NULL;
+#if defined(CTR_NATIVE)
+	if (NativeCustomRacer_GetPlayerSelection(index) >= 0)
+	{
+		m = NativeCustomRacer_GetLoadedPlayerModel(index);
+	}
+#endif
+	if (m == NULL)
+		m = VehBirth_GetModelByName(data.MetaDataCharacters[id].name_Debug);
 
 	struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 

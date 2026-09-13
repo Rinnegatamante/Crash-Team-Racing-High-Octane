@@ -364,7 +364,7 @@ void AA_EndEvent_DrawMenu(void)
 			DecalFont_DrawLine((char *)&s_driverRankString222, letterPos.x + 0x20, 0x5f, FONT_SMALL, WHITE);
 
 			// Draw the driver's character icon
-			UI_DrawDriverIcon(
+			UI_DrawDriverIconForDriver(gGT->driversInRaceOrder[i]->driverID,
 
 			    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[gGT->driversInRaceOrder[i]->driverID]].iconID],
 

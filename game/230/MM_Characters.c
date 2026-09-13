@@ -2,6 +2,7 @@
 
 #if defined(CTR_NATIVE)
 #include "OxideMenuModel.h"
+#include <platform/native_custom_racer.h>
 #endif
 
 enum
@@ -18,6 +19,10 @@ enum
 	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 0x10,
 	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
 	MM_CHARACTER_SELECT_TRANSITION_META_COUNT = 0x16,
+	MM_CHARACTER_SELECT_PAGED_ICON_COUNT = 0x12,
+	MM_CHARACTER_SELECT_PAGED_TITLE_TRANSITION_INDEX = 0x12,
+	MM_CHARACTER_SELECT_PAGED_DRIVER_WINDOW_TRANSITION_FIRST = 0x13,
+	MM_CHARACTER_SELECT_PAGED_TRANSITION_META_COUNT = 0x18,
 #else
 	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
 	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 0xf,
@@ -97,6 +102,18 @@ enum
 	MM_CHARACTER_SELECT_STATS_BAR_SEGMENT_WIDTH = 0xd,
 	MM_CHARACTER_SELECT_STATS_BAR_RATE = 3,
 	MM_CHARACTER_SELECT_STATS_BAR_COLOR_CODE = 0x38000000,
+	MM_CHARACTER_SELECT_PAGE_HINT_LEFT_X = 0x28,
+	MM_CHARACTER_SELECT_PAGE_HINT_RIGHT_X = 0x1d8,
+	MM_CHARACTER_SELECT_PAGE_HINT_Y = 0x8c,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_Y_OFFSET = 7,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_Y_NUDGE = 2,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_GAP = 0x08,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_RIGHT_GAP = 0x0e,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_ICON = 0x38,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_SCALE = 0x1000,
+	MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_ROTATION = 0x800,
+	MM_CHARACTER_SELECT_PAGE_COUNT_X = 0x1f4,
+	MM_CHARACTER_SELECT_PAGE_COUNT_Y = 0xc8,
 };
 
 static const s16 s_nativeCharacterSelectStatTargets[NUM_CLASSES][3] =
@@ -128,6 +145,21 @@ static const s16 s_nativeCharacterSelectClassStrings[3] =
 static SVec2 s_nativeCharacterSelect1PWindowPos;
 static s16 s_nativeCharacterSelectStatLengths[3];
 static s16 s_nativeCharacterSelectStatCharacterID = -1;
+#if defined(CTR_NATIVE)
+static s16 s_nativeCharacterSelectPage;
+static s16 s_nativeCharacterSelectIconPerPlayer[MM_CHARACTER_SELECT_MAX_PLAYERS] = {0, 1, 2, 3};
+static s16 s_nativeCharacterSelectPageBackup;
+static s16 s_nativeCharacterSelectIconBackup[MM_CHARACTER_SELECT_MAX_PLAYERS] = {0, 1, 2, 3};
+static s16 s_nativeCharacterSelectCustomBackup[MM_CHARACTER_SELECT_MAX_PLAYERS] = {-1, -1, -1, -1};
+static s16 s_nativeCharacterSelectCurrentCustomPreview[MM_CHARACTER_SELECT_MAX_PLAYERS] = {-1, -1, -1, -1};
+static s16 s_nativeCharacterSelectDesiredCustomPreview[MM_CHARACTER_SELECT_MAX_PLAYERS] = {-1, -1, -1, -1};
+static struct CharacterSelectMeta s_nativeCharacterSelectPagedMeta[MM_CHARACTER_SELECT_PAGED_ICON_COUNT];
+static struct TransitionMeta s_nativeCharacterSelectPagedTransitions[MM_CHARACTER_SELECT_PAGED_TRANSITION_META_COUNT];
+static b32 MM_Characters_NativeCustomRosterEnabled(void);
+static s32 MM_Characters_NativeActiveIconCount(void);
+static s32 MM_Characters_NativeTitleTransitionIndex(void);
+static s32 MM_Characters_NativeDriverWindowTransitionFirst(void);
+#endif
 
 static void MM_Characters_NativeResetStats(void)
 {
@@ -149,14 +181,25 @@ static void MM_Characters_NativeDrawStats(void)
 	s16 characterID = data.characterIDs[0];
 	struct MetaDataCHAR *mdc = &data.MetaDataCharacters[characterID];
 	s32 engineID = mdc->engineID;
+	s32 statCharacterID = characterID;
+#if defined(CTR_NATIVE)
+	const int customRacerIndex = NativeCustomRacer_GetPlayerSelection(0);
+	if (customRacerIndex >= 0)
+	{
+		const int customEngineClass = NativeCustomRacer_GetEngineClass(customRacerIndex);
+		if (customEngineClass >= 0)
+			engineID = customEngineClass;
+		statCharacterID = 0x100 + customRacerIndex;
+	}
+#endif
 	if ((u32)engineID >= NUM_CLASSES)
 	{
 		engineID = BALANCED;
 	}
 
-	if (s_nativeCharacterSelectStatCharacterID != characterID)
+	if (s_nativeCharacterSelectStatCharacterID != statCharacterID)
 	{
-		s_nativeCharacterSelectStatCharacterID = characterID;
+		s_nativeCharacterSelectStatCharacterID = (s16)statCharacterID;
 		for (s32 i = 0; i < 3; i++)
 		{
 			s_nativeCharacterSelectStatLengths[i] = 0;
@@ -165,7 +208,13 @@ static void MM_Characters_NativeDrawStats(void)
 
 	for (s32 i = 0; i < 3; i++)
 	{
-		s16 target = (characterID == PENTA_PENGUIN) ? 0x50 : s_nativeCharacterSelectStatTargets[engineID][i];
+		s16 target =
+#if defined(CTR_NATIVE)
+			(customRacerIndex < 0 && characterID == PENTA_PENGUIN) ? 0x50 :
+#else
+			(characterID == PENTA_PENGUIN) ? 0x50 :
+#endif
+			s_nativeCharacterSelectStatTargets[engineID][i];
 		s16 *length = &s_nativeCharacterSelectStatLengths[i];
 		if (*length < target)
 		{
@@ -182,13 +231,25 @@ static void MM_Characters_NativeDrawStats(void)
 	}
 
 	struct TransitionMeta *driverTransition =
-		&D230.characterSelectTransitionMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST];
+		&D230.characterSelectTransitionMeta[
+#if defined(CTR_NATIVE)
+			MM_Characters_NativeDriverWindowTransitionFirst()
+#else
+			MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST
+#endif
+		];
 	s16 transitionX = driverTransition->currX;
 	s16 labelX = MM_CHARACTER_SELECT_STATS_LABEL_X + transitionX;
 	s16 barX = MM_CHARACTER_SELECT_STATS_BAR_X + transitionX;
 
 	s32 classIndex = 0;
-	if ((characterID == PENTA_PENGUIN) || (engineID == SPEED))
+	if (
+#if defined(CTR_NATIVE)
+	    ((customRacerIndex < 0) && (characterID == PENTA_PENGUIN)) ||
+#else
+	    (characterID == PENTA_PENGUIN) ||
+#endif
+	    (engineID == SPEED))
 	{
 		classIndex = 2;
 	}
@@ -499,6 +560,422 @@ static struct TransitionMeta *MM_Characters_GetOxideTransitionsForPlayerCount(s3
 	}
 	return s_oxideCharacterSelectTransition4P;
 }
+
+static b32 MM_Characters_NativeCustomRosterEnabled(void)
+{
+	return (sdata != NULL) && (sdata->gGT != NULL) && NativeCustomRacer_IsRosterEnabled();
+}
+
+static s32 MM_Characters_NativePage0CustomSlots(void)
+{
+	return (sdata->gGT->numPlyrNextGame <= 2) ? 2 : 0;
+}
+
+static s32 MM_Characters_NativeCustomPageSlots(void)
+{
+	return (sdata->gGT->numPlyrNextGame <= 2) ? MM_CHARACTER_SELECT_PAGED_ICON_COUNT : MM_CHARACTER_SELECT_ICON_COUNT;
+}
+
+static s32 MM_Characters_NativePageCount(void)
+{
+	const s32 customCount = NativeCustomRacer_GetCount();
+	const s32 page0Slots = MM_Characters_NativePage0CustomSlots();
+	const s32 pageSlots = MM_Characters_NativeCustomPageSlots();
+	if (customCount <= page0Slots)
+		return 1;
+	return 1 + (customCount - page0Slots + pageSlots - 1) / pageSlots;
+}
+
+static void MM_Characters_NativeDrawPageHints(void)
+{
+	if (!MM_Characters_NativeCustomRosterEnabled())
+		return;
+
+	const s32 pageCount = MM_Characters_NativePageCount();
+	if (pageCount <= 1)
+		return;
+
+	s32 leftX = MM_CHARACTER_SELECT_PAGE_HINT_LEFT_X;
+	s32 rightX = MM_CHARACTER_SELECT_PAGE_HINT_RIGHT_X;
+	s32 hintY = MM_CHARACTER_SELECT_PAGE_HINT_Y;
+	s32 pageCountX = MM_CHARACTER_SELECT_PAGE_COUNT_X;
+	s32 pageCountY = MM_CHARACTER_SELECT_PAGE_COUNT_Y;
+	u32 pageCountJustify = JUSTIFY_RIGHT;
+
+	if (sdata->gGT->numPlyrNextGame == 3)
+	{
+		// Keep the page hints away from the three large driver preview windows.
+		leftX = 0x20;
+		rightX = 0x120;
+		hintY = 0x06;
+		pageCountX = 0x18;
+		pageCountJustify = 0;
+	}
+	else if (sdata->gGT->numPlyrNextGame >= 4)
+	{
+		// Keep 4P hints above the preview windows and center the page counter.
+		hintY = 0x64;
+		pageCountX = 0x100;
+		pageCountJustify = JUSTIFY_CENTER;
+	}
+
+	DecalFont_DrawLine("L", leftX, hintY,
+	                   FONT_BIG, JUSTIFY_CENTER | ORANGE);
+	DecalFont_DrawLine("R", rightX, hintY,
+	                   FONT_BIG, JUSTIFY_CENTER | ORANGE);
+
+	struct GameTracker *gGT = sdata->gGT;
+	struct IconGroup *fontIconGroup = gGT->iconGroup[4];
+	if (fontIconGroup != NULL)
+	{
+		struct Icon **iconPtrArray = ICONGROUP_GETICONS(fontIconGroup);
+		const s32 halfLetterWidth = DecalFont_GetLineWidth("L", FONT_BIG) >> 1;
+		u32 *arrowColors = data.ptrColor[ORANGE];
+
+		DecalHUD_Arrow2D(iconPtrArray[MM_CHARACTER_SELECT_PAGE_HINT_ARROW_ICON],
+		                 leftX - halfLetterWidth - MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_GAP,
+		                 hintY + MM_CHARACTER_SELECT_PAGE_HINT_ARROW_Y_OFFSET + MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_Y_NUDGE,
+		                 &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
+		                 arrowColors[0], arrowColors[1], arrowColors[2], arrowColors[3],
+		                 0, MM_CHARACTER_SELECT_PAGE_HINT_ARROW_SCALE, MM_CHARACTER_SELECT_PAGE_HINT_ARROW_LEFT_ROTATION);
+
+		DecalHUD_Arrow2D(iconPtrArray[MM_CHARACTER_SELECT_PAGE_HINT_ARROW_ICON],
+		                 rightX + halfLetterWidth + MM_CHARACTER_SELECT_PAGE_HINT_ARROW_RIGHT_GAP,
+		                 hintY + MM_CHARACTER_SELECT_PAGE_HINT_ARROW_Y_OFFSET,
+		                 &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
+		                 arrowColors[0], arrowColors[1], arrowColors[2], arrowColors[3],
+		                 0, MM_CHARACTER_SELECT_PAGE_HINT_ARROW_SCALE, 0);
+	}
+
+	char pageText[8];
+	sprintf(pageText, "%d/%d", (int)s_nativeCharacterSelectPage + 1, (int)pageCount);
+	DecalFont_DrawLine(pageText, pageCountX, pageCountY,
+	                   FONT_SMALL, pageCountJustify | PERIWINKLE);
+}
+
+static s32 MM_Characters_NativeActiveIconCount(void)
+{
+	return MM_Characters_NativeCustomRosterEnabled() ? MM_CHARACTER_SELECT_PAGED_ICON_COUNT : MM_CHARACTER_SELECT_ICON_COUNT;
+}
+
+static s32 MM_Characters_NativeTitleTransitionIndex(void)
+{
+	return MM_Characters_NativeCustomRosterEnabled() ? MM_CHARACTER_SELECT_PAGED_TITLE_TRANSITION_INDEX : MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX;
+}
+
+static s32 MM_Characters_NativeDriverWindowTransitionFirst(void)
+{
+	return MM_Characters_NativeCustomRosterEnabled() ? MM_CHARACTER_SELECT_PAGED_DRIVER_WINDOW_TRANSITION_FIRST : MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST;
+}
+
+static int MM_Characters_NativeCustomIndexForSlot(int slot)
+{
+	if (!MM_Characters_NativeCustomRosterEnabled())
+		return -1;
+
+	const s32 page0Slots = MM_Characters_NativePage0CustomSlots();
+	const s32 pageSlots = MM_Characters_NativeCustomPageSlots();
+	int index;
+	if (s_nativeCharacterSelectPage == 0)
+	{
+		if ((page0Slots == 0) || (slot < MM_CHARACTER_SELECT_ICON_COUNT) ||
+		    (slot >= MM_CHARACTER_SELECT_ICON_COUNT + page0Slots))
+			return -1;
+		index = slot - MM_CHARACTER_SELECT_ICON_COUNT;
+	}
+	else
+	{
+		if ((slot < 0) || (slot >= pageSlots))
+			return -1;
+		index = page0Slots + (s_nativeCharacterSelectPage - 1) * pageSlots + slot;
+	}
+
+	return (index >= 0 && index < NativeCustomRacer_GetCount()) ? index : -1;
+}
+
+
+static void MM_Characters_NativeDrawPortraitTexture(u32 texture, int textureWidth, int textureHeight, const struct Icon *templateIcon,
+                                                     s16 posX, s16 posY, u32 color)
+{
+	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
+	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
+		return;
+
+	struct GameTracker *gGT = sdata->gGT;
+	struct PrimMem *primMem = &gGT->backBuffer->primMem;
+	u32 *ot = gGT->pushBuffer_UI.ptrOT;
+	u32 oldTag = *ot;
+	DR_PSYX_TEX *setTexture = (DR_PSYX_TEX *)primMem->cursor;
+	POLY_FT4 *poly = (POLY_FT4 *)(setTexture + 1);
+	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
+	const int iconWidth = (int)templateIcon->texLayout.u1 - (int)templateIcon->texLayout.u0;
+	const int iconHeight = (int)templateIcon->texLayout.v2 - (int)templateIcon->texLayout.v0;
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+
+	poly->r0 = (u8)color;
+	poly->g0 = (u8)(color >> 8);
+	poly->b0 = (u8)(color >> 16);
+	// Native RGBA portraits must stay opaque because their cache has no PS1 STP bits.
+	poly->code = 0x2d;
+	poly->x0 = posX;
+	poly->y0 = posY;
+	poly->x1 = (s16)(posX + iconWidth);
+	poly->y1 = posY;
+	poly->x2 = posX;
+	poly->y2 = (s16)(posY + iconHeight);
+	poly->x3 = (s16)(posX + iconWidth);
+	poly->y3 = (s16)(posY + iconHeight);
+	poly->u0 = 0;
+	poly->v0 = 0;
+	poly->clut = 0;
+	poly->u1 = (u8)textureWidth;
+	poly->v1 = 0;
+	poly->tpage = templateIcon->texLayout.tpage;
+	poly->u2 = 0;
+	poly->v2 = (u8)textureHeight;
+	poly->pad1 = 0;
+	poly->u3 = (u8)textureWidth;
+	poly->v3 = (u8)textureHeight;
+	poly->pad2 = 0;
+	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
+
+	SetPsyXTexture(resetTexture, 0, 0, 0);
+	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
+	*ot = CtrGpu_PrimToOTLink24(setTexture);
+	primMem->cursor = resetTexture + 1;
+}
+
+static b32 MM_Characters_NativeSlotAvailable(int slot)
+{
+	if ((slot < 0) || (slot >= MM_CHARACTER_SELECT_PAGED_ICON_COUNT))
+		return false;
+	if (s_nativeCharacterSelectPage == 0)
+		return (slot < MM_CHARACTER_SELECT_ICON_COUNT) || (MM_Characters_NativeCustomIndexForSlot(slot) >= 0);
+	return MM_Characters_NativeCustomIndexForSlot(slot) >= 0;
+}
+
+static void MM_Characters_NativeCopyTransitionConfig(struct TransitionMeta *dst, const struct TransitionMeta *src)
+{
+	// Preserve live currX/currY interpolation while rebuilding paged metadata.
+	dst->distX = src->distX;
+	dst->distY = src->distY;
+	dst->headStart = src->headStart;
+}
+
+static void MM_Characters_NativeInitPagedTransitions(void)
+{
+	struct TransitionMeta *src = MM_Characters_GetOxideTransitionsForPlayerCount(sdata->gGT->numPlyrNextGame);
+	for (s32 i = 0; i < MM_CHARACTER_SELECT_ICON_COUNT; i++)
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[i], &src[i]);
+
+	if (sdata->gGT->numPlyrNextGame <= 2)
+	{
+		// The two added icons occupy the empty left/right spaces on the bottom row.
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[16], &src[12]);
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[17], &src[15]);
+	}
+	else
+	{
+		// Initialize unused 3P/4P extra slots before the shifted title/window entries.
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[16], &src[0]);
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[17], &src[0]);
+	}
+
+	// Move title, four driver windows and the sentinel two entries forward.
+	for (s32 i = MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX; i < MM_CHARACTER_SELECT_TRANSITION_META_COUNT; i++)
+		MM_Characters_NativeCopyTransitionConfig(&s_nativeCharacterSelectPagedTransitions[i + 2], &src[i]);
+}
+
+static void MM_Characters_NativeBuildCustomPageNavigation(void)
+{
+	for (s32 slot = 0; slot < MM_CHARACTER_SELECT_PAGED_ICON_COUNT; slot++)
+	{
+		if (!MM_Characters_NativeSlotAvailable(slot))
+			continue;
+
+		u8 *next = s_nativeCharacterSelectPagedMeta[slot].nextIconByDirection;
+		for (s32 direction = 0; direction < CHARACTER_SELECT_DIRECTION_COUNT; direction++)
+		{
+			next[direction] = (u8)slot;
+			s32 bestScore = 0x7fffffff;
+			for (s32 candidate = 0; candidate < MM_CHARACTER_SELECT_PAGED_ICON_COUNT; candidate++)
+			{
+				if ((candidate == slot) || !MM_Characters_NativeSlotAvailable(candidate))
+					continue;
+
+				const s32 dx = s_nativeCharacterSelectPagedMeta[candidate].posX - s_nativeCharacterSelectPagedMeta[slot].posX;
+				const s32 dy = s_nativeCharacterSelectPagedMeta[candidate].posY - s_nativeCharacterSelectPagedMeta[slot].posY;
+				s32 primary;
+				s32 secondary;
+				if (direction == CHARACTER_SELECT_DIR_LEFT)
+				{
+					if (dx >= 0) continue;
+					primary = -dx;
+					secondary = dy < 0 ? -dy : dy;
+			}
+				else if (direction == CHARACTER_SELECT_DIR_RIGHT)
+				{
+					if (dx <= 0) continue;
+					primary = dx;
+					secondary = dy < 0 ? -dy : dy;
+			}
+				else if (direction == CHARACTER_SELECT_DIR_UP)
+				{
+					if (dy >= 0) continue;
+					primary = -dy;
+					secondary = dx < 0 ? -dx : dx;
+			}
+				else
+				{
+					if (dy <= 0) continue;
+					primary = dy;
+					secondary = dx < 0 ? -dx : dx;
+			}
+
+				const s32 score = primary * 0x100 + secondary;
+				if (score < bestScore)
+				{
+					bestScore = score;
+					next[direction] = (u8)candidate;
+			}
+			}
+		}
+	}
+}
+
+static void MM_Characters_NativeBuildPagedMeta(void)
+{
+	MM_Characters_NativeInitPagedTransitions();
+	memset(s_nativeCharacterSelectPagedMeta, 0, sizeof(s_nativeCharacterSelectPagedMeta));
+	struct CharacterSelectMeta *layoutMeta = sdata->gGT->numPlyrNextGame <= 2
+		? s_oxideCharacterSelectMeta1P2P
+		: MM_Characters_GetOxideMetaForLayout(D230.characterSelectLayoutIndex);
+
+	if (s_nativeCharacterSelectPage == 0)
+	{
+		for (s32 i = 0; i < MM_CHARACTER_SELECT_ICON_COUNT; i++)
+			s_nativeCharacterSelectPagedMeta[i] = layoutMeta[i];
+
+		const int leftCustom = MM_Characters_NativeCustomIndexForSlot(16);
+		const int rightCustom = MM_Characters_NativeCustomIndexForSlot(17);
+		if (leftCustom >= 0)
+		{
+			s_nativeCharacterSelectPagedMeta[16] = (struct CharacterSelectMeta){64, 174, {10, 16, 16, 12},
+				(s16)NativeCustomRacer_GetTemplateCharacterID(leftCustom), MM_CHARACTER_UNLOCK_ALWAYS};
+			s_nativeCharacterSelectPagedMeta[10].nextIconByDirection[CHARACTER_SELECT_DIR_DOWN] = 16;
+			s_nativeCharacterSelectPagedMeta[12].nextIconByDirection[CHARACTER_SELECT_DIR_LEFT] = 16;
+		}
+		if (rightCustom >= 0)
+		{
+			s_nativeCharacterSelectPagedMeta[17] = (struct CharacterSelectMeta){384, 174, {11, 17, 15, 17},
+				(s16)NativeCustomRacer_GetTemplateCharacterID(rightCustom), MM_CHARACTER_UNLOCK_ALWAYS};
+			s_nativeCharacterSelectPagedMeta[11].nextIconByDirection[CHARACTER_SELECT_DIR_DOWN] = 17;
+			s_nativeCharacterSelectPagedMeta[15].nextIconByDirection[CHARACTER_SELECT_DIR_RIGHT] = 17;
+		}
+		return;
+	}
+
+	// Custom pages use 18 slots in 1P/2P and the 16 retail positions in 3P/4P.
+	for (s32 slot = 0; slot < MM_CHARACTER_SELECT_PAGED_ICON_COUNT; slot++)
+	{
+		const int racerIndex = MM_Characters_NativeCustomIndexForSlot(slot);
+		const b32 compactMultiplayer = sdata->gGT->numPlyrNextGame >= 3;
+		const s16 x = compactMultiplayer && slot < MM_CHARACTER_SELECT_ICON_COUNT
+			? layoutMeta[slot].posX
+			: (s16)(64 + (slot % 6) * 64);
+		const s16 y = compactMultiplayer && slot < MM_CHARACTER_SELECT_ICON_COUNT
+			? layoutMeta[slot].posY
+			: (s16)(96 + (slot / 6) * 39);
+		s_nativeCharacterSelectPagedMeta[slot].posX = x;
+		s_nativeCharacterSelectPagedMeta[slot].posY = y;
+		s_nativeCharacterSelectPagedMeta[slot].characterID =
+			(s16)(racerIndex >= 0 ? NativeCustomRacer_GetTemplateCharacterID(racerIndex) : CRASH_BANDICOOT);
+		s_nativeCharacterSelectPagedMeta[slot].unlockFlags = MM_CHARACTER_UNLOCK_ALWAYS;
+	}
+	MM_Characters_NativeBuildCustomPageNavigation();
+}
+
+static void MM_Characters_NativeApplySlotToPlayer(s32 playerIndex, s32 slot)
+{
+	if ((playerIndex < 0) || (playerIndex >= MM_CHARACTER_SELECT_MAX_PLAYERS) ||
+	    (slot < 0) || (slot >= MM_CHARACTER_SELECT_PAGED_ICON_COUNT))
+		return;
+
+	s_nativeCharacterSelectIconPerPlayer[playerIndex] = (s16)slot;
+	const int customIndex = MM_Characters_NativeCustomIndexForSlot(slot);
+	if (customIndex >= 0)
+	{
+		NativeCustomRacer_SetPlayerSelection(playerIndex, customIndex);
+		data.characterIDs[playerIndex] = (s16)NativeCustomRacer_GetTemplateCharacterID(customIndex);
+	}
+	else
+	{
+		NativeCustomRacer_SetPlayerSelection(playerIndex, -1);
+		data.characterIDs[playerIndex] = s_nativeCharacterSelectPagedMeta[slot].characterID;
+	}
+
+	if (playerIndex == 0)
+		NativeCustomRacer_QueueSharedVramForSelections(sdata->ptrBigfile1);
+}
+
+static s32 MM_Characters_NativeNthAvailableSlot(s32 ordinal)
+{
+	for (s32 slot = 0; slot < MM_CHARACTER_SELECT_PAGED_ICON_COUNT; slot++)
+	{
+		if (!MM_Characters_NativeSlotAvailable(slot))
+			continue;
+		if (ordinal-- == 0)
+			return slot;
+	}
+	return -1;
+}
+
+static void MM_Characters_NativeResetSlotsForPage(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
+	{
+		s32 slot = MM_Characters_NativeNthAvailableSlot(playerIndex);
+		if (slot < 0)
+			slot = MM_Characters_NativeNthAvailableSlot(0);
+		if (slot >= 0)
+			MM_Characters_NativeApplySlotToPlayer(playerIndex, slot);
+	}
+	MM_Characters_NativeResetStats();
+}
+
+static b32 MM_Characters_NativeTryChangePage(u32 button)
+{
+	if (!MM_Characters_NativeCustomRosterEnabled() || (sdata->characterSelectFlags != 0))
+		return false;
+
+	const s32 pageCount = MM_Characters_NativePageCount();
+	if (pageCount <= 1)
+		return false;
+
+	s32 nextPage = s_nativeCharacterSelectPage;
+	if ((button & BTN_L1) != 0)
+		nextPage--;
+	else if ((button & BTN_R1) != 0)
+		nextPage++;
+	else
+		return false;
+
+	if (nextPage < 0)
+		nextPage = pageCount - 1;
+	else if (nextPage >= pageCount)
+		nextPage = 0;
+	if (nextPage == s_nativeCharacterSelectPage)
+		return false;
+
+	s_nativeCharacterSelectPage = (s16)nextPage;
+	MM_Characters_NativeBuildPagedMeta();
+	MM_Characters_NativeResetSlotsForPage();
+	OtherFX_Play(0, 1);
+	return true;
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800ad98c-0x800ada4c.
@@ -657,11 +1134,16 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
 		SVec2 *windowPos = &D230.activeCharacterSelectWindowPos[playerIndex];
-		struct TransitionMeta *tMeta = &D230.characterSelectTransitionMeta[playerIndex];
-
 		struct PushBuffer *pb = &gGT->pushBuffer[playerIndex];
-		pb->rect.x = windowPos->x + tMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST].currX;
-		pb->rect.y = windowPos->y + tMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST].currY;
+		const s32 driverWindowTransitionFirst =
+#if defined(CTR_NATIVE)
+			MM_Characters_NativeDriverWindowTransitionFirst();
+#else
+			MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST;
+#endif
+		struct TransitionMeta *driverWindowTransition = &D230.characterSelectTransitionMeta[driverWindowTransitionFirst + playerIndex];
+		pb->rect.x = windowPos->x + driverWindowTransition->currX;
+		pb->rect.y = windowPos->y + driverWindowTransition->currY;
 		pb->rect.w = D230.characterSelectWindowWidth;
 		pb->rect.h = D230.characterSelectWindowHeight;
 
@@ -749,6 +1231,9 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		idpp[playerIndex].pushBuffer = pb;
 
 		s16 *currCharacterID = &D230.characterSelectPlayerState.currentCharacterID[playerIndex];
+	#if defined(CTR_NATIVE)
+		const s16 desiredCustomPreview = (s16)NativeCustomRacer_GetPlayerSelection(playerIndex);
+	#endif
 
 #if defined(CTR_NATIVE)
 		gGT->drivers[playerIndex]->wheelSize = (*currCharacterID == NITROS_OXIDE) ? 0 : MM_CHARACTER_SELECT_WHEEL_SIZE;
@@ -757,10 +1242,27 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
-		struct Model *model = MM_Characters_GetModelByName(data.MetaDataCharacters[(int)*currCharacterID].name_Debug);
+		struct Model *model = NULL;
+	#if defined(CTR_NATIVE)
+		b32 usingCustomPreviewModel = false;
+		const s16 currentCustomPreview = s_nativeCharacterSelectCurrentCustomPreview[playerIndex];
+		if (currentCustomPreview >= 0)
+		{
+			model = NativeCustomRacer_GetPreviewModel(currentCustomPreview);
+			usingCustomPreviewModel = model != NULL;
+		}
+	#endif
+		if (model == NULL)
+			model = MM_Characters_GetModelByName(data.MetaDataCharacters[(int)*currCharacterID].name_Debug);
 
 		// set modelPtr in Instance
 		driverInst->model = model;
+	#if defined(CTR_NATIVE)
+		// Start animated custom previews at the neutral midpoint used by gameplay.
+		if (usingCustomPreviewModel)
+			driverInst->animFrame = (s16)VehFrameInst_GetStartFrame(driverInst->animIndex,
+			                                                      (int)VehFrameInst_GetNumAnimFrames(driverInst, driverInst->animIndex));
+	#endif
 
 		// CameraDC, freecam mode
 		gGT->cameraDC[playerIndex].cameraMode = CAMERA_MODE_FREECAM;
@@ -777,10 +1279,17 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		if (*moveTimer == 0)
 		{
 			// compare to character ID
-			if (*currCharacterID != data.characterIDs[playerIndex])
+			if ((*currCharacterID != data.characterIDs[playerIndex])
+	#if defined(CTR_NATIVE)
+			    || (s_nativeCharacterSelectCurrentCustomPreview[playerIndex] != desiredCustomPreview)
+	#endif
+			)
 			{
 				*moveTimer = D230.characterSelectDriverModel.moveFrames << 1;
 				D230.characterSelectPlayerState.desiredCharacterID[playerIndex] = data.characterIDs[playerIndex];
+	#if defined(CTR_NATIVE)
+				s_nativeCharacterSelectDesiredCustomPreview[playerIndex] = desiredCustomPreview;
+	#endif
 			}
 		}
 
@@ -798,6 +1307,9 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 			{
 				// make driver fly off screen
 				*currCharacterID = D230.characterSelectPlayerState.desiredCharacterID[playerIndex];
+	#if defined(CTR_NATIVE)
+				s_nativeCharacterSelectCurrentCustomPreview[playerIndex] = s_nativeCharacterSelectDesiredCustomPreview[playerIndex];
+	#endif
 				s32 moveFrameScale = RaceFlag_MoveModels((int)nextMoveTimer, (int)D230.characterSelectDriverModel.moveFrames);
 
 				// direction moving
@@ -892,7 +1404,20 @@ void MM_Characters_SetMenuLayout(void)
 	}
 
 #if defined(CTR_NATIVE)
+	if (MM_Characters_NativeCustomRosterEnabled())
+	{
+		const s32 pageCount = MM_Characters_NativePageCount();
+		if ((s_nativeCharacterSelectPage < 0) || (s_nativeCharacterSelectPage >= pageCount))
+			s_nativeCharacterSelectPage = 0;
+		MM_Characters_NativeBuildPagedMeta();
+		D230.activeCharacterSelectMeta = s_nativeCharacterSelectPagedMeta;
+	}
+	else
+	{
+		s_nativeCharacterSelectPage = 0;
+		NativeCustomRacer_ClearPlayerSelections();
 	D230.activeCharacterSelectMeta = MM_Characters_GetOxideMetaForLayout(layoutIndex);
+	}
 #else
 	D230.activeCharacterSelectMeta = D230.characterSelectMetaByLayout[layoutIndex];
 #endif
@@ -900,7 +1425,9 @@ void MM_Characters_SetMenuLayout(void)
 	D230.characterSelectNameTextY = D230.characterSelectLayout.textY[layoutIndex];
 
 #if defined(CTR_NATIVE)
-	D230.characterSelectTransitionMeta = MM_Characters_GetOxideTransitionsForPlayerCount(numPlyrNextGame);
+	D230.characterSelectTransitionMeta = MM_Characters_NativeCustomRosterEnabled()
+		? (MM_Characters_NativeInitPagedTransitions(), s_nativeCharacterSelectPagedTransitions)
+		: MM_Characters_GetOxideTransitionsForPlayerCount(numPlyrNextGame);
 #else
 	D230.characterSelectTransitionMeta = D230.characterSelectTransitionByPlayerCount[numPlyrNextGame - 1];
 #endif
@@ -917,6 +1444,15 @@ void MM_Characters_BackupIDs(void)
 		// backup is restored when you go back to selection
 		sdata->characterIDs_backup[driverIndex] = data.characterIDs[driverIndex];
 	}
+
+#if defined(CTR_NATIVE)
+	s_nativeCharacterSelectPageBackup = s_nativeCharacterSelectPage;
+	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
+	{
+		s_nativeCharacterSelectIconBackup[playerIndex] = s_nativeCharacterSelectIconPerPlayer[playerIndex];
+		s_nativeCharacterSelectCustomBackup[playerIndex] = (s16)NativeCustomRacer_GetPlayerSelection(playerIndex);
+	}
+#endif
 	return;
 }
 
@@ -994,6 +1530,19 @@ void MM_Characters_RestoreIDs(void)
 		data.characterIDs[driverIndex] = sdata->characterIDs_backup[driverIndex];
 	}
 
+#if defined(CTR_NATIVE)
+	s_nativeCharacterSelectPage = s_nativeCharacterSelectPageBackup;
+	NativeCustomRacer_ClearPlayerSelections();
+	if (NativeCustomRacer_IsRosterEnabled())
+	{
+		for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
+		{
+			NativeCustomRacer_SetPlayerSelection(playerIndex, s_nativeCharacterSelectCustomBackup[playerIndex]);
+			s_nativeCharacterSelectIconPerPlayer[playerIndex] = s_nativeCharacterSelectIconBackup[playerIndex];
+		}
+	}
+#endif
+
 	MM_Characters_SetMenuLayout();
 
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
@@ -1014,6 +1563,13 @@ void MM_Characters_RestoreIDs(void)
 		// get character ID
 		s16 *currID = &data.characterIDs[playerIndex];
 
+#if defined(CTR_NATIVE)
+		if (NativeCustomRacer_GetPlayerSelection(playerIndex) >= 0)
+		{
+			continue;
+		}
+#endif
+
 		// get unlock requirement for this character
 		s16 unlocked = D230.activeCharacterSelectMeta[(s32)*currID].unlockFlags;
 
@@ -1029,7 +1585,30 @@ void MM_Characters_RestoreIDs(void)
 		}
 	}
 
+	#if defined(CTR_NATIVE)
+	if (!MM_Characters_NativeCustomRosterEnabled())
+	#endif
 	MM_Characters_PreventOverlap();
+
+#if defined(CTR_NATIVE)
+	if (MM_Characters_NativeCustomRosterEnabled())
+	{
+		for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
+		{
+			const int customIndex = NativeCustomRacer_GetPlayerSelection(playerIndex);
+			if (customIndex >= 0 &&
+			    MM_Characters_NativeCustomIndexForSlot(s_nativeCharacterSelectIconPerPlayer[playerIndex]) == customIndex)
+			{
+				MM_Characters_NativeApplySlotToPlayer(playerIndex, s_nativeCharacterSelectIconPerPlayer[playerIndex]);
+			}
+			else
+			{
+				NativeCustomRacer_SetPlayerSelection(playerIndex, -1);
+				s_nativeCharacterSelectIconPerPlayer[playerIndex] = D230.characterMenuID[data.characterIDs[playerIndex]];
+			}
+		}
+	}
+#endif
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
@@ -1088,6 +1667,11 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
+	#if defined(CTR_NATIVE)
+		if (MM_Characters_NativeCustomRosterEnabled() && (playerIndex < gGT->numPlyrNextGame))
+			iconPerPlayer[playerIndex] = s_nativeCharacterSelectIconPerPlayer[playerIndex];
+		else
+	#endif
 		iconPerPlayer[playerIndex] = D230.characterMenuID[data.characterIDs[playerIndex]];
 	}
 
@@ -1098,6 +1682,14 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 	}
 
 	MM_Characters_SetMenuLayout();
+
+#if defined(CTR_NATIVE)
+	if ((D230.characterSelectMenuState == IN_MENU) && MM_Characters_NativeTryChangePage(sdata->buttonTapPerPlayer[0]))
+	{
+		for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
+			iconPerPlayer[playerIndex] = s_nativeCharacterSelectIconPerPlayer[playerIndex];
+	}
+#endif
 	MM_Characters_DrawWindows(1);
 
 	// if transitioning in
@@ -1159,8 +1751,14 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 		}
 	}
 
-	int posX = D230.characterSelectTransitionMeta[MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX].currX;
-	int posY = D230.characterSelectTransitionMeta[MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX].currY;
+	const s32 titleTransitionIndex =
+#if defined(CTR_NATIVE)
+		MM_Characters_NativeTitleTransitionIndex();
+#else
+		MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX;
+#endif
+	int posX = D230.characterSelectTransitionMeta[titleTransitionIndex].currX;
+	int posY = D230.characterSelectTransitionMeta[titleTransitionIndex].currY;
 
 	u32 characterSelectType;
 	char *characterSelectString;
@@ -1474,14 +2072,28 @@ dontDrawSelectCharacter:
 		RECTMENU_DrawOuterRect_HighLevel(&drawRect, outlineColor, 0, ot);
 	}
 
+	#if defined(CTR_NATIVE)
+	if (!MM_Characters_NativeCustomRosterEnabled())
+	#endif
 	MM_Characters_PreventOverlap();
 
 	struct CharacterSelectMeta *iconDrawMeta = D230.activeCharacterSelectMeta;
+	const s32 activeIconCount =
+#if defined(CTR_NATIVE)
+		MM_Characters_NativeActiveIconCount();
+#else
+		MM_CHARACTER_SELECT_ICON_COUNT;
+#endif
 
 	// loop through character icons
-	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
+	for (s32 iconIndex = 0; iconIndex < activeIconCount; iconIndex++)
 	{
-		s16 unlockRequirement = iconDrawMeta->unlockFlags;
+	#if defined(CTR_NATIVE)
+		if (MM_Characters_NativeCustomRosterEnabled() && !MM_Characters_NativeSlotAvailable(iconIndex))
+			continue;
+	#endif
+		struct CharacterSelectMeta *drawMeta = &iconDrawMeta[iconIndex];
+		s16 unlockRequirement = drawMeta->unlockFlags;
 		if (
 		    // If Icon is unlocked by default,
 		    (unlockRequirement == MM_CHARACTER_UNLOCK_ALWAYS) ||
@@ -1507,27 +2119,56 @@ dontDrawSelectCharacter:
 
 			struct TransitionMeta *iconTransition = &D230.characterSelectTransitionMeta[iconIndex];
 
-			RECTMENU_DrawPolyGT4(gGT->ptrIcons[data.MetaDataCharacters[iconDrawMeta->characterID].iconID],
-			                     iconTransition->currX + iconDrawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X,
-			                     iconTransition->currY + iconDrawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y,
+			struct Icon *retailIcon = gGT->ptrIcons[data.MetaDataCharacters[drawMeta->characterID].iconID];
+			const s16 portraitX = iconTransition->currX + drawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X;
+			const s16 portraitY = iconTransition->currY + drawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y;
+#if defined(CTR_NATIVE)
+			if (MM_Characters_NativeCustomRosterEnabled())
+			{
+				int portraitWidth = 0;
+				int portraitHeight = 0;
+				u32 portraitTexture = 0;
+				const int customRacerIndex = MM_Characters_NativeCustomIndexForSlot(iconIndex);
 
+				if (customRacerIndex >= 0)
+				{
+					portraitTexture = NativeCustomRacer_GetPortraitTexture(customRacerIndex, retailIcon, &portraitWidth, &portraitHeight);
+			}
+
+					if (portraitTexture != 0)
+				{
+					MM_Characters_NativeDrawPortraitTexture(portraitTexture, portraitWidth, portraitHeight, retailIcon,
+					                                           portraitX, portraitY, iconColor.self);
+					continue;
+			}
+			}
+#endif
+
+			RECTMENU_DrawPolyGT4(retailIcon, portraitX, portraitY,
 			                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
-
 			                     iconColor.self, iconColor.self, iconColor.self, iconColor.self, TRANS_50_DECAL, FP(1.0));
 		}
 
-		iconDrawMeta++;
 	}
 
 	// reset
 	struct CharacterSelectMeta *activeCharacterSelectMeta = D230.activeCharacterSelectMeta;
 
-	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
+#if defined(CTR_NATIVE)
+	if (MM_Characters_NativeCustomRosterEnabled())
 	{
+		for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
+			MM_Characters_NativeApplySlotToPlayer(playerIndex, iconPerPlayer[playerIndex]);
+	}
+	else
+#endif
+	{
+	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 		data.characterIDs[playerIndex] = activeCharacterSelectMeta[(int)iconPerPlayer[playerIndex]].characterID;
 	}
 
 	MM_Characters_NativeDrawStats();
+	MM_Characters_NativeDrawPageHints();
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
@@ -1574,8 +2215,14 @@ dontDrawSelectCharacter:
 				fontType = FONT_SMALL;
 			}
 
+			const s32 driverWindowTransitionFirst =
+#if defined(CTR_NATIVE)
+				MM_Characters_NativeDriverWindowTransitionFirst();
+#else
+				MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST;
+#endif
 			struct TransitionMeta *driverWindowTransition =
-			    &D230.characterSelectTransitionMeta[playerIndex + MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST];
+			    &D230.characterSelectTransitionMeta[playerIndex + driverWindowTransitionFirst];
 			SVec2 *windowPos = &D230.activeCharacterSelectWindowPos[playerIndex];
 			s16 nameBaseY = driverWindowTransition->currY + windowPos->y;
 			s16 nameYOffset = (s16)((((u32)(numPlyrNextGame < 3) ^ 1) << 0x12) >> 0x10);
@@ -1591,7 +2238,13 @@ dontDrawSelectCharacter:
 			}
 
 			// draw string
-			DecalFont_DrawLine(sdata->lngStrings[data.MetaDataCharacters[activeCharacterSelectMeta->characterID].name_LNG_long],
+			const char *characterName = sdata->lngStrings[data.MetaDataCharacters[activeCharacterSelectMeta->characterID].name_LNG_long];
+#if defined(CTR_NATIVE)
+			const int customRacerIndex = NativeCustomRacer_GetPlayerSelection(playerIndex);
+			if (customRacerIndex >= 0)
+				characterName = NativeCustomRacer_GetName(customRacerIndex);
+#endif
+			DecalFont_DrawLine((char *)characterName,
 			                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
 			                   (JUSTIFY_CENTER | ORANGE));
 		}
@@ -1604,8 +2257,12 @@ dontDrawSelectCharacter:
 	activeCharacterSelectMeta = D230.activeCharacterSelectMeta;
 
 	// loop through all icons
-	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
+	for (s32 iconIndex = 0; iconIndex < activeIconCount; iconIndex++)
 	{
+	#if defined(CTR_NATIVE)
+		if (MM_Characters_NativeCustomRosterEnabled() && !MM_Characters_NativeSlotAvailable(iconIndex))
+			continue;
+	#endif
 		s16 unlockRequirement = activeCharacterSelectMeta[iconIndex].unlockFlags;
 
 		if (
@@ -1633,7 +2290,13 @@ dontDrawSelectCharacter:
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
-		struct TransitionMeta *driverWindowTransition = &D230.characterSelectTransitionMeta[playerIndex + MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST];
+		const s32 driverWindowTransitionFirst =
+#if defined(CTR_NATIVE)
+			MM_Characters_NativeDriverWindowTransitionFirst();
+#else
+			MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST;
+#endif
+		struct TransitionMeta *driverWindowTransition = &D230.characterSelectTransitionMeta[playerIndex + driverWindowTransitionFirst];
 		b32 playerSelected = (((int)(s16)sdata->characterSelectFlags >> playerIndex) & 1U) != 0;
 		Color animatedColor;
 
