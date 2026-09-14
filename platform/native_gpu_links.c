@@ -114,7 +114,7 @@ void NativeGpuLinks_RegisterRangeChecked(const char *label, const void *hostStar
 
 static const struct NativeGpuLinkRange *NativeGpuLinks_FindHostRange(uintptr_t hostPtr)
 {
-	if (s_lastHostRangeHit < s_nativeGpuLinkRangeCount)
+	if ((s_lastHostRangeHit >= 0) && (s_lastHostRangeHit < s_nativeGpuLinkRangeCount))
 	{
 		const struct NativeGpuLinkRange *cached = &s_nativeGpuLinkRanges[s_lastHostRangeHit];
 		if ((hostPtr >= cached->hostStart) && (hostPtr < cached->hostEnd))

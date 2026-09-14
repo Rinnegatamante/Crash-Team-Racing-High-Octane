@@ -22,7 +22,7 @@
 #define NATIVE_CUSTOM_RACER_MAGIC 0x52525443u
 #define NATIVE_CUSTOM_RACER_VERSION 2u
 #define NATIVE_CUSTOM_RACER_PATH_MAX 1024
-#define NATIVE_CUSTOM_RACER_DIR "customracers"
+#define NATIVE_CUSTOM_RACER_DIR "mods/customracers"
 
 struct NativeCustomRacerDiskAsset
 {

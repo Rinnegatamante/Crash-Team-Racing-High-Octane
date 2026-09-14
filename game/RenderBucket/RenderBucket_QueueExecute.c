@@ -626,9 +626,13 @@ static struct RenderBucketExecuteScratch *RenderBucket_Scratch(void)
 	return CTR_SCRATCHPAD_PTR(struct RenderBucketExecuteScratch, 0);
 }
 
-static struct RenderBucketPackedVertex *RenderBucket_PackedVertexScratch(u16 stackIndex)
+static struct RenderBucketPackedVertex *RenderBucket_PackedVertexCache(struct RenderBucketDrawContext *ctx, u16 stackIndex)
 {
+#if defined(CTR_NATIVE)
+	return &ctx->packedStack[stackIndex];
+#else
 	return CTR_SCRATCHPAD_PTR(struct RenderBucketPackedVertex, RENDER_BUCKET_PAYLOAD_SCRATCH_OFFSET + (stackIndex * sizeof(struct RenderBucketPackedVertex)));
+#endif
 }
 
 static u32 *RenderBucket_ColorCacheScratch(void)
@@ -2454,7 +2458,7 @@ static u32 RenderBucket_InterpolatedModelVertexZ(struct RenderBucketDrawContext 
 
 static struct RenderBucketPackedVertex RenderBucket_CachePackedVertex(struct RenderBucketDrawContext *ctx, u16 stackIndex)
 {
-	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexScratch(stackIndex);
+	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexCache(ctx, stackIndex);
 	struct RenderBucketPackedVertex packed;
 
 	packed.xy = RenderBucket_PackModelVertexXY(ctx, &ctx->stack[stackIndex]);
@@ -2467,7 +2471,7 @@ static struct RenderBucketPackedVertex RenderBucket_CachePackedVertex(struct Ren
 static struct RenderBucketPackedVertex RenderBucket_CacheInterpolatedPackedVertex(struct RenderBucketDrawContext *ctx, u16 stackIndex,
                                                                                   const RenderBucketVertex *curr, const RenderBucketVertex *next)
 {
-	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexScratch(stackIndex);
+	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexCache(ctx, stackIndex);
 	struct RenderBucketPackedVertex packed;
 
 	packed.xy = RenderBucket_PackInterpolatedModelVertexXY(ctx, curr, next);
@@ -2564,7 +2568,7 @@ struct RenderBucketUncompressResult RenderBucket_UncompressAnimationFrame(struct
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8006a8e0-0x8006aaa8.
 	if ((flags & 4) != 0)
 	{
-		struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexScratch(stackIndex);
+		struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexCache(ctx, stackIndex);
 
 		// Command bit 0x04000000 returns the cached packed vertex.
 		result.packed = *scratchVertex;
@@ -2623,7 +2627,7 @@ static struct RenderBucketUncompressResult RenderBucket_UncompressAnimationFrame
 
 	if ((flags & 4) != 0)
 	{
-		struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexScratch(stackIndex);
+		struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexCache(ctx, stackIndex);
 
 		// NOTE(aalhendi): Retail next-frame entry shares the cached-vertex
 		// command bit path with 0x8006a8e0 before returning color.
@@ -2680,7 +2684,7 @@ static struct RenderBucketUncompressResult RenderBucket_TransformSplitDecodedVer
                                                                                     struct RenderBucketUncompressResult result)
 {
 	u8 flags = (command >> 24) & 0xff;
-	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexScratch(stackIndex);
+	struct RenderBucketPackedVertex *scratchVertex = RenderBucket_PackedVertexCache(ctx, stackIndex);
 
 	if ((flags & 4) != 0)
 	{
