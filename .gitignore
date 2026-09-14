@@ -5,6 +5,7 @@ assets/*
 !assets/vita.png
 debug/
 *.exe
+!xdelta.exe
 *.o
 *.gch
 *.a
