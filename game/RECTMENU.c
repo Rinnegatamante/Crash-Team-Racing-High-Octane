@@ -6,6 +6,7 @@ extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
+extern int gNativeCustomAIRacersEnabled;
 extern u32 gNativeCheatConfigMask;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
@@ -50,15 +51,24 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"CAMARA: CERCA", "CAMARA: LEJOS"},
 		{"CAMERA: DICHTBIJ", "CAMERA: VER"},
 	};
-	static const char *defaultHud[6][2] =
-	{
-		{"HUD: MINIMAP", "HUD: SPEEDOMETER"},
+		static const char *defaultHud[6][2] =
+		{
+			{"HUD: MINIMAP", "HUD: SPEEDOMETER"},
 		{"HUD: MINI-CARTE", "HUD: COMPTEUR"},
 		{"HUD: MINIKARTE", "HUD: TACHO"},
 		{"HUD: MINIMAPPA", "HUD: TACHIMETRO"},
 		{"HUD: MINIMAPA", "HUD: VELOCIMETRO"},
-		{"HUD: MINIKAART", "HUD: SNELHEID"},
-	};
+			{"HUD: MINIKAART", "HUD: SNELHEID"},
+		};
+		static const char *customAIRacers[6][2] =
+		{
+			{"CUSTOM RACERS FOR AI: OFF", "CUSTOM RACERS FOR AI: ON"},
+			{"PILOTES CUSTOM IA: NON", "PILOTES CUSTOM IA: OUI"},
+			{"CUSTOM-FAHRER KI: AUS", "CUSTOM-FAHRER KI: EIN"},
+			{"PILOTI CUSTOM IA: NO", "PILOTI CUSTOM IA: SI"},
+			{"PILOTOS CUSTOM IA: NO", "PILOTOS CUSTOM IA: SI"},
+			{"CUSTOM RACERS AI: UIT", "CUSTOM RACERS AI: AAN"},
+		};
 #ifndef __vita__
 	static const char *antiAliasing[2] =
 	{
@@ -302,8 +312,10 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)frameRate[gNative60FpsEnabled != 0];
 	case NATIVE_MENU_STRING_DEFAULT_CAMERA:
 		return (char *)defaultCamera[languageRow][gNativeDefaultCameraFar != 0];
-	case NATIVE_MENU_STRING_DEFAULT_HUD:
-		return (char *)defaultHud[languageRow][gNativeDefaultHudSpeedometer != 0];
+		case NATIVE_MENU_STRING_DEFAULT_HUD:
+			return (char *)defaultHud[languageRow][gNativeDefaultHudSpeedometer != 0];
+		case NATIVE_MENU_STRING_CUSTOM_AI_RACERS:
+			return (char *)customAIRacers[languageRow][gNativeCustomAIRacersEnabled != 0];
 	case NATIVE_MENU_STRING_CONTROLS:
 		return (char *)controlsTitle[languageRow];
 	case NATIVE_MENU_STRING_CHEATS:

@@ -330,13 +330,22 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	u32 voiceIndex = rng % numVoiceIDs;
 	u32 xaID = (u16)voiceIDs[voiceIndex];
 
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_SetActiveVoiceCharacter((int)characterID);
+#endif
 	if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, xaID) == 0)
 	{
+#if defined(CTR_NATIVE)
+		NativeCustomRacer_SetActiveVoiceCharacter(-1);
+#endif
 		sdata->voicelineCooldown = 0x1e;
 		return;
 	}
 
 	sdata->voicelineCooldown = (s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, xaID) / 5) + 0x1e;
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_SetActiveVoiceCharacter(-1);
+#endif
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002d0f8-0x8002d2a8

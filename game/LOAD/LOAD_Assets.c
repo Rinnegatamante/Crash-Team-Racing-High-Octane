@@ -17,6 +17,7 @@ enum
 static DriverModelExtraSlot s_nativeAIRandomizerModels[NATIVE_AI_RANDOMIZER_DRIVER_COUNT];
 static void *s_nativeAIRandomizer2PBuffers[NATIVE_AI_RANDOMIZER_2P_AI_COUNT];
 static struct Model *s_nativeAIRandomizer2PModels[NATIVE_AI_RANDOMIZER_2P_AI_COUNT];
+extern int gNativeCustomAIRacersEnabled;
 
 static b32 NativeAIRandomizer_ShouldUse(const struct GameTracker *gGT)
 {
@@ -25,7 +26,7 @@ static b32 NativeAIRandomizer_ShouldUse(const struct GameTracker *gGT)
 		return false;
 	}
 
-	if (NativeCustomRacer_GetPlayerSelection(0) >= 0)
+	if ((NativeCustomRacer_GetPlayerSelection(0) >= 0) && (gNativeCustomAIRacersEnabled == 0))
 	{
 		return false;
 	}
@@ -95,6 +96,14 @@ static b32 NativeAIRandomizer_CharacterIsTaken(int driverIndex, int characterID)
 	return false;
 }
 
+static void NativeAIRandomizer_ClearCustomAISelections(int firstAI)
+{
+	for (int driverIndex = firstAI; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
+	{
+		NativeCustomRacer_SetDriverSelection(driverIndex, -1);
+	}
+}
+
 static void NativeAIRandomizer_SetCharacters(struct GameTracker *gGT, int firstAI, int driverCount)
 {
 	if (NativeAIRandomizer_ShouldPreserveCupLineup(gGT))
@@ -102,16 +111,31 @@ static void NativeAIRandomizer_SetCharacters(struct GameTracker *gGT, int firstA
 		return;
 	}
 
+	NativeAIRandomizer_ClearCustomAISelections(firstAI);
 	u32 state = NativeAIRandomizer_Seed(gGT, firstAI);
+	const int customCount = gNativeCustomAIRacersEnabled ? NativeCustomRacer_GetCount() : 0;
+	const int candidateCount = NATIVE_AI_RANDOMIZER_CHARACTER_COUNT + customCount;
 	for (int driverIndex = firstAI; driverIndex < driverCount; driverIndex++)
 	{
 		int characterID;
+		int customRacerIndex;
 		do
 		{
-			characterID = (int)(NativeAIRandomizer_Next(&state) % NATIVE_AI_RANDOMIZER_CHARACTER_COUNT);
+			const int candidate = (int)(NativeAIRandomizer_Next(&state) % (u32)candidateCount);
+			if (candidate < NATIVE_AI_RANDOMIZER_CHARACTER_COUNT)
+			{
+				characterID = candidate;
+				customRacerIndex = -1;
+			}
+			else
+			{
+				customRacerIndex = candidate - NATIVE_AI_RANDOMIZER_CHARACTER_COUNT;
+				characterID = NativeCustomRacer_GetTemplateCharacterID(customRacerIndex);
+			}
 		} while (NativeAIRandomizer_CharacterIsTaken(driverIndex, characterID));
 
 		data.characterIDs[driverIndex] = characterID;
+		NativeCustomRacer_SetDriverSelection(driverIndex, customRacerIndex);
 	}
 }
 
@@ -137,6 +161,12 @@ static b32 NativeAIRandomizer_Queue2PModels(struct BigHeader *bigfile)
 	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
 	{
 		int driverIndex = 2 + i;
+		if (NativeCustomRacer_GetDriverSelection(driverIndex) >= 0)
+		{
+			if (NativeCustomRacer_LoadDriverModelNow(driverIndex, NULL))
+				continue;
+			NativeCustomRacer_SetDriverSelection(driverIndex, -1);
+		}
 		int fileIndex = BI_RACERMODELMED + data.characterIDs[driverIndex];
 		u32 readSize = (entries[fileIndex].size + LOAD_CD_DATA_SECTOR_ROUND_MASK) & ~LOAD_CD_DATA_SECTOR_ROUND_MASK;
 
@@ -155,6 +185,8 @@ static b32 NativeAIRandomizer_Queue2PModels(struct BigHeader *bigfile)
 	for (int i = 0; i < NATIVE_AI_RANDOMIZER_2P_AI_COUNT; i++)
 	{
 		int driverIndex = 2 + i;
+		if (NativeCustomRacer_GetDriverSelection(driverIndex) >= 0)
+			continue;
 		int fileIndex = BI_RACERMODELMED + data.characterIDs[driverIndex];
 		LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, s_nativeAIRandomizer2PBuffers[i], NativeAIRandomizer_2PModelLoaded);
 	}
@@ -187,6 +219,13 @@ static void NativeAIRandomizer_QueueCPUModels(struct BigHeader *bigfile, int fir
 {
 	for (int driverIndex = firstAI; driverIndex < driverCount; driverIndex++)
 	{
+		if (NativeCustomRacer_GetDriverSelection(driverIndex) >= 0)
+		{
+			if (NativeCustomRacer_LoadDriverModelNow(driverIndex, NULL))
+				continue;
+			NativeCustomRacer_SetDriverSelection(driverIndex, -1);
+		}
+
 		if (driverIndex == packDriverIndex)
 		{
 			continue;
@@ -206,6 +245,7 @@ void NativeAIRandomizer_FinalizeModels(void)
 			    (struct Model *)((u8 *)s_nativeAIRandomizerModels[driverIndex].fileBase + LOAD_MODEL_FILE_HEADER_BYTES);
 		}
 	}
+	NativeCustomRacer_ApplyDriverVramPatches();
 }
 
 struct Model *NativeAIRandomizer_GetDriverModel(int driverIndex)
@@ -213,6 +253,14 @@ struct Model *NativeAIRandomizer_GetDriverModel(int driverIndex)
 	if ((u32)driverIndex >= NATIVE_AI_RANDOMIZER_DRIVER_COUNT)
 	{
 		return NULL;
+	}
+	if (NativeCustomRacer_GetDriverSelection(driverIndex) >= 0)
+	{
+		struct Model *model = NativeCustomRacer_GetLoadedDriverModel(driverIndex);
+		if (model != NULL)
+		{
+			return model;
+		}
 	}
 
 	if ((driverIndex >= 2) && (driverIndex < 2 + NATIVE_AI_RANDOMIZER_2P_AI_COUNT))
@@ -286,6 +334,7 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 			for (int i = 0; i < LOAD_2P_AI_SET_RACER_COUNT; i++)
 			{
 				data.characterIDs[2 + i] = robotSet[i];
+				NativeCustomRacer_SetDriverSelection(2 + i, -1);
 			}
 		}
 
@@ -345,7 +394,22 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	struct GameTracker *gGT = sdata->gGT;
 #if defined(CTR_NATIVE)
 	NativeAIRandomizer_ResetModels();
-	NativeCustomRacer_QueueSharedVramForSelections(bigfile);
+	if (!NativeAIRandomizer_ShouldUse(gGT))
+	{
+		int firstNonHuman = (gGT != NULL) ? gGT->numPlyrCurrGame : 1;
+		if (firstNonHuman < 1)
+		{
+			firstNonHuman = 1;
+		}
+		NativeAIRandomizer_ClearCustomAISelections(firstNonHuman);
+	}
+		// The AI randomizer composes every selected custom racer's VRAM after the
+		// driver banks finish loading. Avoid spending one of the eight retail queue
+		// slots on a full custom SHAREDMPK.VRM in that path.
+		if (!NativeAIRandomizer_ShouldUse(gGT))
+		{
+			NativeCustomRacer_QueueSharedVramForSelections(bigfile);
+		}
 #endif
 #if defined(__vita__)
 	if (NativeAdhoc_EnforcePreparedRaceConfig(gGT))
@@ -430,7 +494,18 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		}
 
 #if defined(CTR_NATIVE)
-		NativeCustomRacer_QueueSelectedModel(0, &data.driverModelExtras[0].fileBase);
+				if (NativeAIRandomizer_ShouldUse(gGT) && (NativeCustomRacer_GetDriverSelection(0) >= 0))
+				{
+					if (!NativeCustomRacer_LoadDriverModelNow(0, &data.driverModelExtras[0].fileBase))
+					{
+						fprintf(stderr, "[CTR Native] Failed to load custom racer for driver 0; using retail template.\n");
+						NativeCustomRacer_SetDriverSelection(0, -1);
+					}
+				}
+			else
+			{
+				NativeCustomRacer_QueueSelectedModel(0, &data.driverModelExtras[0].fileBase);
+			}
 #endif
 
 #if defined(CTR_NATIVE)
@@ -438,7 +513,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		{
 			int packDriverIndex = LOAD_CHARACTER_ID_COUNT - 1;
 
-			NativeAIRandomizer_QueueDriverModel(bigfile, 0, BI_RACERMODELHI + data.characterIDs[0]);
+			if (NativeCustomRacer_GetDriverSelection(0) < 0)
+			{
+				NativeAIRandomizer_QueueDriverModel(bigfile, 0, BI_RACERMODELHI + data.characterIDs[0]);
+			}
 			NativeAIRandomizer_QueueCPUModels(bigfile, 1, LOAD_CHARACTER_ID_COUNT, packDriverIndex, BI_RACERMODELHI);
 			lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[packDriverIndex];
 		}

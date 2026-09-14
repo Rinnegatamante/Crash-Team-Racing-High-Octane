@@ -563,7 +563,7 @@ struct Model *VehBirth_GetModelByName(char *searchName)
 		struct Model *m = data.driverModelExtras[i].model;
 
 #if defined(CTR_NATIVE)
-		if (NativeCustomRacer_GetPlayerSelection(i) >= 0)
+		if (NativeCustomRacer_GetDriverSelection(i) >= 0)
 		{
 			continue;
 		}
@@ -739,9 +739,9 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 
 	struct Model *m = NULL;
 #if defined(CTR_NATIVE)
-	if (NativeCustomRacer_GetPlayerSelection(index) >= 0)
+	if (NativeCustomRacer_GetDriverSelection(index) >= 0)
 	{
-		m = NativeCustomRacer_GetLoadedPlayerModel(index);
+		m = NativeCustomRacer_GetLoadedDriverModel(index);
 	}
 #endif
 	if (m == NULL)

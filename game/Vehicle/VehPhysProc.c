@@ -2357,7 +2357,7 @@ void VehPhysProc_SlamWall_Animate(struct Thread *t, struct Driver *d)
 		d->matrixIndex = 0;
 	}
 #if defined(CTR_NATIVE)
-	else if (NativeCustomRacer_GetPlayerSelection(d->driverID) >= 0)
+	else if (NativeCustomRacer_GetDriverSelection(d->driverID) >= 0)
 	{
 		// Restore the normal driving pose after custom-racer wall impacts.
 		inst->animIndex = 0;

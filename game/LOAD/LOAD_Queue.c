@@ -10,6 +10,10 @@ void LOAD_AppendQueue(struct BigHeader *bigfile, int type, int fileIndex, void *
 {
 	if (sdata->queueLength >= LOAD_QUEUE_SLOT_COUNT)
 	{
+	#ifdef CTR_NATIVE
+		fprintf(stderr, "[CTR Native] Load queue overflow: type=%d file=%d length=%d\n",
+		        type, fileIndex, (int)sdata->queueLength);
+	#endif
 		return;
 	}
 

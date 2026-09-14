@@ -389,7 +389,7 @@ internal u32 UI_NativeResolveDriverPortraitTexture(int driverID, struct Icon *ic
 	if ((driverID < 0) || (driverID >= LOAD_CHARACTER_ID_COUNT) || (icon == NULL))
 		return 0;
 
-	const int customIndex = NativeCustomRacer_GetPlayerSelection(driverID);
+	const int customIndex = NativeCustomRacer_GetDriverSelection(driverID);
 	if (customIndex >= 0)
 		return NativeCustomRacer_GetPortraitTexture(customIndex, icon, textureWidth, textureHeight);
 

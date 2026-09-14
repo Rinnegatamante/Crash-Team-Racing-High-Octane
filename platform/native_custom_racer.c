@@ -1,6 +1,7 @@
 #include <common.h>
 #include <platform/native_assets.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_disc_image.h>
 #include <platform/native_gpu.h>
 #include <platform/native_path.h>
 #include <platform/native_renderer.h>
@@ -95,16 +96,17 @@ struct NativeCustomRacerTextureTask
 
 global_variable struct NativeCustomRacerEntry s_nativeCustomRacers[NATIVE_CUSTOM_RACER_MAX];
 global_variable int s_nativeCustomRacerCount;
-global_variable s16 s_nativeCustomRacerPlayerSelection[4] = {-1, -1, -1, -1};
-global_variable void *s_nativeCustomRacerPlayerModelStorage[4];
+global_variable s16 s_nativeCustomRacerDriverSelection[LOAD_CHARACTER_ID_COUNT] = {-1, -1, -1, -1, -1, -1, -1, -1};
+global_variable void *s_nativeCustomRacerDriverModelStorage[LOAD_CHARACTER_ID_COUNT];
 global_variable s16 s_nativeCustomRacerSharedVram = -1;
 global_variable struct NativeCustomRacerRetailPortrait s_nativeCustomRacerRetailPortraits[16];
 global_variable u8 *s_nativeCustomRacerRetailSharedVram;
 global_variable u32 s_nativeCustomRacerRetailSharedVramSize;
+global_variable int s_nativeCustomRacerVoiceCharacterID = -1;
 
 internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, int assetIndex, void *destination);
 
-internal int NativeCustomRacer_PlayerIndexForModelTarget(void **target)
+internal int NativeCustomRacer_DriverIndexForModelTarget(void **target)
 {
 	if (target == NULL)
 		return -1;
@@ -114,10 +116,10 @@ internal int NativeCustomRacer_PlayerIndexForModelTarget(void **target)
 		if (target == &data.driverModelExtras[playerIndex].fileBase)
 			return playerIndex;
 	}
-	for (int playerIndex = 0; playerIndex < 4; playerIndex++)
+	for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
 	{
-		if (target == &s_nativeCustomRacerPlayerModelStorage[playerIndex])
-			return playerIndex;
+		if (target == &s_nativeCustomRacerDriverModelStorage[driverIndex])
+			return driverIndex;
 	}
 	return -1;
 }
@@ -324,6 +326,47 @@ internal int NativeCustomRacer_ApplyVramFileToBuffer(const u8 *fileData, u32 fil
 	return 0;
 }
 
+internal int NativeCustomRacer_UploadVramFile(const u8 *fileData, u32 fileSize)
+{
+	if ((fileData == NULL) || (fileSize < sizeof(struct VramHeader)))
+		return 0;
+
+	const u8 *cursor = fileData;
+	const u8 *end = fileData + fileSize;
+	if (*(const u32 *)cursor != 0x20u)
+	{
+		const struct VramHeader *vh = (const struct VramHeader *)cursor;
+		const size_t pixelBytes = (size_t)(u16)vh->rect.w * (size_t)(u16)vh->rect.h * sizeof(u16);
+		if (((const u8 *)VRAMHEADER_GETPIXLES(vh) + pixelBytes > end) ||
+		    (vh->rect.x < 0) || (vh->rect.y < 0) || (vh->rect.x + vh->rect.w > VRAM_WIDTH) || (vh->rect.y + vh->rect.h > VRAM_HEIGHT))
+			return 0;
+		RECT16 rect = {(s16)vh->rect.x, (s16)vh->rect.y, (s16)vh->rect.w, (s16)vh->rect.h};
+		LoadImage(&rect, VRAMHEADER_GETPIXLES(vh));
+		return 1;
+	}
+
+	cursor += sizeof(u32);
+	while (cursor + sizeof(u32) <= end)
+	{
+		const u32 size = *(const u32 *)cursor;
+		if (size == 0)
+			return 1;
+		cursor += sizeof(u32);
+		if ((size < sizeof(struct VramHeader)) || (cursor + (size & ~3u) > end))
+			return 0;
+
+		const struct VramHeader *vh = (const struct VramHeader *)cursor;
+		const size_t pixelBytes = (size_t)(u16)vh->rect.w * (size_t)(u16)vh->rect.h * sizeof(u16);
+		if (((const u8 *)VRAMHEADER_GETPIXLES(vh) + pixelBytes > cursor + (size & ~3u)) ||
+		    (vh->rect.x < 0) || (vh->rect.y < 0) || (vh->rect.x + vh->rect.w > VRAM_WIDTH) || (vh->rect.y + vh->rect.h > VRAM_HEIGHT))
+			return 0;
+		RECT16 rect = {(s16)vh->rect.x, (s16)vh->rect.y, (s16)vh->rect.w, (s16)vh->rect.h};
+		LoadImage(&rect, VRAMHEADER_GETPIXLES(vh));
+		cursor += size & ~3u;
+	}
+	return 0;
+}
+
 CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeader) == 0x24c);
 
 internal int NativeCustomRacer_HasExtension(const char *name, const char *extension)
@@ -447,11 +490,96 @@ internal void NativeCustomRacer_AddPath(const char *path)
 	s_nativeCustomRacers[s_nativeCustomRacerCount++] = racer;
 }
 
+internal int NativeCustomRacer_CacheRetailSharedVramFromAssets(void)
+{
+	if (s_nativeCustomRacerRetailSharedVram != NULL)
+		return 1;
+
+	const size_t headerSize = (size_t)LOAD_BIGFILE_HEADER_SECTORS * LOAD_CD_DATA_SECTOR_SIZE;
+	u8 *headerData = (u8 *)malloc(headerSize);
+	u8 *vramData = NULL;
+	u32 vramSize = 0;
+	if (headerData == NULL)
+		return 0;
+
+	FILE *hostBigfile = NativeAssets_OpenHostBigfile("rb");
+	if (hostBigfile != NULL)
+	{
+		if (fread(headerData, 1, headerSize, hostBigfile) != headerSize)
+			goto host_fail;
+
+		struct BigHeader *header = (struct BigHeader *)headerData;
+		if ((header->numEntry <= BI_SHAREDMPKVRM) ||
+		    (sizeof(*header) + (size_t)header->numEntry * sizeof(struct BigEntry) > headerSize))
+			goto host_fail;
+
+		struct BigEntry *entries = BIG_GETENTRY(header);
+		struct BigEntry *entry = &entries[BI_SHAREDMPKVRM];
+		if ((entry->offset < 0) || (entry->size < (int)sizeof(struct VramHeader)))
+			goto host_fail;
+
+		vramSize = (u32)entry->size;
+		vramData = (u8 *)malloc(vramSize);
+		if ((vramData == NULL) ||
+		    (fseek(hostBigfile, (long)((u32)entry->offset << LOAD_CD_DATA_SECTOR_SHIFT), SEEK_SET) != 0) ||
+		    (fread(vramData, 1, vramSize, hostBigfile) != vramSize))
+		{
+			free(vramData);
+			vramData = NULL;
+			goto host_fail;
+		}
+
+		fclose(hostBigfile);
+	}
+	else
+	{
+		struct NativeDiscImageFile discBigfile;
+		if (!NativeDiscImage_FindFile("BIGFILE.BIG", &discBigfile) ||
+		    !NativeDiscImage_ReadDataSectors(&discBigfile, 0, LOAD_BIGFILE_HEADER_SECTORS, headerData))
+			goto fail;
+
+		struct BigHeader *header = (struct BigHeader *)headerData;
+		if ((header->numEntry <= BI_SHAREDMPKVRM) ||
+		    (sizeof(*header) + (size_t)header->numEntry * sizeof(struct BigEntry) > headerSize))
+			goto fail;
+
+		struct BigEntry *entries = BIG_GETENTRY(header);
+		struct BigEntry *entry = &entries[BI_SHAREDMPKVRM];
+		if ((entry->offset < 0) || (entry->size < (int)sizeof(struct VramHeader)))
+			goto fail;
+
+		vramSize = (u32)entry->size;
+		const u32 sectorCount = (vramSize + LOAD_CD_DATA_SECTOR_ROUND_MASK) >> LOAD_CD_DATA_SECTOR_SHIFT;
+		const size_t readSize = (size_t)sectorCount * LOAD_CD_DATA_SECTOR_SIZE;
+		vramData = (u8 *)malloc(readSize);
+		if ((vramData == NULL) ||
+		    !NativeDiscImage_ReadDataSectors(&discBigfile, (u32)entry->offset, sectorCount, vramData))
+		{
+			free(vramData);
+			vramData = NULL;
+			goto fail;
+		}
+	}
+
+	free(headerData);
+	s_nativeCustomRacerRetailSharedVram = vramData;
+	s_nativeCustomRacerRetailSharedVramSize = vramSize;
+	printf("[CTR Native] Cached retail shared racer VRAM (%u bytes)\n", vramSize);
+	return 1;
+
+host_fail:
+	fclose(hostBigfile);
+fail:
+	free(vramData);
+	free(headerData);
+	return 0;
+}
+
 int NativeCustomRacer_Scan(void)
 {
 	char directory[NATIVE_CUSTOM_RACER_PATH_MAX];
 	s_nativeCustomRacerCount = 0;
-	NativeCustomRacer_ClearPlayerSelections();
+	NativeCustomRacer_ClearDriverSelections();
 
 	if (!NativePath_Join(directory, sizeof(directory), NativeStr8_FromCString(NativeAssets_GetBaseDir()), NATIVE_STR8_LIT(NATIVE_CUSTOM_RACER_DIR)))
 		return 0;
@@ -506,7 +634,11 @@ int NativeCustomRacer_Scan(void)
 		qsort(s_nativeCustomRacers, (size_t)s_nativeCustomRacerCount, sizeof(s_nativeCustomRacers[0]), NativeCustomRacer_Compare);
 
 	if (s_nativeCustomRacerCount != 0)
+	{
 		printf("[CTR Native] Found %d custom racer package(s) in %s\n", s_nativeCustomRacerCount, directory);
+		if (!NativeCustomRacer_CacheRetailSharedVramFromAssets())
+			fprintf(stderr, "[CTR Native] Warning: failed to cache retail shared racer VRAM; custom AI textures may be unavailable until it is loaded normally.\n");
+	}
 
 	return s_nativeCustomRacerCount;
 }
@@ -808,7 +940,28 @@ int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter
 	if ((categoryID != 2) || (xaID < 0) || !NativeCustomRacer_IsRosterEnabled())
 		return 0;
 
-	const int racerIndex = NativeCustomRacer_GetPlayerSelection(0);
+	int racerIndex = -1;
+	if (s_nativeCustomRacerVoiceCharacterID >= 0)
+	{
+		for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
+		{
+			const int selected = NativeCustomRacer_GetDriverSelection(driverIndex);
+			if ((selected >= 0) &&
+			    (NativeCustomRacer_GetTemplateCharacterID(selected) == s_nativeCustomRacerVoiceCharacterID))
+			{
+				racerIndex = selected;
+				break;
+			}
+		}
+		if (racerIndex < 0)
+		{
+			return 0;
+		}
+	}
+	else
+	{
+		racerIndex = NativeCustomRacer_GetPlayerSelection(0);
+	}
 	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
 		return 0;
 	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
@@ -866,6 +1019,11 @@ int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter
 	}
 
 	return 0;
+}
+
+void NativeCustomRacer_SetActiveVoiceCharacter(int characterID)
+{
+	s_nativeCustomRacerVoiceCharacterID = ((characterID >= 0) && (characterID < 16)) ? characterID : -1;
 }
 
 int NativeCustomRacer_IsRosterEnabled(void)
@@ -966,13 +1124,13 @@ int NativeCustomRacer_LoadQueueSlot(struct LoadQueueSlot *slot)
 
 	if (slot->type_UNUSED == LT_DRAM)
 	{
-		const int playerModelIndex = (assetIndex == NATIVE_CUSTOM_RACER_ASSET_MODEL_HI)
-			? NativeCustomRacer_PlayerIndexForModelTarget(setPointerTarget)
-			: -1;
-		if (playerModelIndex >= 0)
-		{
-			free(s_nativeCustomRacerPlayerModelStorage[playerModelIndex]);
-			s_nativeCustomRacerPlayerModelStorage[playerModelIndex] = destination;
+			const int driverModelIndex = (assetIndex == NATIVE_CUSTOM_RACER_ASSET_MODEL_HI)
+				? NativeCustomRacer_DriverIndexForModelTarget(setPointerTarget)
+				: -1;
+			if (driverModelIndex >= 0)
+			{
+				free(s_nativeCustomRacerDriverModelStorage[driverModelIndex]);
+				s_nativeCustomRacerDriverModelStorage[driverModelIndex] = destination;
 		}
 		else
 		{
@@ -1012,30 +1170,89 @@ void NativeCustomRacer_FinishQueueSlot(struct LoadQueueSlot *slot)
 	}
 }
 
-int NativeCustomRacer_QueueSelectedModel(int playerIndex, void **destination)
+int NativeCustomRacer_QueueDriverModel(int driverIndex, void **destination)
 {
 	if (!NativeCustomRacer_IsRosterEnabled())
 		return 0;
 
-	const int racerIndex = NativeCustomRacer_GetPlayerSelection(playerIndex);
+	const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
 	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount) ||
 	    (s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_MODEL_HI].size == 0))
 	{
 		return 0;
 	}
-	if ((destination == NULL) && (playerIndex >= 0) && (playerIndex < 4))
-		destination = &s_nativeCustomRacerPlayerModelStorage[playerIndex];
+	if ((destination == NULL) && (driverIndex >= 0) && (driverIndex < LOAD_CHARACTER_ID_COUNT))
+		destination = &s_nativeCustomRacerDriverModelStorage[driverIndex];
 
 	LOAD_AppendQueue(&s_nativeCustomRacers[racerIndex].bigfile.header, LT_GETADDR,
 	                 NATIVE_CUSTOM_RACER_ASSET_MODEL_HI, destination, LOAD_QUEUE_CALLBACK_SET_POINTER);
 	return 1;
 }
 
+int NativeCustomRacer_LoadDriverModelNow(int driverIndex, void **destination)
+{
+	if (!NativeCustomRacer_IsRosterEnabled())
+		return 0;
+
+	const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
+	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+		return 0;
+
+	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+	const u32 size = racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_MODEL_HI].size;
+	if (size == 0)
+		return 0;
+
+	void *storage = malloc(size);
+	if (storage == NULL)
+		return 0;
+	if (!NativeCustomRacer_ReadAsset(racer, NATIVE_CUSTOM_RACER_ASSET_MODEL_HI, storage))
+	{
+		free(storage);
+		return 0;
+	}
+
+	struct LoadQueueSlot slot = {0};
+	slot.ptrBigfileCdPos_UNUSED = &racer->bigfile.header;
+	slot.type_UNUSED = LT_DRAM;
+	slot.subfileIndex = NATIVE_CUSTOM_RACER_ASSET_MODEL_HI;
+	slot.ptrDestination = storage;
+	slot.size_UNUSED = size;
+	slot.callbackFuncPtr = LOAD_QUEUE_CALLBACK_SET_POINTER;
+
+	const int oldQueueReady = sdata->queueReady;
+	LOAD_DramFileCallback(&slot);
+	sdata->queueReady = oldQueueReady;
+
+	free(s_nativeCustomRacerDriverModelStorage[driverIndex]);
+	s_nativeCustomRacerDriverModelStorage[driverIndex] = storage;
+	if (destination != NULL)
+		*destination = storage;
+
+	printf("[CTR Native] Loaded custom racer %s immediately for driver %d size=%u\n",
+	       racer->disk.name, driverIndex, size);
+	return 1;
+}
+
+int NativeCustomRacer_QueueSelectedModel(int playerIndex, void **destination)
+{
+	if ((playerIndex < 0) || (playerIndex >= 4))
+		return 0;
+	return NativeCustomRacer_QueueDriverModel(playerIndex, destination);
+}
+
+struct Model *NativeCustomRacer_GetLoadedDriverModel(int driverIndex)
+{
+	if ((driverIndex < 0) || (driverIndex >= LOAD_CHARACTER_ID_COUNT) || (s_nativeCustomRacerDriverModelStorage[driverIndex] == NULL))
+		return NULL;
+	return (struct Model *)((u8 *)s_nativeCustomRacerDriverModelStorage[driverIndex] + LOAD_MODEL_FILE_HEADER_BYTES);
+}
+
 struct Model *NativeCustomRacer_GetLoadedPlayerModel(int playerIndex)
 {
-	if ((playerIndex < 0) || (playerIndex >= 4) || (s_nativeCustomRacerPlayerModelStorage[playerIndex] == NULL))
+	if ((playerIndex < 0) || (playerIndex >= 4))
 		return NULL;
-	return (struct Model *)((u8 *)s_nativeCustomRacerPlayerModelStorage[playerIndex] + LOAD_MODEL_FILE_HEADER_BYTES);
+	return NativeCustomRacer_GetLoadedDriverModel(playerIndex);
 }
 
 void NativeCustomRacer_QueueSharedVramForSelections(struct BigHeader *retailBigfile)
@@ -1074,20 +1291,120 @@ void NativeCustomRacer_QueueSharedVramForSelections(struct BigHeader *retailBigf
 	}
 }
 
+void NativeCustomRacer_ApplyDriverVramPatches(void)
+{
+	if (!NativeCustomRacer_IsRosterEnabled() || (s_nativeCustomRacerRetailSharedVram == NULL) ||
+	    (s_nativeCustomRacerRetailSharedVramSize < sizeof(struct VramHeader)))
+	{
+		return;
+	}
+
+	u64 selectedMask = 0;
+	for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
+	{
+		const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
+		if ((racerIndex >= 0) && (racerIndex < s_nativeCustomRacerCount) &&
+		    (s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size != 0))
+		{
+			selectedMask |= (u64)1 << racerIndex;
+		}
+	}
+	if (selectedMask == 0)
+	{
+		return;
+	}
+
+	const size_t vramWordCount = (size_t)VRAM_WIDTH * (size_t)VRAM_HEIGHT;
+	u16 *retailVram = (u16 *)calloc(vramWordCount, sizeof(u16));
+	u16 *customVram = (u16 *)calloc(vramWordCount, sizeof(u16));
+	u16 patchRow[VRAM_WIDTH];
+	if ((retailVram == NULL) || (customVram == NULL) ||
+	    !NativeCustomRacer_ApplyVramFileToBuffer(s_nativeCustomRacerRetailSharedVram,
+	                                             s_nativeCustomRacerRetailSharedVramSize, retailVram) ||
+	    !NativeCustomRacer_UploadVramFile(s_nativeCustomRacerRetailSharedVram, s_nativeCustomRacerRetailSharedVramSize))
+	{
+		free(customVram);
+		free(retailVram);
+		return;
+	}
+
+	for (int racerIndex = 0; racerIndex < s_nativeCustomRacerCount; racerIndex++)
+	{
+		if ((selectedMask & ((u64)1 << racerIndex)) == 0)
+			continue;
+
+		struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+		const u32 vrmSize = racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size;
+		u8 *vrm = (u8 *)malloc(vrmSize);
+		memset(customVram, 0, vramWordCount * sizeof(u16));
+		if ((vrm == NULL) || !NativeCustomRacer_ReadAsset(racer, NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM, vrm) ||
+		    !NativeCustomRacer_ApplyVramFileToBuffer(vrm, vrmSize, customVram))
+		{
+			free(vrm);
+			continue;
+		}
+
+		for (int y = 0; y < VRAM_HEIGHT; y++)
+		{
+			int x = 0;
+			while (x < VRAM_WIDTH)
+			{
+				const size_t rowOffset = (size_t)y * VRAM_WIDTH;
+				while ((x < VRAM_WIDTH) && (customVram[rowOffset + x] == retailVram[rowOffset + x]))
+					x++;
+				if (x >= VRAM_WIDTH)
+					break;
+
+				const int startX = x;
+				while ((x < VRAM_WIDTH) && (customVram[rowOffset + x] != retailVram[rowOffset + x]))
+					x++;
+
+				RECT16 rect = {(s16)startX, (s16)y, (s16)(x - startX), 1};
+				memcpy(patchRow, &customVram[rowOffset + startX], (size_t)rect.w * sizeof(u16));
+				LoadImage(&rect, (u32 *)patchRow);
+			}
+		}
+		free(vrm);
+	}
+
+	NativeCustomRacer_RestoreRetailTemplatePortraitsVram();
+	free(customVram);
+	free(retailVram);
+}
+
 void NativeCustomRacer_ClearPlayerSelections(void)
 {
 	for (int i = 0; i < 4; i++)
-		s_nativeCustomRacerPlayerSelection[i] = -1;
+		s_nativeCustomRacerDriverSelection[i] = -1;
 }
 
 void NativeCustomRacer_SetPlayerSelection(int playerIndex, int racerIndex)
 {
 	if (playerIndex < 0 || playerIndex >= 4)
 		return;
-	s_nativeCustomRacerPlayerSelection[playerIndex] = (racerIndex >= 0 && racerIndex < s_nativeCustomRacerCount) ? (s16)racerIndex : -1;
+	NativeCustomRacer_SetDriverSelection(playerIndex, racerIndex);
 }
 
 int NativeCustomRacer_GetPlayerSelection(int playerIndex)
 {
-	return (playerIndex >= 0 && playerIndex < 4) ? s_nativeCustomRacerPlayerSelection[playerIndex] : -1;
+	return (playerIndex >= 0 && playerIndex < 4) ? NativeCustomRacer_GetDriverSelection(playerIndex) : -1;
+}
+
+void NativeCustomRacer_ClearDriverSelections(void)
+{
+	for (int i = 0; i < LOAD_CHARACTER_ID_COUNT; i++)
+		s_nativeCustomRacerDriverSelection[i] = -1;
+}
+
+void NativeCustomRacer_SetDriverSelection(int driverIndex, int racerIndex)
+{
+	if (driverIndex < 0 || driverIndex >= LOAD_CHARACTER_ID_COUNT)
+		return;
+	s_nativeCustomRacerDriverSelection[driverIndex] =
+		(racerIndex >= 0 && racerIndex < s_nativeCustomRacerCount) ? (s16)racerIndex : -1;
+}
+
+int NativeCustomRacer_GetDriverSelection(int driverIndex)
+{
+	return (driverIndex >= 0 && driverIndex < LOAD_CHARACTER_ID_COUNT) ? s_nativeCustomRacerDriverSelection[driverIndex] : -1;
 }

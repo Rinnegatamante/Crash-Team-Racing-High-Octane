@@ -212,15 +212,16 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 6, 1, 0, 0},
+	{LNG_LANGUAGE, 7, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_FRAME_RATE, 2, 4, 3, 3},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 3, 5, 4, 4},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 4, 6, 5, 5},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 5, 0, 6, 6},
+	{NATIVE_MENU_STRING_CUSTOM_AI_RACERS, 5, 7, 6, 6},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 6, 0, 7, 7},
 #else
-	{LNG_LANGUAGE, 9, 1, 0, 0},
+	{LNG_LANGUAGE, 10, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_FRAME_RATE, 2, 4, 3, 3},
@@ -229,7 +230,8 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_BORDERLESS, 5, 7, 6, 6},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 6, 8, 7, 7},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 7, 9, 8, 8},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 8, 0, 9, 9},
+	{NATIVE_MENU_STRING_CUSTOM_AI_RACERS, 8, 10, 9, 9},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 9, 0, 10, 10},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -379,6 +381,7 @@ extern int gNativeMirrorModeEnabled;
 extern int gNative60FpsEnabled;
 extern int gNativeDefaultCameraFar;
 extern int gNativeDefaultHudSpeedometer;
+extern int gNativeCustomAIRacersEnabled;
 extern u32 gNativeCheatConfigMask;
 #ifndef __vita__
 extern int gNativeAntiAliasingEnabled;
@@ -872,6 +875,13 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	if (choose == NATIVE_MENU_STRING_DEFAULT_HUD)
 	{
 		gNativeDefaultHudSpeedometer ^= 1;
+		save_config();
+		return;
+	}
+
+	if (choose == NATIVE_MENU_STRING_CUSTOM_AI_RACERS)
+	{
+		gNativeCustomAIRacersEnabled ^= 1;
 		save_config();
 		return;
 	}
