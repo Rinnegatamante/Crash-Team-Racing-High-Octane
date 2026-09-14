@@ -39,11 +39,10 @@ The full online leaderboard for Time Trials and Relic Races is available at this
 
 ## Known Issues
 
-- The demo cutscene gets slightly de-synced during Oxide speech.
+- [PSVita Only] The demo cutscene gets slightly de-synced during Oxide speech.
 
 ## Special controls bindings
 
-- [PSVITA Only] L2 and R2 are also mapped on right analog left/right to let PSVita use those controls.
 - [PC/Web Browser] F11 is a shortcut to swap between Windowed and Fullscreen Borderless mode.
 
 ## How to Install (PSVita)
@@ -66,6 +65,20 @@ The full online leaderboard for Time Trials and Relic Races is available at this
   - on PSVita: in `ux0:data/ctr/mods/`.
   - on PC: in the `mods` folder next to the CTR: High Octane executable, so that the final path is `mods/pal-voices`.
 
+## How to add new custom characters to the game
+
+- Install Python 3.11 or higher ([https://www.python.org/downloads/](https://www.python.org/downloads/)).
+- Download [this script](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane/raw/refs/heads/vita/tools/import_custom_racer.py) by right-clicking the link and selecting "Save link as..." or, if the script opens in the browser, "Save page as...".
+- Download [xdelta3](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane/raw/refs/heads/vita/tools/xdelta3.exe) and place it in the same folder as the script.
+Download a custom character in the form of an `.xdelta` patch and place it in the same folder as the script.
+- Place your NTSC-U Crash Team Racing `.bin` dump in the same folder as the script.
+- Open a command prompt in that folder by typing `cmd` in the File Explorer address bar and pressing Enter.
+- Run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr`.
+- *NOTE*: For static custom models, the script can automatically retarget and bake the animations of the original character being replaced onto the custom model. To enable this, run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr --template-animations`. Models that already contain animations will not be overwritten.
+- When conversion is complete, place the generated `YOUR_CHARACTER.ctrr` file:
+  - on PSVita: in `ux0:data/ctr/mods/customracers`.
+  - on PC: in the `mods/customracers` folder next to the CTR: High Octane executable, so that the final path is `mods/customracers/YOUR_CHARACTER.ctrr`.
+
 ## How to set up Online functionalities on PC
 
 In order to be able to auto submit your new records in Time Trial and Relic Race modes on PC, you need to set up an account first.
@@ -78,6 +91,33 @@ In order to be able to auto submit your new records in Time Trial and Relic Race
 - Follow the instructions on screen to properly link your PC account and your PSVita one.
 
 ## Changelog
+
+### v.1.4
+
+- [PC Only] Added an option to disable dithering.
+- [PSVita Only] Made so that controls scheme work as with a Dualshock controller (Aka true analogs support).
+- Added controls rebinding support in the Options menu.
+- Fixed a bug causing main menu to get stale texts after AdHoc matches.
+- Fixed a bug causing the mask grab animation to break in Hot Air Skywat under certain circumstances.
+- Added the possibility to locally save ghosts from the Online Leaderboard.
+- Added the possibility to challenge ghosts from the Ghost Replay end screen.
+- Made so that the powerslide bar changes color dynamically instead of being only two distinct sections.
+- [PSVita Only] Improved performances in Tiger Temple by optimizing the flame spit by the statues.
+- Added Tiger Temple Alternative in the map pool for Relic Race and Time Trial.
+- [PC Only] Fixed a bug causing some controllers (eg. DualSense) to be detected as two controllers.
+- Moved all the gameplay cheatcodes in a dedicated submenu in Options. Cheats will also now be saved and kept between game sessions.
+- Made so that having any gameplay cheat enabled will disable the ability to save ghosts and records in Time Trial and Relic Race.
+- Made so that in Arcade mode (Single and Cup) it's now possible to start races with arbitrary number of laps between 1 and 9.
+- Fixed the speedometer having wrong scale.
+- Fixed a bug causing some menu entries to be partially offscreen in certain languages.
+- Fixed a lot of animations being at wrong speed when playing in 60 FPS.
+- Adjusted physics at 60 FPS to more closely match 30 FPS mode. (This fixes the R in Hot Sky Airway during the CTR Challenge to be impossible to reach amongst other things)
+- Fixed a vanilla game bug that was causing shadow casted from menu rects to cover other menu rects instead of being in background.
+- Made so that enemy AIs in Arcade mode (Single and Cup) can pick unlockable characters, including N. Oxide.
+- Added personal bests showcase (for both 1L and 3L) during Time Trials.
+- Made so that current laps during a Time Trial change color based on how close you are to your personal best.
+- Added custom characters support (Check the "How to add new custom characters to the game" for more info).
+- Added a new option that allows to enable custom characters for enemy AIs in Arcade mode (Single and Cup).
 
 ### v.1.3.1
 
