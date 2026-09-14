@@ -609,21 +609,30 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 				fileIndex = BI_DANCEMODELWIN + podiumFileVariant + danceModelIndex * LOAD_PODIUM_MODEL_FILE_STRIDE;
 			}
 
-			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[0], setPtrCb);
+#if defined(CTR_NATIVE)
+			if (!NativeCustomRacer_LoadPodiumModelNow(0, ptrIndexArr[0], (void **)&ptrModelPtrArr[0]))
+#endif
+				LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[0], setPtrCb);
 		}
 
 		// podium second place
 		if (ptrIndexArr[1] != 0)
 		{
 			fileIndex = BI_DANCEMODELLOSE + podiumFileVariant + (ptrIndexArr[1] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
-			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[1], setPtrCb);
+#if defined(CTR_NATIVE)
+			if (!NativeCustomRacer_LoadPodiumModelNow(1, ptrIndexArr[1], (void **)&ptrModelPtrArr[1]))
+#endif
+				LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[1], setPtrCb);
 		}
 
 		// podium third place
 		if (ptrIndexArr[2] != 0)
 		{
 			fileIndex = BI_DANCEMODELLOSE + podiumFileVariant + (ptrIndexArr[2] - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE;
-			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[2], setPtrCb);
+#if defined(CTR_NATIVE)
+			if (!NativeCustomRacer_LoadPodiumModelNow(2, ptrIndexArr[2], (void **)&ptrModelPtrArr[2]))
+#endif
+				LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &ptrModelPtrArr[2], setPtrCb);
 		}
 
 		// TAWNA
@@ -676,6 +685,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 				gGT->modelPtr[m->id] = m;
 			}
+
+#if defined(CTR_NATIVE)
+			NativeCustomRacer_ApplyPodiumVramPatches();
+#endif
 
 			MEMPACK_SwapPacks(gGT->activeMempackIndex);
 		}

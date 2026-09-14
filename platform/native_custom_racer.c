@@ -25,6 +25,11 @@
 #define NATIVE_CUSTOM_RACER_PATH_MAX 1024
 #define NATIVE_CUSTOM_RACER_DIR "mods/customracers"
 
+enum
+{
+	NATIVE_CUSTOM_RACER_PODIUM_COUNT = 3,
+};
+
 struct NativeCustomRacerDiskAsset
 {
 	u32 offset;
@@ -98,6 +103,8 @@ global_variable struct NativeCustomRacerEntry s_nativeCustomRacers[NATIVE_CUSTOM
 global_variable int s_nativeCustomRacerCount;
 global_variable s16 s_nativeCustomRacerDriverSelection[LOAD_CHARACTER_ID_COUNT] = {-1, -1, -1, -1, -1, -1, -1, -1};
 global_variable void *s_nativeCustomRacerDriverModelStorage[LOAD_CHARACTER_ID_COUNT];
+global_variable s16 s_nativeCustomRacerPodiumSelection[NATIVE_CUSTOM_RACER_PODIUM_COUNT] = {-1, -1, -1};
+global_variable void *s_nativeCustomRacerPodiumModelStorage[NATIVE_CUSTOM_RACER_PODIUM_COUNT];
 global_variable s16 s_nativeCustomRacerSharedVram = -1;
 global_variable struct NativeCustomRacerRetailPortrait s_nativeCustomRacerRetailPortraits[16];
 global_variable u8 *s_nativeCustomRacerRetailSharedVram;
@@ -580,6 +587,7 @@ int NativeCustomRacer_Scan(void)
 	char directory[NATIVE_CUSTOM_RACER_PATH_MAX];
 	s_nativeCustomRacerCount = 0;
 	NativeCustomRacer_ClearDriverSelections();
+	NativeCustomRacer_ClearPodiumSelections();
 
 	if (!NativePath_Join(directory, sizeof(directory), NativeStr8_FromCString(NativeAssets_GetBaseDir()), NATIVE_STR8_LIT(NATIVE_CUSTOM_RACER_DIR)))
 		return 0;
@@ -1189,13 +1197,11 @@ int NativeCustomRacer_QueueDriverModel(int driverIndex, void **destination)
 	return 1;
 }
 
-int NativeCustomRacer_LoadDriverModelNow(int driverIndex, void **destination)
+internal int NativeCustomRacer_LoadModelNow(int racerIndex, void **storageSlot, void **destination, int modelIDOverride)
 {
 	if (!NativeCustomRacer_IsRosterEnabled())
 		return 0;
-
-	const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
-	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount) || (storageSlot == NULL))
 		return 0;
 
 	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
@@ -1224,13 +1230,45 @@ int NativeCustomRacer_LoadDriverModelNow(int driverIndex, void **destination)
 	LOAD_DramFileCallback(&slot);
 	sdata->queueReady = oldQueueReady;
 
-	free(s_nativeCustomRacerDriverModelStorage[driverIndex]);
-	s_nativeCustomRacerDriverModelStorage[driverIndex] = storage;
+	if (modelIDOverride >= 0)
+	{
+		struct Model *model = (struct Model *)((u8 *)storage + LOAD_MODEL_FILE_HEADER_BYTES);
+		model->id = (s16)modelIDOverride;
+	}
+
+	free(*storageSlot);
+	*storageSlot = storage;
 	if (destination != NULL)
 		*destination = storage;
+	return 1;
+}
+
+int NativeCustomRacer_LoadDriverModelNow(int driverIndex, void **destination)
+{
+	if ((driverIndex < 0) || (driverIndex >= LOAD_CHARACTER_ID_COUNT))
+		return 0;
+
+	const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
+	if (!NativeCustomRacer_LoadModelNow(racerIndex, &s_nativeCustomRacerDriverModelStorage[driverIndex], destination, -1))
+		return 0;
 
 	printf("[CTR Native] Loaded custom racer %s immediately for driver %d size=%u\n",
-	       racer->disk.name, driverIndex, size);
+	       s_nativeCustomRacers[racerIndex].disk.name, driverIndex,
+	       s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_MODEL_HI].size);
+	return 1;
+}
+
+int NativeCustomRacer_LoadPodiumModelNow(int podiumRank, int danceModelID, void **destination)
+{
+	if ((podiumRank < 0) || (podiumRank >= NATIVE_CUSTOM_RACER_PODIUM_COUNT) || (danceModelID <= 0))
+		return 0;
+
+	const int racerIndex = NativeCustomRacer_GetPodiumSelection(podiumRank);
+	if (!NativeCustomRacer_LoadModelNow(racerIndex, &s_nativeCustomRacerPodiumModelStorage[podiumRank], destination, danceModelID))
+		return 0;
+
+	printf("[CTR Native] Loaded custom racer %s for podium rank %d model=%d\n",
+	       s_nativeCustomRacers[racerIndex].disk.name, podiumRank, danceModelID);
 	return 1;
 }
 
@@ -1291,25 +1329,10 @@ void NativeCustomRacer_QueueSharedVramForSelections(struct BigHeader *retailBigf
 	}
 }
 
-void NativeCustomRacer_ApplyDriverVramPatches(void)
+internal void NativeCustomRacer_ApplyVramPatches(u64 selectedMask, int uploadRetailBase, int restoreRetailPortraits)
 {
 	if (!NativeCustomRacer_IsRosterEnabled() || (s_nativeCustomRacerRetailSharedVram == NULL) ||
-	    (s_nativeCustomRacerRetailSharedVramSize < sizeof(struct VramHeader)))
-	{
-		return;
-	}
-
-	u64 selectedMask = 0;
-	for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
-	{
-		const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
-		if ((racerIndex >= 0) && (racerIndex < s_nativeCustomRacerCount) &&
-		    (s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size != 0))
-		{
-			selectedMask |= (u64)1 << racerIndex;
-		}
-	}
-	if (selectedMask == 0)
+	    (s_nativeCustomRacerRetailSharedVramSize < sizeof(struct VramHeader)) || (selectedMask == 0))
 	{
 		return;
 	}
@@ -1321,7 +1344,7 @@ void NativeCustomRacer_ApplyDriverVramPatches(void)
 	if ((retailVram == NULL) || (customVram == NULL) ||
 	    !NativeCustomRacer_ApplyVramFileToBuffer(s_nativeCustomRacerRetailSharedVram,
 	                                             s_nativeCustomRacerRetailSharedVramSize, retailVram) ||
-	    !NativeCustomRacer_UploadVramFile(s_nativeCustomRacerRetailSharedVram, s_nativeCustomRacerRetailSharedVramSize))
+	    (uploadRetailBase && !NativeCustomRacer_UploadVramFile(s_nativeCustomRacerRetailSharedVram, s_nativeCustomRacerRetailSharedVramSize)))
 	{
 		free(customVram);
 		free(retailVram);
@@ -1367,9 +1390,40 @@ void NativeCustomRacer_ApplyDriverVramPatches(void)
 		free(vrm);
 	}
 
-	NativeCustomRacer_RestoreRetailTemplatePortraitsVram();
+	if (restoreRetailPortraits)
+		NativeCustomRacer_RestoreRetailTemplatePortraitsVram();
 	free(customVram);
 	free(retailVram);
+}
+
+void NativeCustomRacer_ApplyDriverVramPatches(void)
+{
+	u64 selectedMask = 0;
+	for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
+	{
+		const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
+		if ((racerIndex >= 0) && (racerIndex < s_nativeCustomRacerCount) &&
+		    (s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size != 0))
+		{
+			selectedMask |= (u64)1 << racerIndex;
+		}
+	}
+	NativeCustomRacer_ApplyVramPatches(selectedMask, 1, 1);
+}
+
+void NativeCustomRacer_ApplyPodiumVramPatches(void)
+{
+	u64 selectedMask = 0;
+	for (int podiumRank = 0; podiumRank < NATIVE_CUSTOM_RACER_PODIUM_COUNT; podiumRank++)
+	{
+		const int racerIndex = NativeCustomRacer_GetPodiumSelection(podiumRank);
+		if ((racerIndex >= 0) && (racerIndex < s_nativeCustomRacerCount) &&
+		    (s_nativeCustomRacers[racerIndex].disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size != 0))
+		{
+			selectedMask |= (u64)1 << racerIndex;
+		}
+	}
+	NativeCustomRacer_ApplyVramPatches(selectedMask, 0, 0);
 }
 
 void NativeCustomRacer_ClearPlayerSelections(void)
@@ -1407,4 +1461,27 @@ void NativeCustomRacer_SetDriverSelection(int driverIndex, int racerIndex)
 int NativeCustomRacer_GetDriverSelection(int driverIndex)
 {
 	return (driverIndex >= 0 && driverIndex < LOAD_CHARACTER_ID_COUNT) ? s_nativeCustomRacerDriverSelection[driverIndex] : -1;
+}
+
+void NativeCustomRacer_ClearPodiumSelections(void)
+{
+	for (int podiumRank = 0; podiumRank < NATIVE_CUSTOM_RACER_PODIUM_COUNT; podiumRank++)
+	{
+		s_nativeCustomRacerPodiumSelection[podiumRank] = -1;
+		free(s_nativeCustomRacerPodiumModelStorage[podiumRank]);
+		s_nativeCustomRacerPodiumModelStorage[podiumRank] = NULL;
+	}
+}
+
+void NativeCustomRacer_SetPodiumSelection(int podiumRank, int racerIndex)
+{
+	if ((podiumRank < 0) || (podiumRank >= NATIVE_CUSTOM_RACER_PODIUM_COUNT))
+		return;
+	s_nativeCustomRacerPodiumSelection[podiumRank] =
+		(racerIndex >= 0 && racerIndex < s_nativeCustomRacerCount) ? (s16)racerIndex : -1;
+}
+
+int NativeCustomRacer_GetPodiumSelection(int podiumRank)
+{
+	return (podiumRank >= 0 && podiumRank < NATIVE_CUSTOM_RACER_PODIUM_COUNT) ? s_nativeCustomRacerPodiumSelection[podiumRank] : -1;
 }

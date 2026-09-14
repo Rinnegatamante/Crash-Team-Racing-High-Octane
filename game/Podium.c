@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+#endif
+
 enum PodiumConstants
 {
 	PODIUM_DRIVER_COUNT = 8,
@@ -20,6 +24,9 @@ void Podium_InitModels(struct GameTracker *gGT)
 	gGT->podium_modelIndex_Second = 0;
 	gGT->podium_modelIndex_Third = 0;
 	gGT->podium_modelIndex_tawna = STATIC_TAWNA1;
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_ClearPodiumSelections();
+#endif
 
 	u8 *podiumModelIndexArr = &gGT->podium_modelIndex_First;
 
@@ -42,6 +49,9 @@ void Podium_InitModels(struct GameTracker *gGT)
 		{
 			u8 characterID = data.characterIDs[driver->driverID];
 			podiumModelIndexArr[rank] = characterID + STATIC_CRASHDANCE;
+#if defined(CTR_NATIVE)
+			NativeCustomRacer_SetPodiumSelection(rank, NativeCustomRacer_GetDriverSelection(driver->driverID));
+#endif
 
 			if (rank != PODIUM_RANK_FIRST)
 			{

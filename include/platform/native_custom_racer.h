@@ -36,8 +36,10 @@ struct Model *NativeCustomRacer_GetLoadedPlayerModel(int playerIndex);
 int NativeCustomRacer_QueueDriverModel(int driverIndex, void **destination);
 int NativeCustomRacer_LoadDriverModelNow(int driverIndex, void **destination);
 struct Model *NativeCustomRacer_GetLoadedDriverModel(int driverIndex);
+int NativeCustomRacer_LoadPodiumModelNow(int podiumRank, int danceModelID, void **destination);
 void NativeCustomRacer_QueueSharedVramForSelections(struct BigHeader *retailBigfile);
 void NativeCustomRacer_ApplyDriverVramPatches(void);
+void NativeCustomRacer_ApplyPodiumVramPatches(void);
 void NativeCustomRacer_CaptureRetailSharedVram(const void *fileData, u32 fileSize);
 int NativeCustomRacer_IsBigHeader(const struct BigHeader *bigfile);
 int NativeCustomRacer_LoadQueueSlot(struct LoadQueueSlot *slot);
@@ -49,5 +51,8 @@ int NativeCustomRacer_GetPlayerSelection(int playerIndex);
 void NativeCustomRacer_ClearDriverSelections(void);
 void NativeCustomRacer_SetDriverSelection(int driverIndex, int racerIndex);
 int NativeCustomRacer_GetDriverSelection(int driverIndex);
+void NativeCustomRacer_ClearPodiumSelections(void);
+void NativeCustomRacer_SetPodiumSelection(int podiumRank, int racerIndex);
+int NativeCustomRacer_GetPodiumSelection(int podiumRank);
 
 #endif
