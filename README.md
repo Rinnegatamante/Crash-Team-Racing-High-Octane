@@ -32,6 +32,11 @@ You can play it from Web Browser as well from this link: [Web Browser Build](htt
 - Reverse tracks mode for Crash Cove, Roo's Tubes, Tiger Temple, Coco Park, Dragon Mines, Tiny Arena, Slide Coliseum and Turbo Track available in Time Trial and Relic Race mode.
 - Relic Race mode available outside of Adventure mode and accessible with any character.
 - Relic Race mode now has ghosts support.
+- Custom characters support with pre-baked animations option.
+- Personal bests tracking during Time Trials.
+- Alternative Temple Tiger variant for Time Trial and Relic Race.
+- Fully rebindable controls.
+- And many many more...
 
 ## Online leaderboard
 
