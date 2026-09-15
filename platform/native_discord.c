@@ -2,6 +2,7 @@
 
 #if defined(_WIN32) && !defined(__vita__)
 
+#include "platform/native_custom_racer.h"
 #include "platform/native_log.h"
 #include "platform/native_win32.h"
 
@@ -250,12 +251,27 @@ static const char *NativeDiscord_GetTrackName(const struct GameTracker *gGT)
 
 static const char *NativeDiscord_GetCharacterName(const struct GameTracker *gGT)
 {
-    if ((gGT->numPlyrCurrGame < 1) || (gGT->drivers[0] == NULL) || (sdata->lngStrings == NULL))
-    {
-        return NULL;
-    }
+	if ((gGT->numPlyrCurrGame < 1) || (gGT->drivers[0] == NULL))
+	{
+		return NULL;
+	}
 
-    int driverId = gGT->drivers[0]->driverID;
+	const int customRacerIndex = NativeCustomRacer_GetPlayerSelection(0);
+	if (customRacerIndex >= 0)
+	{
+		const char *customName = NativeCustomRacer_GetName(customRacerIndex);
+		if ((customName != NULL) && (customName[0] != '\0'))
+		{
+			return customName;
+		}
+	}
+
+	if (sdata->lngStrings == NULL)
+	{
+		return NULL;
+	}
+
+	int driverId = gGT->drivers[0]->driverID;
     if ((driverId < 0) || (driverId >= 8))
     {
         return NULL;
