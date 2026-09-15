@@ -79,8 +79,9 @@ Download a custom character in the form of an `.xdelta` patch and place it in th
 - Place your NTSC-U Crash Team Racing `.bin` dump in the same folder as the script.
 - Open a command prompt in that folder by typing `cmd` in the File Explorer address bar and pressing Enter.
 - Run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr`.
+- If the patch replaces multiple characters, the importer automatically generates one `.ctrr` per changed racer, adding the original character name to the requested output filename (for example `YOUR_CHARACTER_crash.ctrr`, `YOUR_CHARACTER_cortex.ctrr`, etc.).
 - *NOTE*: For static custom models, the script can automatically retarget and bake the animations of the original character being replaced onto the custom model. To enable this, run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr --template-animations`. Models that already contain animations will not be overwritten.
-- When conversion is complete, place the generated `YOUR_CHARACTER.ctrr` file:
+- When conversion is complete, place the generated `.ctrr` file or files:
   - on PSVita: in `ux0:data/ctr/mods/customracers`.
   - on PC: in the `mods/customracers` folder next to the CTR: High Octane executable, so that the final path is `mods/customracers/YOUR_CHARACTER.ctrr`.
 
@@ -96,6 +97,10 @@ In order to be able to auto submit your new records in Time Trial and Relic Race
 - Follow the instructions on screen to properly link your PC account and your PSVita one.
 
 ## Changelog
+
+### v.1.4.1
+
+- Added multi characters mod support to the custom characters importer.
 
 ### v.1.4
 

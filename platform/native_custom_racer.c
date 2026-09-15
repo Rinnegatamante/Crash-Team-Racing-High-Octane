@@ -21,13 +21,15 @@
 #include <string.h>
 
 #define NATIVE_CUSTOM_RACER_MAGIC 0x52525443u
-#define NATIVE_CUSTOM_RACER_VERSION 2u
+#define NATIVE_CUSTOM_RACER_VERSION 3u
+#define NATIVE_CUSTOM_RACER_VERSION_LEGACY 2u
 #define NATIVE_CUSTOM_RACER_PATH_MAX 1024
 #define NATIVE_CUSTOM_RACER_DIR "mods/customracers"
 
 enum
 {
 	NATIVE_CUSTOM_RACER_PODIUM_COUNT = 3,
+	NATIVE_CUSTOM_RACER_V2_ASSET_COUNT = 3,
 };
 
 struct NativeCustomRacerDiskAsset
@@ -41,6 +43,22 @@ struct NativeCustomRacerDiskVoiceFile
 	u8 fileNumber;
 	u8 reserved[3];
 	struct NativeCustomRacerDiskAsset asset;
+};
+
+struct NativeCustomRacerDiskHeaderV2
+{
+	u32 magic;
+	u16 version;
+	u16 headerSize;
+	s16 templateCharacterID;
+	s16 engineClass;
+	u32 flags;
+	u8 sourceHash[32];
+	char name[64];
+	char author[64];
+	struct NativeCustomRacerDiskAsset assets[NATIVE_CUSTOM_RACER_V2_ASSET_COUNT];
+	u32 voiceFileCount;
+	struct NativeCustomRacerDiskVoiceFile voiceFiles[NATIVE_CUSTOM_RACER_MAX_VOICE_FILES];
 };
 
 struct NativeCustomRacerDiskHeader
@@ -374,7 +392,8 @@ internal int NativeCustomRacer_UploadVramFile(const u8 *fileData, u32 fileSize)
 	return 0;
 }
 
-CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeader) == 0x24c);
+CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeaderV2) == 0x24c);
+CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeader) == 0x254);
 
 internal int NativeCustomRacer_HasExtension(const char *name, const char *extension)
 {
@@ -405,6 +424,8 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 {
 	FILE *file;
 	long fileSize;
+	u16 sourceVersion;
+	u16 sourceHeaderSize;
 
 	file = fopen(path, "rb");
 	if (file == NULL)
@@ -416,14 +437,63 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 		return 0;
 	}
 	fileSize = ftell(file);
-	if ((fileSize < (long)sizeof(racer->disk)) || (fseek(file, 0, SEEK_SET) != 0))
+	if ((fileSize < 8) || (fseek(file, 0, SEEK_SET) != 0))
 	{
 		fclose(file);
 		return 0;
 	}
 
 	memset(racer, 0, sizeof(*racer));
-	if (fread(&racer->disk, 1, sizeof(racer->disk), file) != sizeof(racer->disk))
+	u8 prefix[8];
+	if (fread(prefix, 1, sizeof(prefix), file) != sizeof(prefix))
+	{
+		fclose(file);
+		return 0;
+	}
+	memcpy(&sourceVersion, &prefix[4], sizeof(sourceVersion));
+	memcpy(&sourceHeaderSize, &prefix[6], sizeof(sourceHeaderSize));
+	if (fseek(file, 0, SEEK_SET) != 0)
+	{
+		fclose(file);
+		return 0;
+	}
+
+	if ((sourceVersion == NATIVE_CUSTOM_RACER_VERSION_LEGACY) &&
+	    (sourceHeaderSize == sizeof(struct NativeCustomRacerDiskHeaderV2)))
+	{
+		struct NativeCustomRacerDiskHeaderV2 legacy;
+		if ((fileSize < (long)sizeof(legacy)) || (fread(&legacy, 1, sizeof(legacy), file) != sizeof(legacy)))
+		{
+			fclose(file);
+			return 0;
+		}
+
+		racer->disk.magic = legacy.magic;
+		racer->disk.version = legacy.version;
+		racer->disk.headerSize = legacy.headerSize;
+		racer->disk.templateCharacterID = legacy.templateCharacterID;
+		racer->disk.engineClass = legacy.engineClass;
+		racer->disk.flags = legacy.flags;
+		memcpy(racer->disk.sourceHash, legacy.sourceHash, sizeof(racer->disk.sourceHash));
+		memcpy(racer->disk.name, legacy.name, sizeof(racer->disk.name));
+		memcpy(racer->disk.author, legacy.author, sizeof(racer->disk.author));
+		racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_MODEL_HI] = legacy.assets[0];
+		racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM] = legacy.assets[1];
+		racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_VOICE_XNF] = legacy.assets[2];
+		racer->disk.voiceFileCount = legacy.voiceFileCount;
+		memcpy(racer->disk.voiceFiles, legacy.voiceFiles, sizeof(racer->disk.voiceFiles));
+	}
+	else if ((sourceVersion == NATIVE_CUSTOM_RACER_VERSION) &&
+	         (sourceHeaderSize == sizeof(racer->disk)))
+	{
+		if ((fileSize < (long)sizeof(racer->disk)) ||
+		    (fread(&racer->disk, 1, sizeof(racer->disk), file) != sizeof(racer->disk)))
+		{
+			fclose(file);
+			return 0;
+		}
+	}
+	else
 	{
 		fclose(file);
 		return 0;
@@ -431,8 +501,6 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 	fclose(file);
 
 	if ((racer->disk.magic != NATIVE_CUSTOM_RACER_MAGIC) ||
-	    (racer->disk.version != NATIVE_CUSTOM_RACER_VERSION) ||
-	    (racer->disk.headerSize != sizeof(racer->disk)) ||
 	    (racer->disk.templateCharacterID < 0) || (racer->disk.templateCharacterID >= 16) ||
 	    (racer->disk.engineClass < -1) || (racer->disk.engineClass >= NUM_CLASSES))
 	{
@@ -443,7 +511,7 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 	{
 		u64 offset = racer->disk.assets[i].offset;
 		u64 size = racer->disk.assets[i].size;
-		if ((size != 0) && ((offset < sizeof(racer->disk)) || (offset + size > (u64)fileSize)))
+		if ((size != 0) && ((offset < sourceHeaderSize) || (offset + size > (u64)fileSize)))
 		{
 			return 0;
 		}
@@ -454,7 +522,7 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 	{
 		const u64 offset = racer->disk.voiceFiles[i].asset.offset;
 		const u64 size = racer->disk.voiceFiles[i].asset.size;
-		if ((size == 0) || (offset < sizeof(racer->disk)) || (offset + size > (u64)fileSize))
+		if ((size == 0) || (offset < sourceHeaderSize) || (offset + size > (u64)fileSize))
 			return 0;
 	}
 
@@ -726,7 +794,10 @@ u32 NativeCustomRacer_GetPortraitTexture(int index, const struct Icon *templateI
 		return racer->portraitTexture;
 	}
 
-	const u32 vrmSize = racer->disk.assets[NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM].size;
+	int vrmAsset = NATIVE_CUSTOM_RACER_ASSET_PORTRAIT_VRM;
+	if (racer->disk.assets[vrmAsset].size < sizeof(struct VramHeader))
+		vrmAsset = NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM;
+	const u32 vrmSize = racer->disk.assets[vrmAsset].size;
 	if (vrmSize < sizeof(struct VramHeader))
 		return 0;
 
@@ -736,7 +807,7 @@ u32 NativeCustomRacer_GetPortraitTexture(int index, const struct Icon *templateI
 	int portraitWidth = 0;
 	int portraitHeight = 0;
 	if ((vrm == NULL) || (vram == NULL) ||
-	    !NativeCustomRacer_ReadAsset(racer, NATIVE_CUSTOM_RACER_ASSET_SHARED_VRM, vrm) ||
+	    !NativeCustomRacer_ReadAsset(racer, vrmAsset, vrm) ||
 	    !NativeCustomRacer_ApplyVramFileToBuffer(vrm, vrmSize, vram) ||
 	    !NativeCustomRacer_DecodePortrait(vram, templateIcon, &rgba, &portraitWidth, &portraitHeight))
 	{

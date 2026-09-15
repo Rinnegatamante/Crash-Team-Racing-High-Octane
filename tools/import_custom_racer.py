@@ -22,14 +22,85 @@ BIGFILE_ENTRY_COUNT = 608
 BI_RACERMODELHI = 242
 RACER_COUNT = 16
 BI_SHAREDMPKVRM = 258
+BI_LANGUAGEFILE = BI_RACERMODELHI - 8
+ENGLISH_LANGUAGE_INDEX = 1
 
 PACKAGE_MAGIC = b"CTRR"
 PACKAGE_VERSION = 2
+PACKAGE_MULTI_VERSION = 3
 MAX_VOICE_FILES = 32
 PACKAGE_HEADER_STRUCT = struct.Struct("<IHHhhI32s64s64s" + "II" * 3 + "I" + "B3xII" * MAX_VOICE_FILES)
+PACKAGE_MULTI_HEADER_STRUCT = struct.Struct("<IHHhhI32s64s64s" + "II" * 4 + "I" + "B3xII" * MAX_VOICE_FILES)
 ASSET_MODEL_HI = 0
 ASSET_SHARED_VRM = 1
 ASSET_VOICE_XNF = 2
+ASSET_PORTRAIT_VRM = 2
+ASSET_MULTI_VOICE_XNF = 3
+
+VOICE_TRACKS_PER_CHARACTER = 19
+XNF_GAME_CATEGORY = 2
+XNF_HEADER_SIZE = 0x44
+
+VRAM_WIDTH = 1024
+VRAM_HEIGHT = 512
+VRAM_HEADER_SIZE = 0x14
+
+CHARACTER_NAMES = (
+    "Crash Bandicoot",
+    "Neo Cortex",
+    "Tiny Tiger",
+    "Coco Bandicoot",
+    "N. Gin",
+    "Dingodile",
+    "Polar",
+    "Pura",
+    "Pinstripe",
+    "Papu Papu",
+    "Ripper Roo",
+    "Komodo Joe",
+    "N. Tropy",
+    "Penta Penguin",
+    "Fake Crash",
+    "Nitros Oxide",
+)
+
+CHARACTER_SLUGS = (
+    "crash",
+    "cortex",
+    "tiny",
+    "coco",
+    "ngin",
+    "dingodile",
+    "polar",
+    "pura",
+    "pinstripe",
+    "papu",
+    "ripper_roo",
+    "komodo_joe",
+    "ntropy",
+    "penta",
+    "fake_crash",
+    "oxide",
+)
+
+CHARACTER_LONG_NAME_LNG_INDICES = (
+    0x02C,
+    0x02D,
+    0x02E,
+    0x02F,
+    0x030,
+    0x031,
+    0x032,
+    0x033,
+    0x034,
+    0x035,
+    0x036,
+    0x037,
+    0x038,
+    0x03A,
+    0x03B,
+    0x039,
+)
 
 MODEL_FILE_HEADER_SIZE = 4
 MODEL_HEADER_SIZE = 0x40
@@ -43,6 +114,16 @@ class IsoEntry:
     lba: int
     size: int
     flags: int
+
+
+@dataclass
+class VramBlock:
+    prefix: bytes
+    x: int
+    y: int
+    w: int
+    h: int
+    pixels: bytes
 
 
 class RawIso:
@@ -187,6 +268,38 @@ def normalize_name(stem: str) -> str:
     return " ".join(name.split())[:63] or "Custom Racer"
 
 
+def parse_lng_strings(raw: bytes):
+    if len(raw) < 8:
+        raise RuntimeError("language file is too small")
+    num_strings, pointer_array_offset = struct.unpack_from("<ii", raw, 0)
+    if num_strings < 0 or pointer_array_offset < 8 or pointer_array_offset + num_strings * 4 > len(raw):
+        raise RuntimeError("language file has an invalid string table")
+
+    strings = []
+    for index in range(num_strings):
+        string_offset = read_u32(raw, pointer_array_offset + index * 4)
+        if string_offset >= len(raw):
+            raise RuntimeError(f"language string {index} points outside the file")
+        string_end = raw.find(b"\0", string_offset)
+        if string_end < 0:
+            raise RuntimeError(f"language string {index} is unterminated")
+        strings.append(raw[string_offset:string_end].decode("latin-1", errors="replace"))
+    return strings
+
+
+def custom_character_names(base_big: BigFile, patched_big: BigFile):
+    base_strings = parse_lng_strings(base_big.read_entry(BI_LANGUAGEFILE + ENGLISH_LANGUAGE_INDEX))
+    patched_strings = parse_lng_strings(patched_big.read_entry(BI_LANGUAGEFILE + ENGLISH_LANGUAGE_INDEX))
+    names = {}
+    for template_id, string_index in enumerate(CHARACTER_LONG_NAME_LNG_INDICES):
+        if string_index >= len(base_strings) or string_index >= len(patched_strings):
+            continue
+        patched_name = " ".join(patched_strings[string_index].split())
+        if patched_name and patched_name != base_strings[string_index]:
+            names[template_id] = patched_name[:63]
+    return names
+
+
 def align(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
@@ -195,6 +308,312 @@ def xa_payload(raw: bytes) -> bytes:
     if len(raw) % RAW_SECTOR:
         return raw
     return b"".join(raw[i + 16:i + RAW_SECTOR] for i in range(0, len(raw), RAW_SECTOR))
+
+
+def xnf_character_voice_entries(xnf: bytes, template_id: int):
+    if len(xnf) < XNF_HEADER_SIZE or read_u32(xnf, 0) != 0x464E4958:
+        raise RuntimeError("ENG.XNF has an invalid header")
+
+    num_xas = read_u32(xnf, 0x0C)
+    num_tracks = read_u32(xnf, 0x10)
+    num_songs = read_u32(xnf, 0x2C + XNF_GAME_CATEGORY * 4)
+    first_song = read_u32(xnf, 0x38 + XNF_GAME_CATEGORY * 4)
+    entries_offset = XNF_HEADER_SIZE + num_xas * 4
+    if entries_offset > len(xnf):
+        raise RuntimeError("ENG.XNF track table is truncated")
+
+    entries = []
+    first_xa = template_id * VOICE_TRACKS_PER_CHARACTER
+    last_xa = min(first_xa + VOICE_TRACKS_PER_CHARACTER, num_songs)
+    for xa_id in range(first_xa, last_xa):
+        entry_index = first_song + xa_id
+        entry_offset = entries_offset + entry_index * 4
+        if entry_index >= num_tracks or entry_offset + 4 > len(xnf):
+            raise RuntimeError(f"ENG.XNF voice entry {xa_id} is outside the track table")
+        channel, file_number, sectors = struct.unpack_from("<BBh", xnf, entry_offset)
+        if sectors <= 0:
+            continue
+        entries.append((xa_id, entry_offset, channel, file_number, sectors))
+    return entries
+
+
+def filter_raw_xa_channels_with_prefix(raw: bytes, channels):
+    if len(raw) % RAW_SECTOR:
+        raise RuntimeError("custom voice XA extent is not raw MODE2/2352 data")
+
+    out = bytearray()
+    prefix_counts = [0]
+    for offset in range(0, len(raw), RAW_SECTOR):
+        sector = raw[offset:offset + RAW_SECTOR]
+        subheader = sector[16:20]
+        keep = (len(subheader) == 4 and subheader[0] == 1 and
+                subheader[1] in channels and (subheader[2] & 0x04) != 0)
+        if keep:
+            out += sector
+        prefix_counts.append(prefix_counts[-1] + (1 if keep else 0))
+    return bytes(out), prefix_counts
+
+
+def filter_raw_xa_channels(raw: bytes, channels) -> bytes:
+    return filter_raw_xa_channels_with_prefix(raw, channels)[0]
+
+
+def split_voice_assets_for_character(clean_xnf: bytes, patched_xnf: bytes, patched_voice_files,
+                                     changed_voice_file_numbers, template_id: int):
+    patched_entries = xnf_character_voice_entries(patched_xnf, template_id)
+    clean_entries = {xa_id: (channel, file_number, sectors)
+                     for xa_id, _, channel, file_number, sectors in xnf_character_voice_entries(clean_xnf, template_id)}
+
+    selected_entries = []
+    channels_by_file = {}
+    for xa_id, entry_offset, channel, file_number, sectors in patched_entries:
+        clean_entry = clean_entries.get(xa_id)
+        patched_entry = (channel, file_number, sectors)
+        if patched_entry == clean_entry and file_number not in changed_voice_file_numbers:
+            continue
+        selected_entries.append((xa_id, entry_offset, channel, file_number, sectors))
+        channels_by_file.setdefault(file_number, set()).add(channel)
+
+    if not selected_entries:
+        return b"", []
+
+    xnf = bytearray(patched_xnf)
+    filtered_files = {}
+    prefix_counts = {}
+    for file_number, channels in channels_by_file.items():
+        raw = patched_voice_files.get(file_number)
+        if raw is None:
+            raise RuntimeError(f"custom voice S{file_number:02d}.XA is missing from the patched image")
+        filtered, prefix = filter_raw_xa_channels_with_prefix(raw, channels)
+        if not filtered:
+            raise RuntimeError(
+                f"custom voice S{file_number:02d}.XA has no sectors for {CHARACTER_NAMES[template_id]} channels {sorted(channels)}"
+            )
+        filtered_files[file_number] = filtered
+        prefix_counts[file_number] = prefix
+
+    for _, entry_offset, _, file_number, sectors in selected_entries:
+        prefix = prefix_counts[file_number]
+        original_limit = min(sectors, len(prefix) - 1)
+        filtered_limit = prefix[original_limit]
+        if filtered_limit <= 0 or filtered_limit > 0x7FFF:
+            raise RuntimeError(
+                f"custom voice S{file_number:02d}.XA has an invalid filtered sector limit {filtered_limit}"
+            )
+        struct.pack_into("<h", xnf, entry_offset + 2, filtered_limit)
+
+    return bytes(xnf), [(file_number, filtered_files[file_number]) for file_number in sorted(filtered_files)]
+
+
+def parse_vram_block(raw: bytes, offset: int, limit: int) -> VramBlock:
+    if offset < 0 or offset + VRAM_HEADER_SIZE > limit:
+        raise RuntimeError("VRM block header is truncated")
+    x, y, w, h = struct.unpack_from("<hhhh", raw, offset + 0x0C)
+    if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > VRAM_WIDTH or y + h > VRAM_HEIGHT:
+        raise RuntimeError(f"invalid VRM rectangle ({x}, {y}, {w}, {h})")
+    pixel_size = w * h * 2
+    pixel_offset = offset + VRAM_HEADER_SIZE
+    if pixel_offset + pixel_size > limit:
+        raise RuntimeError("VRM block pixels are truncated")
+    return VramBlock(raw[offset:offset + 0x0C], x, y, w, h, raw[pixel_offset:pixel_offset + pixel_size])
+
+
+def parse_vram_file(raw: bytes):
+    if len(raw) < VRAM_HEADER_SIZE:
+        raise RuntimeError("SHAREDMPK.VRM is too small")
+
+    if read_u32(raw, 0) != 0x20:
+        return [parse_vram_block(raw, 0, len(raw))]
+
+    blocks = []
+    cursor = 4
+    while cursor + 4 <= len(raw):
+        size = read_u32(raw, cursor)
+        cursor += 4
+        if size == 0:
+            return blocks
+        span = size & ~3
+        if span < VRAM_HEADER_SIZE or cursor + span > len(raw):
+            raise RuntimeError("packed VRM block has an invalid size")
+        blocks.append(parse_vram_block(raw, cursor, cursor + span))
+        cursor += span
+    raise RuntimeError("packed VRM is missing its terminator")
+
+
+def vram_word_map(blocks):
+    values = {}
+    for block in blocks:
+        for row in range(block.h):
+            for col in range(block.w):
+                coord = (block.y + row) * VRAM_WIDTH + block.x + col
+                values[coord] = struct.unpack_from("<H", block.pixels, (row * block.w + col) * 2)[0]
+    return values
+
+
+def encode_vram_from_base(base_blocks, modifications) -> bytes:
+    if not modifications:
+        return b""
+
+    output_blocks = []
+    base_coverage = set()
+    for block in base_blocks:
+        pixels = bytearray(block.pixels)
+        for row in range(block.h):
+            for col in range(block.w):
+                coord = (block.y + row) * VRAM_WIDTH + block.x + col
+                base_coverage.add(coord)
+                value = modifications.get(coord)
+                if value is not None:
+                    struct.pack_into("<H", pixels, (row * block.w + col) * 2, value)
+        output_blocks.append(VramBlock(block.prefix, block.x, block.y, block.w, block.h, bytes(pixels)))
+
+    extra = sorted(coord for coord in modifications if coord not in base_coverage)
+    pos = 0
+    while pos < len(extra):
+        first = extra[pos]
+        y, x = divmod(first, VRAM_WIDTH)
+        end = pos + 1
+        while end < len(extra):
+            next_y, next_x = divmod(extra[end], VRAM_WIDTH)
+            if next_y != y or next_x != x + (end - pos):
+                break
+            end += 1
+        width = end - pos
+        pixels = bytearray(width * 2)
+        for i in range(width):
+            struct.pack_into("<H", pixels, i * 2, modifications[extra[pos + i]])
+        output_blocks.append(VramBlock(b"\0" * 0x0C, x, y, width, 1, bytes(pixels)))
+        pos = end
+
+    out = bytearray(struct.pack("<I", 0x20))
+    for block in output_blocks:
+        payload = block.prefix + struct.pack("<hhhh", block.x, block.y, block.w, block.h) + block.pixels
+        size = align(len(payload), 4)
+        out += struct.pack("<I", size)
+        out += payload
+        if len(payload) < size:
+            out += b"\0" * (size - len(payload))
+    out += struct.pack("<I", 0)
+    return bytes(out)
+
+
+def texture_coordinate_span(values):
+    return range(min(values), max(values) + 1)
+
+
+def texture_layout_word_coords(layout: bytes):
+    if len(layout) != 0x0C:
+        raise RuntimeError("invalid texture layout size")
+    u0, v0, clut, u1, v1, tpage, u2, v2, u3, v3 = struct.unpack("<BBHBBHBBBB", layout)
+    bpp = (tpage >> 7) & 3
+    if bpp > 2:
+        return set()
+
+    page_x = (tpage & 0x0F) * 64
+    page_y = ((tpage >> 4) & 1) * 256
+    word_shift = (2, 1, 0)[bpp]
+    coords = set()
+    for v in texture_coordinate_span((v0, v1, v2, v3)):
+        y = page_y + v
+        if y < 0 or y >= VRAM_HEIGHT:
+            continue
+        for u in texture_coordinate_span((u0, u1, u2, u3)):
+            x = page_x + (u >> word_shift)
+            if 0 <= x < VRAM_WIDTH:
+                coords.add(y * VRAM_WIDTH + x)
+
+    if bpp < 2:
+        clut_x = (clut & 0x3F) * 16
+        clut_y = (clut >> 6) & 0x1FF
+        palette_width = 16 if bpp == 0 else 256
+        if 0 <= clut_y < VRAM_HEIGHT:
+            for x in range(clut_x, min(clut_x + palette_width, VRAM_WIDTH)):
+                coords.add(clut_y * VRAM_WIDTH + x)
+    return coords
+
+
+def model_texture_word_coords(raw: bytes):
+    if len(raw) < MODEL_FILE_HEADER_SIZE + 0x18:
+        raise RuntimeError("racer model file is too small")
+    pointer_map_offset = read_s32(raw, 0)
+    body = raw[MODEL_FILE_HEADER_SIZE:]
+    if pointer_map_offset <= 0 or pointer_map_offset > len(body):
+        raise RuntimeError("racer model has an invalid pointer map offset")
+
+    num_headers = struct.unpack_from("<h", body, 0x12)[0]
+    headers_offset = read_u32(body, 0x14)
+    if num_headers <= 0 or headers_offset + num_headers * MODEL_HEADER_SIZE > pointer_map_offset:
+        raise RuntimeError("racer model headers are outside the DRAM payload")
+
+    layouts = set()
+    for header_index in range(num_headers):
+        header_offset = headers_offset + header_index * MODEL_HEADER_SIZE
+        command_offset = read_u32(body, header_offset + 0x20)
+        table_offset = read_u32(body, header_offset + 0x28)
+        if command_offset == 0 or table_offset == 0:
+            continue
+        if command_offset + 4 > pointer_map_offset or table_offset + 4 > pointer_map_offset:
+            raise RuntimeError("racer model texture data is outside the DRAM payload")
+
+        texture_indices = set()
+        cursor = command_offset + 4
+        while cursor + 4 <= pointer_map_offset:
+            command = read_u32(body, cursor)
+            cursor += 4
+            if command == 0xFFFFFFFF:
+                break
+            if (command & 0xFFFF0000) != 0:
+                texture_index = command & 0x1FF
+                if texture_index != 0:
+                    texture_indices.add(texture_index)
+        else:
+            raise RuntimeError("unterminated model command list")
+
+        for texture_index in texture_indices:
+            slot = table_offset + (texture_index - 1) * 4
+            if slot + 4 > pointer_map_offset:
+                raise RuntimeError("racer model texture table is truncated")
+            layout_offset = read_u32(body, slot)
+            if layout_offset == 0:
+                continue
+            if layout_offset + 0x0C > pointer_map_offset:
+                raise RuntimeError("racer model texture layout is outside the DRAM payload")
+            layouts.add(body[layout_offset:layout_offset + 0x0C])
+
+    coords = set()
+    for layout in layouts:
+        coords.update(texture_layout_word_coords(layout))
+    return coords
+
+
+def split_shared_vram(base_raw: bytes, patched_raw: bytes, models):
+    base_blocks = parse_vram_file(base_raw)
+    patched_blocks = parse_vram_file(patched_raw)
+    base_values = vram_word_map(base_blocks)
+    patched_values = vram_word_map(patched_blocks)
+
+    changed = {}
+    for coord in set(base_values) | set(patched_values):
+        base_value = base_values.get(coord, 0)
+        patched_value = patched_values.get(coord, base_value)
+        if patched_value != base_value:
+            changed[coord] = patched_value
+
+    model_regions = {template_id: model_texture_word_coords(model) for template_id, model in models.items()}
+    split = {}
+    matched = set()
+    for template_id, region in model_regions.items():
+        modifications = {coord: value for coord, value in changed.items() if coord in region}
+        matched.update(modifications)
+        split[template_id] = encode_vram_from_base(base_blocks, modifications)
+
+    return split, {
+        "changed_words": len(changed),
+        "matched_words": len(matched),
+        "unmatched_words": len(changed) - len(matched),
+        "per_racer_words": {template_id: sum(1 for coord in changed if coord in region)
+                            for template_id, region in model_regions.items()},
+    }
 
 
 def read_u32(data: bytes, offset: int) -> int:
@@ -501,12 +920,114 @@ def retarget_template_animations(custom_raw: bytes, template_raw: bytes):
     return struct.pack("<i", pointer_map_offset) + bytes(new_body), report
 
 
+def multi_output_path(output: Path, template_id: int) -> Path:
+    slug = CHARACTER_SLUGS[template_id]
+    if output.suffix.lower() == ".ctrr":
+        return output.with_name(f"{output.stem}_{slug}.ctrr")
+    return output / f"{slug}.ctrr"
+
+
+def write_package(output: Path, template_id: int, engine_class: int, display_name: str, author: str,
+                  source_hash: bytes, model_hi: bytes, shared_vrm: bytes, portrait_vrm: bytes,
+                  voice_xnf: bytes, voice_files, multi_format: bool):
+    if multi_format:
+        header_struct = PACKAGE_MULTI_HEADER_STRUCT
+        version = PACKAGE_MULTI_VERSION
+        assets = [model_hi, shared_vrm, portrait_vrm, voice_xnf]
+    else:
+        header_struct = PACKAGE_HEADER_STRUCT
+        version = PACKAGE_VERSION
+        assets = [model_hi, shared_vrm, voice_xnf]
+
+    offsets = []
+    cursor = align(header_struct.size, 16)
+    for asset in assets:
+        if asset:
+            offsets.append((cursor, len(asset)))
+            cursor = align(cursor + len(asset), 16)
+        else:
+            offsets.append((0, 0))
+
+    voice_offsets = []
+    for file_number, voice_data in voice_files:
+        voice_offsets.append((file_number, cursor, len(voice_data)))
+        cursor = align(cursor + len(voice_data), 16)
+
+    voice_header_values = []
+    for i in range(MAX_VOICE_FILES):
+        if i < len(voice_offsets):
+            file_number, offset, size = voice_offsets[i]
+            voice_header_values.extend((file_number, offset, size))
+        else:
+            voice_header_values.extend((0, 0, 0))
+
+    common_header = (
+        int.from_bytes(PACKAGE_MAGIC, "little"), version, header_struct.size,
+        template_id, engine_class, 0, source_hash,
+        fixed_string(display_name, 64), fixed_string(author, 64),
+    )
+    if multi_format:
+        header = header_struct.pack(
+            *common_header,
+            offsets[ASSET_MODEL_HI][0], offsets[ASSET_MODEL_HI][1],
+            offsets[ASSET_SHARED_VRM][0], offsets[ASSET_SHARED_VRM][1],
+            offsets[ASSET_PORTRAIT_VRM][0], offsets[ASSET_PORTRAIT_VRM][1],
+            offsets[ASSET_MULTI_VOICE_XNF][0], offsets[ASSET_MULTI_VOICE_XNF][1],
+            len(voice_offsets), *voice_header_values,
+        )
+    else:
+        header = header_struct.pack(
+            *common_header,
+            offsets[ASSET_MODEL_HI][0], offsets[ASSET_MODEL_HI][1],
+            offsets[ASSET_SHARED_VRM][0], offsets[ASSET_SHARED_VRM][1],
+            offsets[ASSET_VOICE_XNF][0], offsets[ASSET_VOICE_XNF][1],
+            len(voice_offsets), *voice_header_values,
+        )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("wb") as out:
+        out.write(header)
+        header_end = align(header_struct.size, 16)
+        if out.tell() < header_end:
+            out.write(b"\0" * (header_end - out.tell()))
+        for asset, (offset, _) in zip(assets, offsets):
+            if not asset:
+                continue
+            if out.tell() < offset:
+                out.write(b"\0" * (offset - out.tell()))
+            out.write(asset)
+            aligned = align(out.tell(), 16)
+            if aligned != out.tell():
+                out.write(b"\0" * (aligned - out.tell()))
+
+        for (_, voice_data), (_, offset, _) in zip(voice_files, voice_offsets):
+            if out.tell() < offset:
+                out.write(b"\0" * (offset - out.tell()))
+            out.write(voice_data)
+            aligned = align(out.tell(), 16)
+            if aligned != out.tell():
+                out.write(b"\0" * (aligned - out.tell()))
+
+
+def print_animation_report(animation_report):
+    if animation_report is None:
+        return
+    print("Template animations: " + ", ".join(animation_report["animations"]))
+    print(f"Animation retarget vertices: {animation_report['template_vertices']} -> {animation_report['custom_vertices']}")
+    print("Animation mapping distance: "
+          f"median {animation_report['median_distance']:.1f}, "
+          f"p90 {animation_report['p90_distance']:.1f}, "
+          f"max {animation_report['max_distance']:.1f}")
+    print(f"Animation clipped components: {animation_report['clipped_components']}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Import a CTR racer XDelta as a High Octane .ctrr package")
     parser.add_argument("base", type=Path, help="clean NTSC-U raw ctr-u.bin")
     parser.add_argument("patch", type=Path, help="racer .xdelta patch")
-    parser.add_argument("output", type=Path, help="output .ctrr package")
-    parser.add_argument("--name", help="display name (defaults to patch filename)")
+    parser.add_argument("output", type=Path,
+                        help="output .ctrr package; multi-racer patches use this as a filename prefix or output directory")
+    parser.add_argument("--name", help="display name override; otherwise uses a patched character name when available")
     parser.add_argument("--author", default="", help="mod author")
     parser.add_argument("--engine-class", type=int, default=-1, choices=(-1, 0, 1, 2, 3), help="override engine class; -1 keeps template")
     parser.add_argument("--template-animations", action="store_true",
@@ -529,108 +1050,104 @@ def main() -> int:
             patched_big = BigFile(patched_iso)
 
             changed_models = [i for i in range(RACER_COUNT) if base_big.changed(patched_big, BI_RACERMODELHI + i)]
-            if len(changed_models) != 1:
-                raise RuntimeError(f"expected exactly one changed high-LOD racer model, found {changed_models}")
+            if not changed_models:
+                raise RuntimeError("no changed high-LOD racer models were found")
+            patched_character_names = custom_character_names(base_big, patched_big)
 
-            template_id = changed_models[0]
-            model_hi = patched_big.read_entry(BI_RACERMODELHI + template_id)
-            animation_report = None
-            if args.template_animations:
-                template_model_hi = base_big.read_entry(BI_RACERMODELHI + template_id)
-                model_hi, animation_report = retarget_template_animations(model_hi, template_model_hi)
-            shared_vrm = patched_big.read_entry(BI_SHAREDMPKVRM) if base_big.changed(patched_big, BI_SHAREDMPKVRM) else b""
+            models = {}
+            animation_reports = {}
+            for template_id in changed_models:
+                model_hi = patched_big.read_entry(BI_RACERMODELHI + template_id)
+                animation_report = None
+                if args.template_animations:
+                    template_model_hi = base_big.read_entry(BI_RACERMODELHI + template_id)
+                    model_hi, animation_report = retarget_template_animations(model_hi, template_model_hi)
+                models[template_id] = model_hi
+                animation_reports[template_id] = animation_report
+
+            shared_vrm_changed = base_big.changed(patched_big, BI_SHAREDMPKVRM)
+            base_shared_vrm = base_big.read_entry(BI_SHAREDMPKVRM) if shared_vrm_changed else b""
+            patched_shared_vrm = patched_big.read_entry(BI_SHAREDMPKVRM) if shared_vrm_changed else b""
+            split_vram = {}
+            split_report = None
+            if len(changed_models) > 1 and shared_vrm_changed:
+                split_vram, split_report = split_shared_vram(base_shared_vrm, patched_shared_vrm, models)
 
             clean_xnf = base_iso._read_entry(base_iso.files["XA/ENG.XNF"])
             patched_xnf = patched_iso._read_entry(patched_iso.files["XA/ENG.XNF"])
             voice_xnf = patched_xnf if clean_xnf != patched_xnf else b""
             voice_files = []
+            patched_voice_files = {}
+            changed_voice_file_numbers = set()
             for file_number in range(100):
                 relative = f"XA/ENG/GAME/S{file_number:02d}.XA"
                 if relative not in base_iso.files or relative not in patched_iso.files:
                     continue
                 clean = base_iso.read_raw_extent(relative)
                 patched = patched_iso.read_raw_extent(relative)
+                patched_voice_files[file_number] = patched
                 if xa_payload(clean) != xa_payload(patched):
                     voice_files.append((file_number, patched))
-            if len(voice_files) > MAX_VOICE_FILES:
+                    changed_voice_file_numbers.add(file_number)
+            if len(changed_models) == 1 and len(voice_files) > MAX_VOICE_FILES:
                 raise RuntimeError(f"too many changed GAME XA files: {len(voice_files)}")
         finally:
             base_iso.close()
             patched_iso.close()
 
-    assets = [model_hi, shared_vrm, voice_xnf]
-    offsets = []
-    cursor = align(PACKAGE_HEADER_STRUCT.size, 16)
-    for asset in assets:
-        if asset:
-            offsets.append((cursor, len(asset)))
-            cursor = align(cursor + len(asset), 16)
-        else:
-            offsets.append((0, 0))
-
-    voice_offsets = []
-    for file_number, voice_data in voice_files:
-        voice_offsets.append((file_number, cursor, len(voice_data)))
-        cursor = align(cursor + len(voice_data), 16)
-
-    display_name = args.name or normalize_name(args.patch.stem)
     source_hash = hashlib.sha256(args.patch.read_bytes()).digest()
-    voice_header_values = []
-    for i in range(MAX_VOICE_FILES):
-        if i < len(voice_offsets):
-            file_number, offset, size = voice_offsets[i]
-            voice_header_values.extend((file_number, offset, size))
+    base_display_name = args.name or normalize_name(args.patch.stem)
+    multi_format = len(changed_models) > 1
+    if multi_format:
+        print(f"Detected {len(changed_models)} changed racers: " +
+              ", ".join(CHARACTER_NAMES[template_id] for template_id in changed_models))
+        if split_report is not None:
+            print("Shared VRM split: "
+                  f"{split_report['matched_words']}/{split_report['changed_words']} changed words belong to racer model textures; "
+                  f"{split_report['unmatched_words']} are kept only in the portrait source VRM")
+
+    for template_id in changed_models:
+        if multi_format:
+            output = multi_output_path(args.output, template_id)
+            character_name = patched_character_names.get(template_id)
+            if character_name is not None and args.name is None:
+                display_name = character_name
+            else:
+                display_name = f"{base_display_name} - {character_name or CHARACTER_NAMES[template_id]}"
+            shared_vrm = split_vram.get(template_id, b"") if shared_vrm_changed else b""
+            portrait_vrm = patched_shared_vrm if shared_vrm_changed else b""
+            racer_voice_xnf, racer_voice_files = split_voice_assets_for_character(
+                clean_xnf, patched_xnf, patched_voice_files, changed_voice_file_numbers, template_id
+            )
         else:
-            voice_header_values.extend((0, 0, 0))
+            output = args.output
+            display_name = args.name or patched_character_names.get(template_id) or base_display_name
+            shared_vrm = patched_shared_vrm if shared_vrm_changed else b""
+            portrait_vrm = b""
+            racer_voice_xnf = voice_xnf
+            racer_voice_files = voice_files
 
-    header = PACKAGE_HEADER_STRUCT.pack(
-        int.from_bytes(PACKAGE_MAGIC, "little"), PACKAGE_VERSION, PACKAGE_HEADER_STRUCT.size,
-        template_id, args.engine_class, 0, source_hash,
-        fixed_string(display_name, 64), fixed_string(args.author, 64),
-        offsets[ASSET_MODEL_HI][0], offsets[ASSET_MODEL_HI][1],
-        offsets[ASSET_SHARED_VRM][0], offsets[ASSET_SHARED_VRM][1],
-        offsets[ASSET_VOICE_XNF][0], offsets[ASSET_VOICE_XNF][1],
-        len(voice_offsets), *voice_header_values,
-    )
+        if len(racer_voice_files) > MAX_VOICE_FILES:
+            raise RuntimeError(
+                f"too many custom GAME XA files for {CHARACTER_NAMES[template_id]}: {len(racer_voice_files)}"
+            )
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("wb") as out:
-        out.write(header)
-        if out.tell() < align(PACKAGE_HEADER_STRUCT.size, 16):
-            out.write(b"\0" * (align(PACKAGE_HEADER_STRUCT.size, 16) - out.tell()))
-        for asset, (offset, _) in zip(assets, offsets):
-            if not asset:
-                continue
-            if out.tell() < offset:
-                out.write(b"\0" * (offset - out.tell()))
-            out.write(asset)
-            aligned = align(out.tell(), 16)
-            if aligned != out.tell():
-                out.write(b"\0" * (aligned - out.tell()))
+        write_package(output, template_id, args.engine_class, display_name, args.author, source_hash,
+                      models[template_id], shared_vrm, portrait_vrm, racer_voice_xnf, racer_voice_files, multi_format)
 
-        for (_, voice_data), (_, offset, _) in zip(voice_files, voice_offsets):
-            if out.tell() < offset:
-                out.write(b"\0" * (offset - out.tell()))
-            out.write(voice_data)
-            aligned = align(out.tell(), 16)
-            if aligned != out.tell():
-                out.write(b"\0" * (aligned - out.tell()))
+        print(f"Custom racer: {display_name}")
+        print(f"Template character ID: {template_id} ({CHARACTER_NAMES[template_id]})")
+        print(f"High model: {len(models[template_id])} bytes")
+        print_animation_report(animation_reports[template_id])
+        print(f"Shared VRM: {len(shared_vrm)} bytes")
+        if multi_format:
+            print(f"Portrait source VRM: {len(portrait_vrm)} bytes")
+            if split_report is not None:
+                print(f"Racer VRM changed words: {split_report['per_racer_words'][template_id]}")
+        print(f"Voice XNF: {len(racer_voice_xnf)} bytes")
+        print(f"Voice XA files: {', '.join(f'S{n:02d}' for n, _ in racer_voice_files) if racer_voice_files else 'none'}")
+        print(f"Wrote: {output}")
 
-    print(f"Custom racer: {display_name}")
-    print(f"Template character ID: {template_id}")
-    print(f"High model: {len(model_hi)} bytes")
-    if animation_report is not None:
-        print("Template animations: " + ", ".join(animation_report["animations"]))
-        print(f"Animation retarget vertices: {animation_report['template_vertices']} -> {animation_report['custom_vertices']}")
-        print("Animation mapping distance: "
-              f"median {animation_report['median_distance']:.1f}, "
-              f"p90 {animation_report['p90_distance']:.1f}, "
-              f"max {animation_report['max_distance']:.1f}")
-        print(f"Animation clipped components: {animation_report['clipped_components']}")
-    print(f"Shared VRM: {len(shared_vrm)} bytes")
-    print(f"Voice XNF: {len(voice_xnf)} bytes")
-    print(f"Voice XA files: {', '.join(f'S{n:02d}' for n, _ in voice_files) if voice_files else 'none'}")
-    print(f"Wrote: {args.output}")
     return 0
 
 
