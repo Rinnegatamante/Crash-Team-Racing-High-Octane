@@ -208,13 +208,7 @@ static void MM_Characters_NativeDrawStats(void)
 
 	for (s32 i = 0; i < 3; i++)
 	{
-		s16 target =
-#if defined(CTR_NATIVE)
-			(customRacerIndex < 0 && characterID == PENTA_PENGUIN) ? 0x50 :
-#else
-			(characterID == PENTA_PENGUIN) ? 0x50 :
-#endif
-			s_nativeCharacterSelectStatTargets[engineID][i];
+		s16 target = (characterID == PENTA_PENGUIN) ? 0x50 : s_nativeCharacterSelectStatTargets[engineID][i];
 		s16 *length = &s_nativeCharacterSelectStatLengths[i];
 		if (*length < target)
 		{
@@ -243,13 +237,7 @@ static void MM_Characters_NativeDrawStats(void)
 	s16 barX = MM_CHARACTER_SELECT_STATS_BAR_X + transitionX;
 
 	s32 classIndex = 0;
-	if (
-#if defined(CTR_NATIVE)
-	    ((customRacerIndex < 0) && (characterID == PENTA_PENGUIN)) ||
-#else
-	    (characterID == PENTA_PENGUIN) ||
-#endif
-	    (engineID == SPEED))
+	if ((characterID == PENTA_PENGUIN) || (engineID == SPEED))
 	{
 		classIndex = 2;
 	}
