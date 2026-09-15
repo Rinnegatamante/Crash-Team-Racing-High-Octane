@@ -378,7 +378,7 @@ static void MM_Characters_NativeDrawStats(void)
 	box.y = MM_CHARACTER_SELECT_STATS_BOX_Y;
 	box.w = (contentRight - contentLeft) + 12;
 	box.h = MM_CHARACTER_SELECT_STATS_BOX_H;
-	RECTMENU_DrawInnerRect(&box, 4, gGT->backBuffer->otMem.uiOT);
+	RECTMENU_DrawInnerRect(&box, 0, gGT->backBuffer->otMem.uiOT);
 }
 
 #if defined(CTR_NATIVE)
