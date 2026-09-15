@@ -120,6 +120,7 @@ typedef struct
 	TextureID overrideTexture;
 	int overrideTextureWidth;
 	int overrideTextureHeight;
+	bool overrideTexturePsxStp;
 
 	int drawPrimMode;
 	bool psxDrawMaskSet;
@@ -1511,7 +1512,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 	BlendMode blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
 	TexFormat texFormat = GetTPageFormat(tpage);
 	TextureID textureId = textured ? NativeRenderer_GetVRAMTexture() : NativeRenderer_GetWhiteTexture();
-	bool psxTexturedSemiTrans = semiTrans && textured && s_gpu.overrideTexture == 0;
+	bool psxTexturedSemiTrans = semiTrans && textured && (s_gpu.overrideTexture == 0 || s_gpu.overrideTexturePsxStp);
 	// NOTE(aalhendi): PS1 framebuffer bit 15 follows sampled texture STP for
 	// textured draws unless E6 forces it. Recursive screen-copy effects depend
 	// on this bit surviving after the blended textured pass.
@@ -1523,7 +1524,6 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback, 
 		// override texture format, zero tpage
 		texFormat = TF_32_BIT_RGBA;
 		textureId = s_gpu.overrideTexture;
-		psxTexturedSemiTrans = false;
 	}
 
 #ifdef __vita__
@@ -1698,7 +1698,8 @@ global_variable NativeGpuBlendNode s_gpuBlendNodes[MAX_DRAW_SPLITS];
 
 internal NativeGpuPassCategory NativeGpu_GetPassCategory(const GPUDrawSplit *split, BlendMode blendMode)
 {
-	const bool mayDiscard = split->textureId != NativeRenderer_GetWhiteTexture() && split->texFormat != TF_32_BIT_RGBA && !split->psxTextureFullyOpaque;
+	const bool mayDiscard = split->textureId != NativeRenderer_GetWhiteTexture() &&
+	                        (split->texFormat != TF_32_BIT_RGBA || split->psxTexturedSemiTrans) && !split->psxTextureFullyOpaque;
 	if (blendMode == BM_NONE)
 	{
 		return mayDiscard ? NATIVE_GPU_PASS_DISCARD : NATIVE_GPU_PASS_OPAQUE;
@@ -1709,7 +1710,7 @@ internal NativeGpuPassCategory NativeGpu_GetPassCategory(const GPUDrawSplit *spl
 internal bool NativeGpu_CanUseMixedSTPPass(const GPUDrawSplit *split)
 {
 	return split->psxTexturedSemiTrans && split->psxSemiTransPassMask == 3 && !split->drawPrimMode && !split->psxDrawMaskSet &&
-	       split->blendMode != BM_SUBTRACT;
+	       split->blendMode != BM_SUBTRACT && split->texFormat != TF_32_BIT_RGBA;
 }
 
 internal bool NativeGpu_GetDepthPassInfo(const GPUDrawSplit *split, NativeGpuPassCategory *category, int *semiTransPass)
@@ -2490,7 +2491,7 @@ internal void NativeGpu_ClassifyOpaqueTextureSplits(void)
 		}
 		if (!split->psxTextureOutputSTP)
 		{
-			// Native RGBA override textures already use a shader without discard.
+			// RGBA override textures have no PS1 palette to classify here.
 			continue;
 		}
 		if (split->psxTexturedSemiTrans)
@@ -3426,6 +3427,7 @@ internal int ProcessPsyXPrims(P_TAG *polyTag)
 		s_gpu.overrideTexture = psytex->code[0] & 0xFFFFFF;
 		s_gpu.overrideTextureWidth = psytex->code[1] & 0xFFF;
 		s_gpu.overrideTextureHeight = psytex->code[1] >> 16 & 0xFFF;
+		s_gpu.overrideTexturePsxStp = (psytex->code[1] & PSYX_TEX_FLAG_PSX_STP) != 0;
 		return 2;
 	}
 	case 0x02:

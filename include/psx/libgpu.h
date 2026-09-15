@@ -603,6 +603,8 @@ typedef struct
 	uint32_t code[2];
 } DR_PSYX_TEX;
 
+#define PSYX_TEX_FLAG_PSX_STP 0x80000000u
+
 typedef struct
 {
 	DECLARE_P_ADDR
@@ -814,6 +816,7 @@ extern void GetDrawEnv2(DR_ENV *p);
  */
 
 extern void SetPsyXTexture(DR_PSYX_TEX *p, uint32_t grTextureId, int width, int height);
+extern void SetPsyXTextureSTP(DR_PSYX_TEX *p, uint32_t grTextureId, int width, int height);
 extern void SetPsyXDebugMarker(DR_PSYX_DBGMARKER *p, const char *str);
 
 #ifdef _DEBUG

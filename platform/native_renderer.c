@@ -1408,12 +1408,31 @@ const char *gte_shader_untextured = "\tuniform float psxDrawMaskSet;\n"
 #endif
 
 const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
+                                 GPU_SEMI_TRANS_UNIFORM
                                  "	uniform float psxDrawMaskSet;\n"
                                  "	uniform vec2 texelSize;\n"
                                  "	void main() {\n"
                                  "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
+#ifdef __vita__
+                                 "#if defined(PSX_PASS_NON_STP) || defined(PSX_PASS_STP)\n"
+                                 "		if (color.a < 0.25) { discard; }\n"
+                                 "		float sampledStp = step(0.75, color.a);\n"
+                                 "#ifdef PSX_PASS_NON_STP\n		if (sampledStp >= 0.5) { discard; }\n#endif\n"
+                                 "#ifdef PSX_PASS_STP\n		if (sampledStp < 0.5) { discard; }\n#endif\n"
+                                 "#else\n"
                                  "		if (color.a < 0.5) { discard; }\n"
+                                 "#endif\n"
+#else
+                                 "		if (psxSemiTransPass == 0) {\n"
+                                 "			if (color.a < 0.5) { discard; }\n"
+                                 "		} else {\n"
+                                 "			if (color.a < 0.25) { discard; }\n"
+                                 "			float sampledStp = step(0.75, color.a);\n"
+                                 "			if (psxSemiTransPass == 1 && sampledStp >= 0.5) { discard; }\n"
+                                 "			if (psxSemiTransPass == 2 && sampledStp < 0.5) { discard; }\n"
+                                 "		}\n"
+#endif
                                  GPU_RGBA_FRAGMENT_OUTPUT
                                  GPU_PSX_BLEND_APPLY
                                  "	}\n";
@@ -1736,7 +1755,7 @@ internal void NativeRenderer_InitialisePSXShaders(void)
 
 	for (int format = TF_4_BIT; format <= TF_32_BIT_RGBA; format++)
 	{
-		const int variantCount = format == TF_32_BIT_RGBA ? 3 : NATIVE_PSX_SHADER_VARIANT_COUNT;
+		const int variantCount = format == TF_32_BIT_RGBA ? NATIVE_PSX_SHADER_STP_QUARTER + 1 : NATIVE_PSX_SHADER_VARIANT_COUNT;
 		for (int variant = 0; variant < variantCount; variant++)
 		{
 			NativeRenderer_CompilePSXShader(&s_gteShaderVariants[format][variant], sources[format], variantDefines[variant]);
@@ -2223,12 +2242,6 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat, int semiT
 		                                               : NATIVE_PSX_SHADER_MIXED_ADD;
 	}
 	else
-	{
-		variant = blendMode == BM_AVERAGE         ? NATIVE_PSX_SHADER_OPAQUE_AVERAGE
-		          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_OPAQUE_QUARTER
-		                                               : NATIVE_PSX_SHADER_OPAQUE;
-	}
-	if (texFormat == TF_32_BIT_RGBA && variant >= NATIVE_PSX_SHADER_NON_STP)
 	{
 		variant = blendMode == BM_AVERAGE         ? NATIVE_PSX_SHADER_OPAQUE_AVERAGE
 		          : blendMode == BM_ADD_QUATER_SOURCE ? NATIVE_PSX_SHADER_OPAQUE_QUARTER

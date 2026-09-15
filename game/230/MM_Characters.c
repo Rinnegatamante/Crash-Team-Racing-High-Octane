@@ -710,22 +710,28 @@ static void MM_Characters_NativeDrawPortraitTexture(u32 texture, int textureWidt
 	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
 	const int iconWidth = (int)templateIcon->texLayout.u1 - (int)templateIcon->texLayout.u0;
 	const int iconHeight = (int)templateIcon->texLayout.v2 - (int)templateIcon->texLayout.v0;
+	int leftX = posX;
+	int rightX = posX + iconWidth;
+#if CTR_NATIVE_WIDESCREEN
+	const int centerX = (leftX + rightX) / 2;
+	leftX = centerX + CTR_WIDESCREEN_SCALE_X(leftX - centerX);
+	rightX = centerX + CTR_WIDESCREEN_SCALE_X(rightX - centerX);
+#endif
 
-	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	SetPsyXTextureSTP(setTexture, texture, textureWidth, textureHeight);
 	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
 
 	poly->r0 = (u8)color;
 	poly->g0 = (u8)(color >> 8);
 	poly->b0 = (u8)(color >> 16);
-	// Native RGBA portraits must stay opaque because their cache has no PS1 STP bits.
 	poly->code = 0x2d;
-	poly->x0 = posX;
+	poly->x0 = (s16)leftX;
 	poly->y0 = posY;
-	poly->x1 = (s16)(posX + iconWidth);
+	poly->x1 = (s16)rightX;
 	poly->y1 = posY;
-	poly->x2 = posX;
+	poly->x2 = (s16)leftX;
 	poly->y2 = (s16)(posY + iconHeight);
-	poly->x3 = (s16)(posX + iconWidth);
+	poly->x3 = (s16)rightX;
 	poly->y3 = (s16)(posY + iconHeight);
 	poly->u0 = 0;
 	poly->v0 = 0;
@@ -739,6 +745,7 @@ static void MM_Characters_NativeDrawPortraitTexture(u32 texture, int textureWidt
 	poly->u3 = (u8)textureWidth;
 	poly->v3 = (u8)textureHeight;
 	poly->pad2 = 0;
+	setTransparency(poly, TRANS_50_DECAL);
 	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
 
 	SetPsyXTexture(resetTexture, 0, 0, 0);
@@ -2133,14 +2140,14 @@ dontDrawSelectCharacter:
 				if (customRacerIndex >= 0)
 				{
 					portraitTexture = NativeCustomRacer_GetPortraitTexture(customRacerIndex, retailIcon, &portraitWidth, &portraitHeight);
-			}
+				}
 
-					if (portraitTexture != 0)
+				if (portraitTexture != 0)
 				{
 					MM_Characters_NativeDrawPortraitTexture(portraitTexture, portraitWidth, portraitHeight, retailIcon,
 					                                           portraitX, portraitY, iconColor.self);
 					continue;
-			}
+				}
 			}
 #endif
 

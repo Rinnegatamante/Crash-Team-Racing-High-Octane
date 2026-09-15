@@ -398,7 +398,7 @@ internal u32 UI_NativeResolveDriverPortraitTexture(int driverID, struct Icon *ic
 
 internal void UI_NativeDrawDriverIconTexture(u32 texture, int textureWidth, int textureHeight,
 	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot,
-	s16 scale, u32 color)
+	char transparency, s16 scale, u32 color)
 {
 	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
 	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
@@ -420,10 +420,9 @@ internal void UI_NativeDrawDriverIconTexture(u32 texture, int textureWidth, int 
 	nativeIcon.texLayout.v3 = (u8)textureHeight;
 	nativeIcon.texLayout.clut = 0;
 
-	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	SetPsyXTextureSTP(setTexture, texture, textureWidth, textureHeight);
 	primMem->cursor = poly;
-	// The RGBA cache only stores transparent/opaque pixels, not the PS1 STP bit.
-	UI_DrawDriverIcon(&nativeIcon, posX, posY, primMem, ot, 0, scale, color);
+	UI_DrawDriverIcon(&nativeIcon, posX, posY, primMem, ot, transparency, scale, color);
 
 	SetPsyXTexture(resetTexture, 0, 0, 0);
 	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
@@ -434,7 +433,7 @@ internal void UI_NativeDrawDriverIconTexture(u32 texture, int textureWidth, int 
 }
 
 internal void UI_NativeDrawDriverIconDecalTexture(u32 texture, int textureWidth, int textureHeight,
-	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, s16 scale)
+	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, char transparency, s16 scale)
 {
 	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
 	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
@@ -456,9 +455,9 @@ internal void UI_NativeDrawDriverIconDecalTexture(u32 texture, int textureWidth,
 	nativeIcon.texLayout.v3 = (u8)textureHeight;
 	nativeIcon.texLayout.clut = 0;
 
-	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	SetPsyXTextureSTP(setTexture, texture, textureWidth, textureHeight);
 	primMem->cursor = poly;
-	DecalHUD_DrawPolyFT4(&nativeIcon, posX, posY, primMem, ot, 0, scale);
+	DecalHUD_DrawPolyFT4(&nativeIcon, posX, posY, primMem, ot, transparency, scale);
 
 	SetPsyXTexture(resetTexture, 0, 0, 0);
 	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
@@ -470,7 +469,7 @@ internal void UI_NativeDrawDriverIconDecalTexture(u32 texture, int textureWidth,
 
 internal void UI_NativeDrawDriverIconGT4Texture(u32 texture, int textureWidth, int textureHeight,
 	struct Icon *templateIcon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot,
-	u32 color0, u32 color1, u32 color2, u32 color3, s16 scale)
+	u32 color0, u32 color1, u32 color2, u32 color3, char transparency, s16 scale)
 {
 	if ((texture == 0) || (textureWidth <= 0) || (textureHeight <= 0) ||
 	    (textureWidth > 255) || (textureHeight > 255) || (templateIcon == NULL))
@@ -492,10 +491,10 @@ internal void UI_NativeDrawDriverIconGT4Texture(u32 texture, int textureWidth, i
 	nativeIcon.texLayout.v3 = (u8)textureHeight;
 	nativeIcon.texLayout.clut = 0;
 
-	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	SetPsyXTextureSTP(setTexture, texture, textureWidth, textureHeight);
 	primMem->cursor = poly;
 	DecalHUD_DrawPolyGT4(&nativeIcon, posX, posY, primMem, ot,
-		color0, color1, color2, color3, 0, scale);
+		color0, color1, color2, color3, transparency, scale);
 
 	SetPsyXTexture(resetTexture, 0, 0, 0);
 	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
@@ -519,7 +518,7 @@ void UI_DrawDriverIconForDriver(int driverID, struct Icon *icon, s16 posX, s16 p
 		if (texture != 0)
 		{
 			UI_NativeDrawDriverIconTexture(texture, textureWidth, textureHeight, icon,
-				posX, posY, primMem, ot, scale, color);
+				posX, posY, primMem, ot, transparency, scale, color);
 			return;
 		}
 	}
@@ -540,7 +539,7 @@ void UI_DrawDriverIconDecalForDriver(int driverID, struct Icon *icon, s16 posX, 
 		if (texture != 0)
 		{
 			UI_NativeDrawDriverIconDecalTexture(texture, textureWidth, textureHeight, icon,
-				posX, posY, primMem, ot, scale);
+				posX, posY, primMem, ot, transparency, scale);
 			return;
 		}
 	}
@@ -562,7 +561,7 @@ void UI_DrawDriverIconGT4ForDriver(int driverID, struct Icon *icon, s16 posX, s1
 		if (texture != 0)
 		{
 			UI_NativeDrawDriverIconGT4Texture(texture, textureWidth, textureHeight, icon,
-				posX, posY, primMem, ot, color0, color1, color2, color3, scale);
+				posX, posY, primMem, ot, color0, color1, color2, color3, transparency, scale);
 			return;
 		}
 	}

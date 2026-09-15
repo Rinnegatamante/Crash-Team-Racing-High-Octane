@@ -253,7 +253,8 @@ internal void NativeCustomRacer_PsxColorToRgba(u16 color, u8 *rgba)
 	rgba[0] = (u8)((r << 3) | (r >> 2));
 	rgba[1] = (u8)((g << 3) | (g >> 2));
 	rgba[2] = (u8)((b << 3) | (b >> 2));
-	rgba[3] = 0xff;
+	// Keep PS1 non-STP and STP texels distinct after conversion to RGBA.
+	rgba[3] = (color & 0x8000) != 0 ? 0xff : 0x80;
 }
 
 internal int NativeCustomRacer_DecodePortrait(const u16 *vram, const struct Icon *icon, u8 **rgbaOut, int *widthOut, int *heightOut)
