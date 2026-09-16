@@ -83,7 +83,7 @@ void VehFire_Audio(struct Driver *driver, int speed_cap)
 		if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
 #endif
 		{
-			Voiceline_RequestPlay(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, data.characterIDs[driver->driverID], VEH_FIRE_VOICELINE_PRIORITY);
+			Voiceline_RequestPlayDriver(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, driver->driverID, VEH_FIRE_VOICELINE_PRIORITY);
 		}
 
 		goto Skip;

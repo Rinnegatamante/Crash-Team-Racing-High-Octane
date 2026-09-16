@@ -600,7 +600,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		if (NativeAdhoc_ShouldPresentDriver(player->driverID))
 #endif
 		{
-			Voiceline_RequestPlay(13, data.characterIDs[player->driverID], 0x10);
+			Voiceline_RequestPlayDriver(13, player->driverID, 0x10);
 		}
 	}
 

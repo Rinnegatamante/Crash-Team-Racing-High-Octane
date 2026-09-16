@@ -333,7 +333,7 @@ checkCollision:
 		if (NativeAdhoc_ShouldPresentDriver(victim->driverID))
 #endif
 		{
-			Voiceline_RequestPlay(1, data.characterIDs[victim->driverID], 0x10);
+			Voiceline_RequestPlayDriver(1, victim->driverID, 0x10);
 		}
 	}
 }

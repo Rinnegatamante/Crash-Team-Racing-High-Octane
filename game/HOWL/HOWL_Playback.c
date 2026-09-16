@@ -211,7 +211,13 @@ void howl_UnPauseChannel(struct ChannelStats *stats)
 
 	else if (type == HOWL_CHANNEL_TYPE_OTHER_FX)
 	{
-		howl_InitChannelAttr_OtherFX(&sdata->howl_metaOtherFX[soundID], &attr, stats->vol, stats->LR, stats->distort);
+#if defined(CTR_NATIVE)
+		if ((stats->unk2 == 0) ||
+		    !NativeCustomRacer_InitSampledVoiceChannelAttr((int)stats->unk2 - 1, soundID, &attr, stats->vol, stats->LR, stats->distort))
+#endif
+		{
+			howl_InitChannelAttr_OtherFX(&sdata->howl_metaOtherFX[soundID], &attr, stats->vol, stats->LR, stats->distort);
+		}
 	}
 
 	else if (type == HOWL_CHANNEL_TYPE_MUSIC)

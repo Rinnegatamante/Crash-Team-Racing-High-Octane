@@ -427,14 +427,12 @@ void PlayLevel_UpdateLapStats(void)
 		    ((s8)gGT->humanPlayerPositions[driverIndex] < currRank))
 		{
 			struct Driver *voiceDriver = gGT->driversInRaceOrder[currRank - 1];
-			int characterID = data.characterIDs[voiceDriver->driverID];
-
 			// Make driver talk
 #if defined(__vita__)
 			if (NativeAdhoc_ShouldPresentDriver(voiceDriver->driverID))
 #endif
 			{
-				Voiceline_RequestPlay(PLAYLEVEL_PASS_VOICELINE, characterID, PLAYLEVEL_VOICELINE_FLAGS);
+				Voiceline_RequestPlayDriver(PLAYLEVEL_PASS_VOICELINE, voiceDriver->driverID, PLAYLEVEL_VOICELINE_FLAGS);
 			}
 		}
 		gGT->humanPlayerPositions[driverIndex] = currRank;

@@ -507,7 +507,7 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 				if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
 #endif
 				{
-					Voiceline_RequestPlay(0x13, data.characterIDs[driver->driverID], 0x10);
+					Voiceline_RequestPlayDriver(0x13, driver->driverID, 0x10);
 				}
 			}
 

@@ -18,7 +18,6 @@
 #define NATIVE_AUDIO_SAMPLE_RATE            44100
 #define NATIVE_AUDIO_CHANNELS               2
 #define NATIVE_AUDIO_SPU_VOICE_COUNT        24
-#define NATIVE_AUDIO_SPU_MEMSIZE            (512 * 1024)
 // streaming ADPCM decode like the real SPU: 16-byte blocks decoded on the fly
 // per voice, reading SPU RAM live (psx-spx "SPU ADPCM Samples/Pitch") -penta3
 #define NATIVE_AUDIO_ADPCM_BLOCK_BYTES        16
@@ -163,7 +162,7 @@ struct NativeAudioReverbState
 
 struct NativeAudioSpuArena
 {
-	// NOTE(aalhendi): Emulated PS1 SPU RAM; this is snapshot state, not host PCM.
+	// First 512KB are emulated PS1 SPU RAM; the rest is CTR Native-only sample space.
 	u8 memory[NATIVE_AUDIO_SPU_MEMSIZE];
 	int allocCursor;
 	int transferOffset;
@@ -469,7 +468,7 @@ struct NativeAudioSnapshot
 	SpuCommonAttr commonAttr;
 	struct NativeAudioVoiceState voices[NATIVE_AUDIO_SPU_VOICE_COUNT];
 	struct NativeAudioXAState xa;
-	u8 spuSampleMem[NATIVE_AUDIO_SPU_MEMSIZE];
+	u8 spuSampleMem[NATIVE_AUDIO_SPU_HW_MEMSIZE];
 };
 
 global_variable struct NativeAudioState s_audio;
@@ -1904,7 +1903,8 @@ internal int NativeAudio_DecodeAdpcmNibble(u8 soundParameter, int nibble, int *o
 
 internal u32 NativeAudio_WrapSpuAddr(u32 addr)
 {
-	// SPU addresses wrap within the 512KB like hardware -penta3
+	// Retail data stays within the first 512KB. CTR Native reserves the second
+	// 512KB for native-only samples that have no PS1 hardware address.
 	return addr & (u32)(NATIVE_AUDIO_SPU_MEMSIZE - 1);
 }
 
@@ -3718,7 +3718,9 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 	s_audio.reverb = snapshot->reverb;
 	NativeAudio_ReverbRefreshOffsetsNoLock();
 	s_audio.commonAttr = snapshot->commonAttr;
-	memcpy(s_audio.spu.memory, snapshot->spuSampleMem, sizeof(s_audio.spu.memory));
+	// The native extension contains immutable custom-racer samples loaded from
+	// packages, so snapshots only restore the hardware-visible 512KB region.
+	memcpy(s_audio.spu.memory, snapshot->spuSampleMem, sizeof(snapshot->spuSampleMem));
 	s_audio.spu.transferOffset = snapshot->spuTransferOffset;
 		for (i = 0; i < NATIVE_AUDIO_SPU_VOICE_COUNT; i++)
 		{

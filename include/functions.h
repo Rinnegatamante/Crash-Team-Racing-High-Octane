@@ -283,6 +283,7 @@ void Voiceline_PoolClear(void);
 void Voiceline_StopAll(void);
 void Voiceline_ToggleEnable(int toggle);
 void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2);
+void Voiceline_RequestPlayDriver(u32 voiceID, int driverID, u32 characterID2);
 void Voiceline_StartPlay(struct Item *voiceLine);
 void Voiceline_Update(void);
 void Voiceline_EmptyFunc(void);

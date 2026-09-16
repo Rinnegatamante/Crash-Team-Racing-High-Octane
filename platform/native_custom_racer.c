@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_assets.h>
+#include <platform/native_audio.h>
 #include <platform/native_custom_racer.h>
 #include <platform/native_disc_image.h>
 #include <platform/native_gpu.h>
@@ -21,10 +22,13 @@
 #include <string.h>
 
 #define NATIVE_CUSTOM_RACER_MAGIC 0x52525443u
-#define NATIVE_CUSTOM_RACER_VERSION 3u
+#define NATIVE_CUSTOM_RACER_VERSION 4u
+#define NATIVE_CUSTOM_RACER_VERSION_MULTI 3u
 #define NATIVE_CUSTOM_RACER_VERSION_LEGACY 2u
 #define NATIVE_CUSTOM_RACER_PATH_MAX 1024
 #define NATIVE_CUSTOM_RACER_DIR "mods/customracers"
+#define NATIVE_CUSTOM_RACER_SPU_START NATIVE_AUDIO_SPU_HW_MEMSIZE
+#define NATIVE_CUSTOM_RACER_SPU_END NATIVE_AUDIO_SPU_MEMSIZE
 
 enum
 {
@@ -45,6 +49,16 @@ struct NativeCustomRacerDiskVoiceFile
 	struct NativeCustomRacerDiskAsset asset;
 };
 
+struct NativeCustomRacerDiskSample
+{
+	u8 flags;
+	u8 volume;
+	u16 pitch;
+	u16 duration;
+	u16 reserved;
+	struct NativeCustomRacerDiskAsset asset;
+};
+
 struct NativeCustomRacerDiskHeaderV2
 {
 	u32 magic;
@@ -57,6 +71,22 @@ struct NativeCustomRacerDiskHeaderV2
 	char name[64];
 	char author[64];
 	struct NativeCustomRacerDiskAsset assets[NATIVE_CUSTOM_RACER_V2_ASSET_COUNT];
+	u32 voiceFileCount;
+	struct NativeCustomRacerDiskVoiceFile voiceFiles[NATIVE_CUSTOM_RACER_MAX_VOICE_FILES];
+};
+
+struct NativeCustomRacerDiskHeaderV3
+{
+	u32 magic;
+	u16 version;
+	u16 headerSize;
+	s16 templateCharacterID;
+	s16 engineClass;
+	u32 flags;
+	u8 sourceHash[32];
+	char name[64];
+	char author[64];
+	struct NativeCustomRacerDiskAsset assets[NATIVE_CUSTOM_RACER_ASSET_COUNT];
 	u32 voiceFileCount;
 	struct NativeCustomRacerDiskVoiceFile voiceFiles[NATIVE_CUSTOM_RACER_MAX_VOICE_FILES];
 };
@@ -75,6 +105,7 @@ struct NativeCustomRacerDiskHeader
 	struct NativeCustomRacerDiskAsset assets[NATIVE_CUSTOM_RACER_ASSET_COUNT];
 	u32 voiceFileCount;
 	struct NativeCustomRacerDiskVoiceFile voiceFiles[NATIVE_CUSTOM_RACER_MAX_VOICE_FILES];
+	struct NativeCustomRacerDiskSample sampledVoices[NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT];
 };
 
 struct NativeCustomRacerBigHeader
@@ -93,6 +124,7 @@ struct NativeCustomRacerEntry
 	struct Model *previewModel;
 	u8 *voiceXnf;
 	u32 voiceXnfSize;
+	u32 sampledVoiceSpuAddr[NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT];
 	u32 portraitTexture;
 	s16 portraitWidth;
 	s16 portraitHeight;
@@ -128,8 +160,11 @@ global_variable struct NativeCustomRacerRetailPortrait s_nativeCustomRacerRetail
 global_variable u8 *s_nativeCustomRacerRetailSharedVram;
 global_variable u32 s_nativeCustomRacerRetailSharedVramSize;
 global_variable int s_nativeCustomRacerVoiceCharacterID = -1;
+global_variable int s_nativeCustomRacerVoiceDriverID = -1;
 
 internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, int assetIndex, void *destination);
+internal int NativeCustomRacer_ReadDiskAsset(struct NativeCustomRacerEntry *racer,
+	const struct NativeCustomRacerDiskAsset *asset, void *destination);
 
 internal int NativeCustomRacer_DriverIndexForModelTarget(void **target)
 {
@@ -394,7 +429,8 @@ internal int NativeCustomRacer_UploadVramFile(const u8 *fileData, u32 fileSize)
 }
 
 CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeaderV2) == 0x24c);
-CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeader) == 0x254);
+CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeaderV3) == 0x254);
+CTR_STATIC_ASSERT(sizeof(struct NativeCustomRacerDiskHeader) == 0x274);
 
 internal int NativeCustomRacer_HasExtension(const char *name, const char *extension)
 {
@@ -484,6 +520,17 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 		racer->disk.voiceFileCount = legacy.voiceFileCount;
 		memcpy(racer->disk.voiceFiles, legacy.voiceFiles, sizeof(racer->disk.voiceFiles));
 	}
+	else if ((sourceVersion == NATIVE_CUSTOM_RACER_VERSION_MULTI) &&
+	         (sourceHeaderSize == sizeof(struct NativeCustomRacerDiskHeaderV3)))
+	{
+		struct NativeCustomRacerDiskHeaderV3 multi;
+		if ((fileSize < (long)sizeof(multi)) || (fread(&multi, 1, sizeof(multi), file) != sizeof(multi)))
+		{
+			fclose(file);
+			return 0;
+		}
+		memcpy(&racer->disk, &multi, sizeof(multi));
+	}
 	else if ((sourceVersion == NATIVE_CUSTOM_RACER_VERSION) &&
 	         (sourceHeaderSize == sizeof(racer->disk)))
 	{
@@ -524,6 +571,13 @@ internal int NativeCustomRacer_ReadHeader(const char *path, struct NativeCustomR
 		const u64 offset = racer->disk.voiceFiles[i].asset.offset;
 		const u64 size = racer->disk.voiceFiles[i].asset.size;
 		if ((size == 0) || (offset < sourceHeaderSize) || (offset + size > (u64)fileSize))
+			return 0;
+	}
+	for (int i = 0; i < NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT; i++)
+	{
+		const u64 offset = racer->disk.sampledVoices[i].asset.offset;
+		const u64 size = racer->disk.sampledVoices[i].asset.size;
+		if ((size != 0) && ((offset < sourceHeaderSize) || (offset + size > (u64)fileSize)))
 			return 0;
 	}
 
@@ -1013,6 +1067,192 @@ internal void NativeCustomRacer_RestoreRetailTemplatePortraitsVram(void)
 	}
 }
 
+internal int NativeCustomRacer_SampledVoiceSlotForSound(const struct NativeCustomRacerEntry *racer, int soundID)
+{
+	if (racer == NULL)
+		return -1;
+	if (soundID == racer->disk.templateCharacterID + 0x1c)
+		return 0;
+	if (soundID == racer->disk.templateCharacterID + 0x2c)
+		return 1;
+	return -1;
+}
+
+internal u64 NativeCustomRacer_SelectedSampleMask(void)
+{
+	u64 mask = 0;
+	for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
+	{
+		const int racerIndex = NativeCustomRacer_GetDriverSelection(driverIndex);
+		if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+			continue;
+		for (int sampleIndex = 0; sampleIndex < NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT; sampleIndex++)
+		{
+			if (s_nativeCustomRacers[racerIndex].disk.sampledVoices[sampleIndex].asset.size != 0)
+			{
+				mask |= (u64)1 << racerIndex;
+				break;
+			}
+		}
+	}
+	return mask;
+}
+
+void NativeCustomRacer_LoadSelectedSamplesToSpu(void)
+{
+	for (int racerIndex = 0; racerIndex < s_nativeCustomRacerCount; racerIndex++)
+		memset(s_nativeCustomRacers[racerIndex].sampledVoiceSpuAddr, 0, sizeof(s_nativeCustomRacers[racerIndex].sampledVoiceSpuAddr));
+
+	const u64 selectedMask = NativeCustomRacer_SelectedSampleMask();
+	if (selectedMask == 0)
+		return;
+
+	// Native audio has a separate extension above the 512KB PS1 SPU address
+	// space. Keep custom samples there so they never compete with retail banks or
+	// the PS1 reverb work area.
+	u32 cursor = NATIVE_CUSTOM_RACER_SPU_START;
+	for (int racerIndex = 0; racerIndex < s_nativeCustomRacerCount; racerIndex++)
+	{
+		if ((selectedMask & ((u64)1 << racerIndex)) == 0)
+			continue;
+		struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+		for (int sampleIndex = 0; sampleIndex < NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT; sampleIndex++)
+		{
+			const struct NativeCustomRacerDiskAsset *asset = &racer->disk.sampledVoices[sampleIndex].asset;
+			if (asset->size == 0)
+				continue;
+			const u32 alignedSize = (asset->size + 7u) & ~7u;
+			if ((cursor >= NATIVE_CUSTOM_RACER_SPU_END) ||
+			    (alignedSize > NATIVE_CUSTOM_RACER_SPU_END - cursor))
+			{
+				fprintf(stderr, "[CTR Native] Not enough SPU RAM for sampled voice %d of %s; using retail audio.\n",
+				        sampleIndex, racer->disk.name);
+				continue;
+			}
+
+			u8 *sampleData = (u8 *)malloc(asset->size);
+			if ((sampleData == NULL) || !NativeCustomRacer_ReadDiskAsset(racer, asset, sampleData))
+			{
+				free(sampleData);
+				continue;
+			}
+
+			if ((SpuSetTransferStartAddr(cursor) != 0) && (SpuWrite(sampleData, asset->size) == asset->size))
+			{
+				racer->sampledVoiceSpuAddr[sampleIndex] = cursor;
+				printf("[CTR Native] Loaded sampled voice %d for %s at SPU 0x%x (%u bytes)\n",
+				       sampleIndex, racer->disk.name, cursor, asset->size);
+			}
+			free(sampleData);
+			cursor += alignedSize;
+		}
+	}
+}
+
+int NativeCustomRacer_InitSampledVoiceChannelAttr(int racerIndex, int soundID, struct ChannelAttr *attr,
+	int vol, int LR, int distort)
+{
+	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount) || (attr == NULL))
+		return 0;
+	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+	const int sampleIndex = NativeCustomRacer_SampledVoiceSlotForSound(racer, soundID);
+	if ((sampleIndex < 0) || (racer->disk.sampledVoices[sampleIndex].asset.size == 0) ||
+	    (racer->sampledVoiceSpuAddr[sampleIndex] == 0))
+	{
+		return 0;
+	}
+
+	const struct NativeCustomRacerDiskSample *sample = &racer->disk.sampledVoices[sampleIndex];
+	int otherVol = (sample->flags & 4) != 0 ? sdata->vol_Voice : sdata->vol_FX;
+	Channel_SetVolume(attr, (otherVol * sample->volume * vol) >> 10, LR);
+
+	s16 pitch = sample->pitch;
+	if (distort != HOWL_SFX_DISTORTION_NONE)
+		pitch = ((int)pitch * (int)data.distortConst_OtherFX[distort]) >> 0x10;
+	attr->pitch = pitch;
+	attr->ad = 0x80ff;
+	attr->sr = 0x1fc2;
+	attr->spuStartAddr = (void *)(uintptr_t)racer->sampledVoiceSpuAddr[sampleIndex];
+	return 1;
+}
+
+int NativeCustomRacer_UpdateSampledVoiceVolume(int racerIndex, int soundID, struct ChannelAttr *attr, int vol, int LR)
+{
+	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount) || (attr == NULL))
+		return 0;
+	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+	const int sampleIndex = NativeCustomRacer_SampledVoiceSlotForSound(racer, soundID);
+	if ((sampleIndex < 0) || (racer->disk.sampledVoices[sampleIndex].asset.size == 0))
+		return 0;
+	const struct NativeCustomRacerDiskSample *sample = &racer->disk.sampledVoices[sampleIndex];
+	const int otherVol = (sample->flags & 4) != 0 ? sdata->vol_Voice : sdata->vol_FX;
+	Channel_SetVolume(attr, (otherVol * sample->volume * vol) >> 10, LR);
+	return 1;
+}
+
+int NativeCustomRacer_PlayDriverSampledVoice(int driverID, int voiceType, int characterID, int *soundIDCount)
+{
+	if ((voiceType < 0) || (voiceType >= NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT) ||
+	    (driverID < 0) || (driverID >= LOAD_CHARACTER_ID_COUNT))
+	{
+		return 0;
+	}
+
+	const int racerIndex = NativeCustomRacer_GetDriverSelection(driverID);
+	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+		return 0;
+	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
+	if (racer->disk.templateCharacterID != characterID)
+		return 0;
+
+	const int soundID = characterID + (voiceType == 0 ? 0x1c : 0x2c);
+	struct ChannelAttr channelAttr;
+	const u32 flags = HOWL_SFX_DEFAULT_FLAGS;
+	const u32 LR = HowlSfx_LR(flags);
+	const u32 distortion = HowlSfx_Distortion(flags);
+	const u32 volume = HowlSfx_Volume(flags);
+	const u16 echo = (u16)HowlSfx_Echo(flags);
+	if (!NativeCustomRacer_InitSampledVoiceChannelAttr(racerIndex, soundID, &channelAttr, volume, LR, distortion))
+		return 0;
+	channelAttr.reverb = echo;
+
+	Smart_EnterCriticalSection();
+	if (Channel_FindSound(soundID) != 0)
+	{
+		Smart_ExitCriticalSection();
+		return 1;
+	}
+
+	struct ChannelStats *channel = Channel_AllocSlot_AntiSpam((s16)soundID, 2, HOWL_CHANNEL_UPDATE_ALL_ATTRS, &channelAttr);
+	if (channel == NULL)
+	{
+		Smart_ExitCriticalSection();
+		return 1;
+	}
+
+	const struct NativeCustomRacerDiskSample *sample = &racer->disk.sampledVoices[voiceType];
+	if ((sample->flags & 2) != 0)
+		channel->flags |= 4;
+	channel->type = HOWL_CHANNEL_TYPE_OTHER_FX;
+	channel->unk2 = (u8)(racerIndex + 1);
+	channel->echo = echo;
+	channel->vol = volume;
+	channel->distort = distortion;
+	channel->LR = LR;
+	channel->timeLeft = sample->duration;
+	channel->soundID = (CountSounds() << 0x10) | (soundID & 0xffff);
+	channel->startFrame = sdata->gGT->frameTimer_MainFrame_ResetDB;
+	if (soundIDCount != NULL)
+		*soundIDCount = channel->soundID;
+	Smart_ExitCriticalSection();
+	return 1;
+}
+
+int NativeCustomRacer_PlayActiveSampledVoice(int voiceType, int characterID)
+{
+	return NativeCustomRacer_PlayDriverSampledVoice(s_nativeCustomRacerVoiceDriverID, voiceType, characterID, NULL);
+}
+
 int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter, int *numSectors,
                                     const char **packagePath, u64 *assetOffset, u32 *assetSize)
 {
@@ -1021,7 +1261,13 @@ int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter
 		return 0;
 
 	int racerIndex = -1;
-	if (s_nativeCustomRacerVoiceCharacterID >= 0)
+	if ((s_nativeCustomRacerVoiceDriverID >= 0) && (s_nativeCustomRacerVoiceDriverID < LOAD_CHARACTER_ID_COUNT))
+	{
+		racerIndex = NativeCustomRacer_GetDriverSelection(s_nativeCustomRacerVoiceDriverID);
+		if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+			return 0;
+	}
+	else if (s_nativeCustomRacerVoiceCharacterID >= 0)
 	{
 		for (int driverIndex = 0; driverIndex < LOAD_CHARACTER_ID_COUNT; driverIndex++)
 		{
@@ -1106,6 +1352,11 @@ void NativeCustomRacer_SetActiveVoiceCharacter(int characterID)
 	s_nativeCustomRacerVoiceCharacterID = ((characterID >= 0) && (characterID < 16)) ? characterID : -1;
 }
 
+void NativeCustomRacer_SetActiveVoiceDriver(int driverID)
+{
+	s_nativeCustomRacerVoiceDriverID = ((driverID >= 0) && (driverID < LOAD_CHARACTER_ID_COUNT)) ? driverID : -1;
+}
+
 int NativeCustomRacer_IsRosterEnabled(void)
 {
 #if defined(__vita__)
@@ -1138,12 +1389,13 @@ int NativeCustomRacer_IsBigHeader(const struct BigHeader *bigfile)
 	return NativeCustomRacer_FindByBigHeader(bigfile) != NULL;
 }
 
-internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, int assetIndex, void *destination)
+internal int NativeCustomRacer_ReadDiskAsset(struct NativeCustomRacerEntry *racer,
+	const struct NativeCustomRacerDiskAsset *asset, void *destination)
 {
-	if ((racer == NULL) || (assetIndex < 0) || (assetIndex >= NATIVE_CUSTOM_RACER_ASSET_COUNT) || (destination == NULL))
+	if ((racer == NULL) || (asset == NULL) || (destination == NULL))
 		return 0;
-	const u32 offset = racer->disk.assets[assetIndex].offset;
-	const u32 size = racer->disk.assets[assetIndex].size;
+	const u32 offset = asset->offset;
+	const u32 size = asset->size;
 	if ((offset == 0) || (size == 0) || (offset > 0x7fffffffu))
 		return 0;
 
@@ -1153,6 +1405,13 @@ internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, i
 	const int ok = (fseek(file, (long)offset, SEEK_SET) == 0) && (fread(destination, 1, size, file) == size);
 	fclose(file);
 	return ok;
+}
+
+internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, int assetIndex, void *destination)
+{
+	if ((racer == NULL) || (assetIndex < 0) || (assetIndex >= NATIVE_CUSTOM_RACER_ASSET_COUNT) || (destination == NULL))
+		return 0;
+	return NativeCustomRacer_ReadDiskAsset(racer, &racer->disk.assets[assetIndex], destination);
 }
 
 int NativeCustomRacer_LoadQueueSlot(struct LoadQueueSlot *slot)

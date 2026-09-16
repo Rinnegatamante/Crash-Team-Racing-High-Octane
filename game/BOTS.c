@@ -1155,7 +1155,7 @@ UpdateTireColorTimer:
 
 			if (BOTS_IsOxideBoss(botDriver))
 			{ // if oxide, then talk
-				Voiceline_RequestPlay(0, 0xf, 0x10);
+				Voiceline_RequestPlayDriver(0, botDriver->driverID, 0x10);
 			}
 
 			if (( // if in front row & 25% chance
@@ -2984,7 +2984,7 @@ u32 BOTS_ChangeState(struct Driver *driverVictim, int damageType, struct Driver 
 			if (NativeAdhoc_ShouldPresentDriver(driverVictim->driverID))
 #endif
 			{
-				Voiceline_RequestPlay(1, data.characterIDs[driverVictim->driverID], 0x10);
+				Voiceline_RequestPlayDriver(1, driverVictim->driverID, 0x10);
 			}
 		}
 		break;

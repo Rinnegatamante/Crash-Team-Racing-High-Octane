@@ -132,6 +132,19 @@ static u32 Voiceline_RequestPlay_NextAudioRNG(void)
 	return sdata->audioRNG;
 }
 
+void Voiceline_RequestPlayDriver(u32 voiceID, int driverID, u32 characterID2)
+{
+	if ((driverID < 0) || (driverID >= LOAD_CHARACTER_ID_COUNT))
+		return;
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_SetActiveVoiceDriver(driverID);
+#endif
+	Voiceline_RequestPlay(voiceID, data.characterIDs[driverID], characterID2);
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_SetActiveVoiceDriver(-1);
+#endif
+}
+
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8002cbe8-0x8002cf28
 void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 {
@@ -231,6 +244,14 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 	}
 
 playImmediate:
+#if defined(CTR_NATIVE)
+	if ((voiceType < NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT) &&
+	    NativeCustomRacer_PlayActiveSampledVoice(voiceType, characterID))
+	{
+		sdata->timeSet2[characterID] = sdata->gGT->frameTimer_MainFrame_ResetDB;
+		return;
+	}
+#endif
 	if (voiceType == 0)
 	{
 		OtherFX_Play((characterID + 0x1c) & 0xffff, 2);
@@ -294,13 +315,16 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	u32 voiceID = (u16)voiceLineItem->voiceID;
 	u32 characterID = voiceLineItem->characterID;
 	u32 voiceSetIndex;
+	b32 isBossVoice = (IS_BOSS_RACE(sdata->gGT->gameMode1)) &&
+	                  ((u32)(voiceID - 10) < 6) &&
+	                  (((u32)(characterID - 8) < 4) || (characterID == 0xf));
 
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[0], CTR_ReadU32LE((u8 *)voiceLineItem + 0x0));
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[1], CTR_ReadU32LE((u8 *)voiceLineItem + 0x4));
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[2], CTR_ReadU32LE((u8 *)voiceLineItem + 0x8));
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[3], CTR_ReadU32LE((u8 *)voiceLineItem + 0xc));
 
-	if ((IS_BOSS_RACE(sdata->gGT->gameMode1)) && ((u32)(voiceID - 10) < 6) && (((u32)(characterID - 8) < 4) || (characterID == 0xf)))
+	if (isBossVoice)
 	{
 		u32 rng = Voiceline_RequestPlay_NextAudioRNG();
 		voiceSetIndex = (rng & 3) + 4;
@@ -331,7 +355,7 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	u32 xaID = (u16)voiceIDs[voiceIndex];
 
 #if defined(CTR_NATIVE)
-	NativeCustomRacer_SetActiveVoiceCharacter((int)characterID);
+	NativeCustomRacer_SetActiveVoiceCharacter(isBossVoice ? -1 : (int)characterID);
 #endif
 	if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, xaID) == 0)
 	{

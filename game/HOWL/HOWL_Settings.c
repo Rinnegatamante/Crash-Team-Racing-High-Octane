@@ -79,7 +79,13 @@ void UpdateChannelVol_EngineFX_All()
 		// type == OtherFX
 		else
 		{
-			UpdateChannelVol_OtherFX(&sdata->howl_metaOtherFX[soundID], &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR);
+#if defined(CTR_NATIVE)
+			if ((curr->unk2 == 0) ||
+			    !NativeCustomRacer_UpdateSampledVoiceVolume((int)curr->unk2 - 1, soundID, &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR))
+#endif
+			{
+				UpdateChannelVol_OtherFX(&sdata->howl_metaOtherFX[soundID], &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR);
+			}
 		}
 	}
 }
@@ -122,7 +128,14 @@ void UpdateChannelVol_OtherFX_All()
 		// update volume
 		sdata->ChannelUpdateFlags[curr->channelID] |= HOWL_CHANNEL_UPDATE_VOLUME;
 
-		UpdateChannelVol_OtherFX(&sdata->howl_metaOtherFX[curr->soundID & 0xffff], &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR);
+		const int soundID = curr->soundID & 0xffff;
+#if defined(CTR_NATIVE)
+		if ((curr->unk2 == 0) ||
+		    !NativeCustomRacer_UpdateSampledVoiceVolume((int)curr->unk2 - 1, soundID, &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR))
+#endif
+		{
+			UpdateChannelVol_OtherFX(&sdata->howl_metaOtherFX[soundID], &sdata->channelAttrNew[curr->channelID], curr->vol, curr->LR);
+		}
 	}
 }
 
@@ -331,21 +344,31 @@ void OptionsMenu_TestSound(int newRow, int newBoolPlay)
 		int sampleVoiceID;
 
 		// every 25th frame
-		if (frameCount == (frameCount / 25) * 25)
-		{
-			// every 50th frame (0, 50, 100, 150)
-			if (frameCount == (frameCount / 50) * 50)
+			if (frameCount == (frameCount / 25) * 25)
 			{
-				sampleVoiceID = characterID + 0x1c;
-			}
+				int sampleVoiceType;
 
-			// every 50th frame (25, 75, 125, 175)
-			else
-			{
-				sampleVoiceID = characterID + 0x2c;
-			}
+				// every 50th frame (0, 50, 100, 150)
+				if (frameCount == (frameCount / 50) * 50)
+				{
+					sampleVoiceID = characterID + 0x1c;
+					sampleVoiceType = 0;
+				}
 
-			sdata->OptionSlider_soundID = OtherFX_Play(sampleVoiceID, 0);
+				// every 50th frame (25, 75, 125, 175)
+				else
+				{
+					sampleVoiceID = characterID + 0x2c;
+					sampleVoiceType = 1;
+				}
+
+#if defined(CTR_NATIVE)
+				if (!NativeCustomRacer_PlayDriverSampledVoice(driverID, sampleVoiceType, characterID,
+				                                                &sdata->OptionSlider_soundID))
+#endif
+				{
+					sdata->OptionSlider_soundID = OtherFX_Play(sampleVoiceID, 0);
+				}
+			}
 		}
-	}
 }

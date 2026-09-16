@@ -346,6 +346,10 @@ u32 Music_AsyncParseBanks(void)
 			goto PARSE_FINISH;
 		}
 
+#if defined(CTR_NATIVE)
+		NativeCustomRacer_LoadSelectedSamplesToSpu();
+#endif
+
 		// If you're in a Boss Race
 		// 0x80000000
 		if (IS_BOSS_RACE(gGT->gameMode1))

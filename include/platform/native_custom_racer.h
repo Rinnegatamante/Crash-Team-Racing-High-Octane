@@ -3,6 +3,7 @@
 
 #define NATIVE_CUSTOM_RACER_MAX 64
 #define NATIVE_CUSTOM_RACER_MAX_VOICE_FILES 32
+#define NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT 2
 
 enum NativeCustomRacerAsset
 {
@@ -14,6 +15,7 @@ enum NativeCustomRacerAsset
 };
 
 struct BigHeader;
+struct ChannelAttr;
 struct LoadQueueSlot;
 struct Model;
 struct Icon;
@@ -31,6 +33,13 @@ u32 NativeCustomRacer_GetRetailPortraitTexture(int templateCharacterID, const st
 int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter, int *numSectors,
                                     const char **packagePath, u64 *assetOffset, u32 *assetSize);
 void NativeCustomRacer_SetActiveVoiceCharacter(int characterID);
+void NativeCustomRacer_SetActiveVoiceDriver(int driverID);
+int NativeCustomRacer_PlayActiveSampledVoice(int voiceType, int characterID);
+int NativeCustomRacer_PlayDriverSampledVoice(int driverID, int voiceType, int characterID, int *soundIDCount);
+int NativeCustomRacer_InitSampledVoiceChannelAttr(int racerIndex, int soundID, struct ChannelAttr *attr,
+                                                  int vol, int LR, int distort);
+int NativeCustomRacer_UpdateSampledVoiceVolume(int racerIndex, int soundID, struct ChannelAttr *attr, int vol, int LR);
+void NativeCustomRacer_LoadSelectedSamplesToSpu(void);
 
 int NativeCustomRacer_QueueSelectedModel(int playerIndex, void **destination);
 struct Model *NativeCustomRacer_GetLoadedPlayerModel(int playerIndex);

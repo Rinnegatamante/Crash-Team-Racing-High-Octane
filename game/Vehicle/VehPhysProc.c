@@ -2566,7 +2566,7 @@ void VehPhysProc_SpinFirst_Init(struct Thread *t, struct Driver *d)
 	if (NativeAdhoc_ShouldPresentInteractionVoice(d->driverID, interactionDriverID))
 #endif
 	{
-		Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, data.characterIDs[d->driverID], VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
+		Voiceline_RequestPlayDriver(VEH_PHYS_PROC_SPIN_VOICELINE_ID, d->driverID, VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
 	}
 	d->pendingDamageAttacker = NULL;
 

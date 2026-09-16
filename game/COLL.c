@@ -2673,7 +2673,7 @@ u32 COLL_MOVED_ScrubImpact(struct Driver *d, struct Thread *t, struct Scratchpad
 					if (shouldPresentImpact)
 					{
 						OtherFX_Play_LowLevel(6, 1, soundFlags);
-						Voiceline_RequestPlay(6, data.characterIDs[d->driverID], 0x10);
+						Voiceline_RequestPlayDriver(6, d->driverID, 0x10);
 						GAMEPAD_ShockFreq(d, 8, 0);
 						GAMEPAD_ShockForce1(d, 8, 0x7f);
 					}

@@ -122,7 +122,7 @@ void UI_JumpMeter_Update(struct Driver *driver)
 			if (NativeAdhoc_ShouldPresentDriver(driver->driverID))
 #endif
 			{
-				Voiceline_RequestPlay(UI_JUMP_METER_LANDING_VOICELINE_ID, data.characterIDs[driver->driverID], UI_JUMP_METER_LANDING_VOICELINE_FLAGS);
+				Voiceline_RequestPlayDriver(UI_JUMP_METER_LANDING_VOICELINE_ID, driver->driverID, UI_JUMP_METER_LANDING_VOICELINE_FLAGS);
 			}
 		}
 

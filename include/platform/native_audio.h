@@ -4,6 +4,9 @@
 #include <macros.h>
 #include <psx/libspu.h>
 
+#define NATIVE_AUDIO_SPU_HW_MEMSIZE (512u * 1024u)
+#define NATIVE_AUDIO_SPU_MEMSIZE (1024u * 1024u)
+
 s32 NativeAudio_SpuInit(void);
 u32 NativeAudio_SpuSetTransferStartAddr(u32 addr);
 u32 NativeAudio_SpuWrite(const u8 *addr, u32 size);

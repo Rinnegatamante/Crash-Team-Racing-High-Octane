@@ -91,8 +91,6 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 	int victimState = victimDriver->kartState;
 	victimDriver->pendingDamageType = 0;
 
-	int victimCharacter = data.characterIDs[victimDriver->driverID];
-
 	if (victimState == KS_MASK_GRABBED)
 	{
 		return 0;
@@ -111,7 +109,7 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 			attackDriver != NULL ? attackDriver->driverID : -1))
 #endif
 		{
-			Voiceline_RequestPlay(VEH_PICK_VOICELINE_VICTIM_LAUGH, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+			Voiceline_RequestPlayDriver(VEH_PICK_VOICELINE_VICTIM_LAUGH, victimDriver->driverID, VEH_PICK_VOICELINE_PRIORITY);
 		}
 		return 0;
 	}
@@ -246,7 +244,7 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 			attackDriver != NULL ? attackDriver->driverID : -1))
 #endif
 		{
-			Voiceline_RequestPlay(voice, victimCharacter, VEH_PICK_VOICELINE_PRIORITY);
+			Voiceline_RequestPlayDriver(voice, victimDriver->driverID, VEH_PICK_VOICELINE_PRIORITY);
 		}
 	}
 
