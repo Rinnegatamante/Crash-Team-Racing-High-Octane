@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_custom_racer.h>
+#endif
+
 extern int gNativeGhostReplayMode;
 
 static char *SelectProfile_NativeGhostFormatText(int ghostFps, int ghostMode)
@@ -707,6 +711,9 @@ static void SelectProfile_LoadAdvProfile(int slot)
 
 	GAMEPROG_SyncGameAndCard(&memcard->gameProgress, &sdata->gameProgress);
 	sdata->advProgress = memcard->advProgress[slot];
+#if defined(CTR_NATIVE)
+	NativeCustomRacer_ClearDriverSelections();
+#endif
 	data.characterIDs[0] = sdata->advProgress.characterID;
 	memmove(gGT->prevNameEntered, sdata->advProgress.name, sizeof(gGT->prevNameEntered));
 }
