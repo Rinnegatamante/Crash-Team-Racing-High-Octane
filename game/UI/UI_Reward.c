@@ -157,6 +157,12 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 	if (!isTimeCrate && (inst->model->id == STATIC_FRUITDISP) &&
 	    (gGT->numPlyrCurrGame >= 2) && ((gGT->gameMode1 & MAIN_MENU) == 0))
 	{
+		if ((gGT->gameMode1 & END_OF_RACE) != 0)
+		{
+			inst->flags |= HIDE_MODEL;
+			return;
+		}
+
 		int owner = -1;
 
 		for (int i = 0; i < gGT->numPlyrCurrGame; i++)
