@@ -258,15 +258,15 @@ static void MM_TrackSelect_Video_DrawNativePreview(RECT *r, u32 texture, int tex
 	DR_PSYX_TEX *resetTexture = (DR_PSYX_TEX *)(poly + 1);
 	u32 *ot = gGT->pushBuffer_UI.ptrOT;
 	u32 oldTag = (u32)*ot;
-	const s16 dstX = (s16)(r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X);
-	const s16 dstY = (s16)(r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y);
 	const u8 srcX = MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X;
 	const u8 srcY = MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y;
 	const u8 srcRight = (u8)(srcX + MM_TRACK_VIDEO_FRAME_WIDTH);
 	const u8 srcBottom = (u8)(srcY + MM_TRACK_VIDEO_FRAME_HEIGHT);
-	const u16 iconTpage = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.tpage;
-	const u8 iconU = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.u0;
-	const u8 iconV = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX]->texLayout.v0;
+	struct Icon *videoIcon = gGT->ptrIcons[MM_TRACK_VIDEO_ICON_INDEX];
+	struct Icon nativeIcon = *videoIcon;
+	const u16 iconTpage = videoIcon->texLayout.tpage;
+	const u8 iconU = videoIcon->texLayout.u0;
+	const u8 iconV = videoIcon->texLayout.v0;
 	const int oldVramX = (u16)iconU + (iconTpage & 0xf) * 0x40;
 	const int oldVramY = (u16)iconV + (iconTpage & 0x10) * 0x10 + (s16)(((u32)iconTpage & 0x800) >> 2);
 
@@ -275,38 +275,29 @@ static void MM_TrackSelect_Video_DrawNativePreview(RECT *r, u32 texture, int tex
 		return;
 	}
 
-	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
-	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
-
-	poly->r0 = 0x80;
-	poly->g0 = 0x80;
-	poly->b0 = 0x80;
-	poly->code = 0x2f;
-	poly->x0 = dstX;
-	poly->y0 = dstY;
-	poly->x1 = dstX + MM_TRACK_VIDEO_FRAME_WIDTH;
-	poly->y1 = dstY;
-	poly->x2 = dstX;
-	poly->y2 = dstY + MM_TRACK_VIDEO_FRAME_HEIGHT;
-	poly->x3 = dstX + MM_TRACK_VIDEO_FRAME_WIDTH;
-	poly->y3 = dstY + MM_TRACK_VIDEO_FRAME_HEIGHT;
-	poly->u0 = srcX;
-	poly->v0 = srcY;
-	poly->clut = 0;
-	poly->u1 = srcRight;
-	poly->v1 = srcY;
+	nativeIcon.texLayout.u0 = srcX;
+	nativeIcon.texLayout.v0 = srcY;
+	nativeIcon.texLayout.u1 = srcRight;
+	nativeIcon.texLayout.v1 = srcY;
+	nativeIcon.texLayout.u2 = srcX;
+	nativeIcon.texLayout.v2 = srcBottom;
+	nativeIcon.texLayout.u3 = srcRight;
+	nativeIcon.texLayout.v3 = srcBottom;
+	nativeIcon.texLayout.clut = 0;
 	// Preserve the draw-mode side effect of the former VRAM-backed preview;
 	// sprites later in the same UI OT may inherit this tpage.
-	poly->tpage = getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)oldVramX, (u32)oldVramY);
-	poly->u2 = srcX;
-	poly->v2 = srcBottom;
-	poly->pad1 = 0;
-	poly->u3 = srcRight;
-	poly->v3 = srcBottom;
-	poly->pad2 = 0;
-	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
+	nativeIcon.texLayout.tpage = getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)oldVramX, (u32)oldVramY);
+
+	SetPsyXTexture(setTexture, texture, textureWidth, textureHeight);
+	gGT->backBuffer->primMem.cursor = poly;
+	DecalHUD_DrawPolyFT4(&nativeIcon,
+	                     (s16)(r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X),
+	                     (s16)(r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y),
+	                     &gGT->backBuffer->primMem, ot, 0, FP(1.0));
 
 	SetPsyXTexture(resetTexture, 0, 0, 0);
+	setTexture->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(poly), 0x02000000);
+	poly->tag = CtrGpu_PackOTTag(CtrGpu_PrimToOTLink24(resetTexture), 0x09000000);
 	resetTexture->tag = CtrGpu_PackOTTag(oldTag, 0x02000000);
 	*ot = (u32)CtrGpu_PrimToOTLink24(setTexture);
 	gGT->backBuffer->primMem.cursor = resetTexture + 1;
@@ -480,7 +471,15 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 	D230.trackSelect.videoStatePrev = D230.trackSelect.videoStateCurr;
 
 	// Draw 2D Menu rectangle background
+#if CTR_NATIVE_WIDESCREEN
+	RECT videoRect = *r;
+	const s16 scaledFrameWidth = (s16)CTR_WIDESCREEN_SCALE_X(MM_TRACK_VIDEO_FRAME_WIDTH);
+	videoRect.x += (MM_TRACK_VIDEO_FRAME_WIDTH - scaledFrameWidth) / 2;
+	videoRect.w = scaledFrameWidth + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X * 2;
+	RECTMENU_DrawInnerRect(&videoRect, (s16)(rectFlags | 1), gGT->backBuffer->otMem.uiOT);
+#else
 	RECTMENU_DrawInnerRect(r, (s16)(rectFlags | 1), gGT->backBuffer->otMem.uiOT);
+#endif
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800aff58-0x800affd0.
