@@ -3,6 +3,45 @@
 #if defined(CTR_NATIVE)
 #include "platform/native_adhoc.h"
 static int s_nativeAdhocRouletteSoundActive;
+extern int cfg_language;
+
+static const char *s_nativeReplayControlText[6][2] =
+{
+	{"* PLAY/PAUSE   [ STEP", "L - SPEED + R"},
+	{"* LIRE/PAUSE   [ PAS", "L - VITESSE + R"},
+	{"* PLAY/PAUSE   [ SCHRITT", "L - TEMPO + R"},
+	{"* PLAY/PAUSA   [ PASSO", "L - VELOCITA + R"},
+	{"* PLAY/PAUSA   [ PASO", "L - VELOCIDAD + R"},
+	{"* PLAY/PAUZE   [ STAP", "L - SNELHEID + R"},
+};
+
+static void UI_RenderFrame_DrawReplayControls(const char *status)
+{
+	int languageRow = 0;
+	if ((cfg_language >= 2) && (cfg_language <= 7))
+	{
+		languageRow = cfg_language - 2;
+	}
+
+	char *line1 = (char *)s_nativeReplayControlText[languageRow][0];
+	char *line2 = (char *)s_nativeReplayControlText[languageRow][1];
+	int width1 = DecalFont_GetLineWidth(line1, FONT_SMALL);
+	int width2 = DecalFont_GetLineWidth(line2, FONT_SMALL);
+	int panelWidth = ((width1 > width2) ? width1 : width2) + 0xc;
+	int lineHeight = data.PlayerCommentBoxParams[FONT_SMALL];
+	int textYOffset = data.PlayerCommentBoxParams[4 + FONT_SMALL];
+	RECT panel;
+
+	panel.x = (s16)(0x100 - (panelWidth >> 1));
+	panel.y = 0xb7;
+	panel.w = (s16)panelWidth;
+	panel.h = (s16)(lineHeight * 2);
+
+	DecalFont_DrawLine((char *)status, 0x100, 4, FONT_SMALL, JUSTIFY_CENTER | ORANGE);
+	DecalFont_DrawLine(line1, 0x100, panel.y + textYOffset, FONT_SMALL, JUSTIFY_CENTER | WHITE);
+	DecalFont_DrawLine(line2, 0x100, panel.y + lineHeight + textYOffset, FONT_SMALL, JUSTIFY_CENTER | WHITE);
+	RECTMENU_DrawInnerRect(&panel, 0, sdata->gGT->backBuffer->otMem.uiOT);
+}
 #endif
 
 // To do: add a header
@@ -61,7 +100,15 @@ void UI_RenderFrame_Racing()
 	}
 #endif
 
-	// Get pointer to array of HUD structs
+#if defined(CTR_NATIVE)
+		const char *replayControlStatus = NativeGhostInput_GetReplayControlStatus();
+		if (replayControlStatus != NULL)
+		{
+			UI_RenderFrame_DrawReplayControls(replayControlStatus);
+		}
+#endif
+
+		// Get pointer to array of HUD structs
 	hudStructPtr = (struct UiElement2D *)data.hudStructPtr[numPlyr - 1];
 
 	levPtrMap = 0;

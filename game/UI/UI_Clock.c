@@ -27,6 +27,7 @@ enum
 	UI_RACE_CLOCK_PB_TIME_X_OFFSET = 0x38,
 	UI_RACE_CLOCK_PB_TOP_GAP = 4,
 	UI_RACE_CLOCK_PB_ROW_Y_STEP = 8,
+	UI_RACE_CLOCK_RELIC_PB_Y_OFFSET = 0x34,
 	UI_RACE_CLOCK_PB_SLOW_ONE_SECOND = UI_RACE_CLOCK_TICKS_PER_SECOND,
 	UI_RACE_CLOCK_PB_SLOW_TWO_SECONDS = UI_RACE_CLOCK_TICKS_PER_SECOND * 2,
 	UI_RACE_CLOCK_RESULTS_TWO_COLUMN_LAPS = 7,
@@ -45,6 +46,25 @@ CTR_STATIC_ASSERT(UI_LIMIT_CLOCK_FLASH_THRESHOLD == 0x3840);
 static const char s_timeTrialPbRaceLabel[] = "PB 3L";
 static const char s_timeTrialPbLapLabel[] = "PB L";
 static const char s_resultsMaxLapTime[] = " 9:59:99";
+
+static void UI_DrawRacePersonalBest(u16 labelPosX, int posY)
+{
+	if (sdata->ptrActiveHighScoreEntry == NULL)
+	{
+		return;
+	}
+
+	int timeX = (int)labelPosX + UI_RACE_CLOCK_PB_TIME_X_OFFSET;
+	DecalFont_DrawLine((char *)s_timeTrialPbRaceLabel, (int)(s16)labelPosX, posY, FONT_SMALL, ORANGE);
+	if (sdata->ptrActiveHighScoreEntry[1].time < MEMCARD_HIGH_SCORE_DEFAULT_TIME)
+	{
+		DecalFont_DrawLine(RECTMENU_DrawTime(sdata->ptrActiveHighScoreEntry[1].time), timeX, posY, FONT_SMALL, PERIWINKLE);
+	}
+	else
+	{
+		DecalFont_DrawLine("--:--:--", timeX, posY, FONT_SMALL, PERIWINKLE);
+	}
+}
 
 void UI_NativeRaceClock_GetTwoColumnLayout(int centerX, int *leftAnchorX, int *rightAnchorX, int *contentLeftX, int *contentWidth)
 {
@@ -127,15 +147,7 @@ static void UI_DrawTimeTrialPersonalBests(u16 labelPosX, u16 labelPosY, struct G
 	int pbLapY = pbRaceY + UI_RACE_CLOCK_PB_ROW_Y_STEP;
 	int timeX = (int)labelPosX + UI_RACE_CLOCK_PB_TIME_X_OFFSET;
 
-	DecalFont_DrawLine((char *)s_timeTrialPbRaceLabel, (int)(s16)labelPosX, pbRaceY, FONT_SMALL, ORANGE);
-	if (sdata->ptrActiveHighScoreEntry[1].time < MEMCARD_HIGH_SCORE_DEFAULT_TIME)
-	{
-		DecalFont_DrawLine(RECTMENU_DrawTime(sdata->ptrActiveHighScoreEntry[1].time), timeX, pbRaceY, FONT_SMALL, PERIWINKLE);
-	}
-	else
-	{
-		DecalFont_DrawLine("--:--:--", timeX, pbRaceY, FONT_SMALL, PERIWINKLE);
-	}
+	UI_DrawRacePersonalBest(labelPosX, pbRaceY);
 
 	DecalFont_DrawLine((char *)s_timeTrialPbLapLabel, (int)(s16)labelPosX, pbLapY, FONT_SMALL, ORANGE);
 	if (sdata->ptrActiveHighScoreEntry[0].time < MEMCARD_HIGH_SCORE_DEFAULT_TIME)
@@ -598,6 +610,13 @@ LAB_8004f378:
 	sdata->raceClockStr[5] = sdata->relicTime_10ms + '0';
 	sdata->raceClockStr[6] = sdata->relicTime_1ms + '0';
 	DecalFont_DrawLine(sdata->raceClockStr, (int)(s16)relicTimeX, (int)relicTimeY, FONT_BIG, (int)(s16)(lapOrRelicColor & (0xffff ^ JUSTIFY_RIGHT)));
+
+#if defined(CTR_NATIVE)
+	if (((flags & UI_RACE_CLOCK_SHOW_RESULTS) == 0) && (gNativeRelicRaceMode != 0))
+	{
+		UI_DrawRacePersonalBest(labelPosX, (int)(s16)labelPosY + UI_RACE_CLOCK_RELIC_PB_Y_OFFSET);
+	}
+#endif
 }
 
 // countdown clock, used for Battle Mode and Crystal Challenge

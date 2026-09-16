@@ -77,6 +77,7 @@ u32 main(void)
 
 #ifdef CTR_NATIVE
 	int nativeAdhocRunSimulation = 1;
+	int nativeGhostRunSimulation = 1;
 #endif
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 	int nativeReplayFrameActive = 0;
@@ -410,23 +411,6 @@ u32 main(void)
 				{
 #endif
 
-				if ((
-			        // Check value of traffic lights
-			        (-960 < gGT->trafficLightsTimer) &&
-			        // if not drawing intro race cutscene and if not paused
-			        ((gGT->gameMode1 & (START_OF_RACE | PAUSE_ALL)) == 0)) &&
-			    (
-			        // amount of milliseconds on Traffic Lights - elapsed milliseconds per frame, ~32
-			        iVar8 = gGT->trafficLightsTimer - gGT->elapsedTimeMS,
-			        // decrease amount of time on Traffic Lights
-			        gGT->trafficLightsTimer = iVar8,
-			        // if countdown has gone down far enough for traffic lights to go off-screen
-			        iVar8 < -960))
-			{
-				// set a floor value, so countdown can't go farther negative
-				gGT->trafficLightsTimer = 0xfffffc40;
-			}
-
 			// frame counter, not represented in common.h currently
 			sdata->frameCounter++;
 
@@ -446,6 +430,27 @@ u32 main(void)
 				}
 #endif
 					GAMEPAD_ProcessAnyoneVars(gGS);
+
+#if defined(CTR_NATIVE)
+					nativeGhostRunSimulation = NativeGhostInput_ShouldRunSimulationFrame();
+					if (!nativeGhostRunSimulation)
+					{
+						sdata->frameCounter--;
+					}
+#endif
+
+				if (
+#if defined(CTR_NATIVE)
+				    nativeGhostRunSimulation &&
+#endif
+				    (-960 < gGT->trafficLightsTimer) &&
+				    ((gGT->gameMode1 & (START_OF_RACE | PAUSE_ALL)) == 0) &&
+				    (iVar8 = gGT->trafficLightsTimer - gGT->elapsedTimeMS,
+				     gGT->trafficLightsTimer = iVar8,
+				     iVar8 < -960))
+				{
+					gGT->trafficLightsTimer = 0xfffffc40;
+				}
 
 #ifdef CTR_NATIVE
 				}
@@ -515,12 +520,19 @@ u32 main(void)
 				DecalFont_DrawMultiLine(sdata->lngStrings[LNG_DEMO_MODE_PRESS_ANY_BUTTON_TO_EXIT], 0x100, uVar12, 0x200, 2, 0xffff8000);
 			}
 
-			if ((gGT->gameMode1 & LOADING) == 0)
+			if ((gGT->gameMode1 & LOADING) == 0
+#if defined(CTR_NATIVE)
+			    && nativeGhostRunSimulation
+#endif
+			)
 			{
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 				NativePerf_BeginScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
 #endif
-				MainFrame_GameLogic(gGT, gGS);
+					MainFrame_GameLogic(gGT, gGS);
+#if defined(CTR_NATIVE)
+					NativeGhostInput_EndReplaySimulationFrame();
+#endif
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 					NativePerf_EndScope(NATIVE_PERF_BUCKET_GAME_LOGIC);
 #endif

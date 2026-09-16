@@ -782,6 +782,8 @@ int NikoGetEnterKey(void)
 global_variable u64 s_nextVBlankCounter = 0;
 global_variable u64 s_vblankRemainder = 0;
 global_variable int s_nativeVBlankCount = 0;
+global_variable int s_vblankPacingNumerator = 1;
+global_variable int s_vblankPacingDenominator = 1;
 
 internal u64 Native_CounterFromMicroseconds(u64 freq, u64 microseconds)
 {
@@ -791,17 +793,41 @@ internal u64 Native_CounterFromMicroseconds(u64 freq, u64 microseconds)
 internal void Native_AdvanceVBlankTarget(void)
 {
 	const u64 freq = SDL_GetPerformanceFrequency();
-	// counter ticks per vblank = freq * (897619 / 53693175) sec, kept exact with a
-	// running remainder. freq*897619 fits u64 for any realistic QPC frequency.
-	const u64 numer = freq * NATIVE_VBLANK_GPU_CYCLES;
+	// Playback speed scales wall pacing only. VBlank callbacks and game simulation
+	// still advance one-for-one so deterministic ghost input is never skipped.
+	const u64 numer = freq * NATIVE_VBLANK_GPU_CYCLES * (u64)s_vblankPacingDenominator;
+	const u64 denom = NATIVE_GPU_CLOCK_HZ * (u64)s_vblankPacingNumerator;
 
-	s_nextVBlankCounter += numer / NATIVE_GPU_CLOCK_HZ;
-	s_vblankRemainder += numer % NATIVE_GPU_CLOCK_HZ;
-	if (s_vblankRemainder >= NATIVE_GPU_CLOCK_HZ)
+	s_nextVBlankCounter += numer / denom;
+	s_vblankRemainder += numer % denom;
+	if (s_vblankRemainder >= denom)
 	{
 		s_nextVBlankCounter++;
-		s_vblankRemainder -= NATIVE_GPU_CLOCK_HZ;
+		s_vblankRemainder -= denom;
 	}
+}
+
+void Platform_SetVBlankPacingScale(int speedNumerator, int speedDenominator)
+{
+	if ((speedNumerator <= 0) || (speedDenominator <= 0))
+	{
+		speedNumerator = 1;
+		speedDenominator = 1;
+	}
+
+	if ((s_vblankPacingNumerator == speedNumerator) &&
+	    (s_vblankPacingDenominator == speedDenominator))
+	{
+		return;
+	}
+
+	s_vblankPacingNumerator = speedNumerator;
+	s_vblankPacingDenominator = speedDenominator;
+
+	// Rebase the absolute target when speed changes so an old slow/fast target
+	// cannot cause a long wait or catch-up burst on the first frame at new speed.
+	s_nextVBlankCounter = 0;
+	s_vblankRemainder = 0;
 }
 
 internal void Native_EnsureVBlankTarget(void)
@@ -899,6 +925,19 @@ internal int Native_CatchUpDueVBlanks(void)
 
 	Native_EnsureVBlankTarget();
 
+	// Custom replay pacing changes wall-clock speed only. Never turn lateness
+	// into extra emulated VBlanks, because that changes deterministic game state.
+	if (s_vblankPacingNumerator != s_vblankPacingDenominator)
+	{
+		const u64 now = SDL_GetPerformanceCounter();
+		if (now >= s_nextVBlankCounter)
+		{
+			s_nextVBlankCounter = now;
+			s_vblankRemainder = 0;
+		}
+		return 0;
+	}
+
 	// NOTE(aalhendi): Native host stalls can be much longer than retail frame
 	// stalls, for example during window dragging or a debugger break. Replay a few
 	// late VBlanks normally, but rebase pathological stalls instead of bursting
@@ -909,7 +948,9 @@ internal int Native_CatchUpDueVBlanks(void)
 		if (now >= s_nextVBlankCounter)
 		{
 			const u64 freq = SDL_GetPerformanceFrequency();
-			const u64 step = (freq * NATIVE_VBLANK_GPU_CYCLES) / NATIVE_GPU_CLOCK_HZ;
+			const u64 step =
+			    (freq * NATIVE_VBLANK_GPU_CYCLES * (u64)s_vblankPacingDenominator) /
+			    (NATIVE_GPU_CLOCK_HZ * (u64)s_vblankPacingNumerator);
 			const u64 dueApprox = ((now - s_nextVBlankCounter) / step) + 1;
 
 			if (dueApprox > NATIVE_VSYNC_CATCHUP_MAX)

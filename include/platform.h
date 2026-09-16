@@ -25,6 +25,7 @@ void Platform_PinVRAMDisplayRect(int x, int y, int w, int h, int frameCount);
 void Platform_PinTextureDisplay(unsigned int texture, int contentHeight, int displayHeight, int frameCount);
 int Platform_GetVBlankCount(void);
 void Platform_WaitUntilVBlank(int targetVBlank);
+void Platform_SetVBlankPacingScale(int speedNumerator, int speedDenominator);
 void Platform_PollHostEvents(void);
 int Platform_PollInput(void);
 int Platform_InputStartPressed(void);

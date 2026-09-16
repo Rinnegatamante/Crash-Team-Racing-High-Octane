@@ -53,6 +53,49 @@ CTR_STATIC_ASSERT(sizeof(struct NativeGhostInputFrame) == 0x8);
 int gNativeGhostReplayMode = 0;
 int gNativeGhostReplayFpsOverride = -1;
 
+#if defined(CTR_NATIVE)
+enum NativeGhostReplaySpeedIndex
+{
+    NATIVE_GHOST_REPLAY_SPEED_QUARTER,
+    NATIVE_GHOST_REPLAY_SPEED_HALF,
+    NATIVE_GHOST_REPLAY_SPEED_NORMAL,
+    NATIVE_GHOST_REPLAY_SPEED_ONE_HALF,
+    NATIVE_GHOST_REPLAY_SPEED_DOUBLE,
+    NATIVE_GHOST_REPLAY_SPEED_COUNT,
+};
+
+struct NativeGhostReplaySpeed
+{
+    int numerator;
+    int denominator;
+    const char *speedText;
+};
+
+static const struct NativeGhostReplaySpeed s_nativeGhostReplaySpeeds[NATIVE_GHOST_REPLAY_SPEED_COUNT] = {
+    {1, 4, "0.25X"},
+    {1, 2, "0.50X"},
+    {1, 1, "1.00X"},
+    {3, 2, "1.50X"},
+    {2, 1, "2.00X"},
+};
+
+static const char *s_nativeGhostReplayPausedText[6] = {
+    "PAUSED", "PAUSE", "PAUSE", "PAUSA", "PAUSA", "PAUZE",
+};
+static char s_nativeGhostReplayStatusText[32];
+extern int cfg_language;
+
+static int s_nativeGhostReplaySpeedIndex = NATIVE_GHOST_REPLAY_SPEED_NORMAL;
+static b32 s_nativeGhostReplayPaused;
+static b32 s_nativeGhostReplayStepInProgress;
+static b32 s_nativeGhostReplayPauseOwned;
+static b32 s_nativeGhostReplayAudioPauseOwned;
+static u32 s_nativeGhostReplayPhysicalHeldPrev;
+static b32 s_nativeGhostReplayPhysicalHeldPrevValid;
+
+void MainFrame_TogglePauseAudio(b32 bool_pause);
+#endif
+
 static struct NativeGhostInputFrame s_nativeGhostInputFrames[NATIVE_GHOST_INPUT_MAX_FRAMES];
 static struct NativeGhostInputFrame s_nativeGhostInputPending;
 static u32 s_nativeGhostInputFrameCount;
@@ -74,6 +117,204 @@ static struct NativeGhostInputFrame s_nativeGhostInputDisplayFrame;
 static b32 s_nativeGhostInputLeaderboardReplay;
 static char s_nativeGhostInputLeaderboardNickname[0x11];
 static char s_nativeGhostInputSelectedName[0x40];
+
+#if defined(CTR_NATIVE)
+static void NativeGhostInput_ApplyReplaySpeed(void)
+{
+    const struct NativeGhostReplaySpeed *speed = &s_nativeGhostReplaySpeeds[s_nativeGhostReplaySpeedIndex];
+    Platform_SetVBlankPacingScale(speed->numerator, speed->denominator);
+}
+
+static void NativeGhostInput_ResetReplayControls(void)
+{
+    if (s_nativeGhostReplayPauseOwned && (sdata != NULL) && (sdata->gGT != NULL))
+    {
+        sdata->gGT->gameMode1 &= ~PAUSE_1;
+    }
+
+    if (s_nativeGhostReplayAudioPauseOwned && (sdata != NULL) && sdata->boolSoundPaused)
+    {
+        MainFrame_TogglePauseAudio(0);
+    }
+
+    s_nativeGhostReplaySpeedIndex = NATIVE_GHOST_REPLAY_SPEED_NORMAL;
+    s_nativeGhostReplayPaused = false;
+    s_nativeGhostReplayStepInProgress = false;
+    s_nativeGhostReplayPauseOwned = false;
+    s_nativeGhostReplayAudioPauseOwned = false;
+    s_nativeGhostReplayPhysicalHeldPrev = 0;
+    s_nativeGhostReplayPhysicalHeldPrevValid = false;
+    Platform_SetVBlankPacingScale(1, 1);
+}
+
+static void NativeGhostInput_SetReplayPaused(b32 paused)
+{
+    struct GameTracker *gGT = sdata->gGT;
+
+    if (paused == s_nativeGhostReplayPaused)
+    {
+        return;
+    }
+
+    if (paused)
+    {
+        s_nativeGhostReplayPauseOwned = (gGT->gameMode1 & PAUSE_1) == 0;
+        if (s_nativeGhostReplayPauseOwned)
+        {
+            gGT->gameMode1 |= PAUSE_1;
+        }
+
+        s_nativeGhostReplayAudioPauseOwned = !sdata->boolSoundPaused;
+        if (s_nativeGhostReplayAudioPauseOwned)
+        {
+            MainFrame_TogglePauseAudio(1);
+        }
+
+        s_nativeGhostReplayPaused = true;
+        s_nativeGhostReplayStepInProgress = false;
+        Platform_SetVBlankPacingScale(1, 1);
+        return;
+    }
+
+    if (s_nativeGhostReplayPauseOwned)
+    {
+        gGT->gameMode1 &= ~PAUSE_1;
+    }
+    if (s_nativeGhostReplayAudioPauseOwned && sdata->boolSoundPaused)
+    {
+        MainFrame_TogglePauseAudio(0);
+    }
+
+    s_nativeGhostReplayPaused = false;
+    s_nativeGhostReplayStepInProgress = false;
+    s_nativeGhostReplayPauseOwned = false;
+    s_nativeGhostReplayAudioPauseOwned = false;
+    NativeGhostInput_ApplyReplaySpeed();
+}
+
+static void NativeGhostInput_ChangeReplaySpeed(int direction)
+{
+    int nextSpeed = s_nativeGhostReplaySpeedIndex + direction;
+    if (nextSpeed < 0)
+    {
+        nextSpeed = 0;
+    }
+    else if (nextSpeed >= NATIVE_GHOST_REPLAY_SPEED_COUNT)
+    {
+        nextSpeed = NATIVE_GHOST_REPLAY_SPEED_COUNT - 1;
+    }
+
+    s_nativeGhostReplaySpeedIndex = nextSpeed;
+    if (!s_nativeGhostReplayPaused)
+    {
+        NativeGhostInput_ApplyReplaySpeed();
+    }
+}
+
+static void NativeGhostInput_BeginReplayFrameStep(void)
+{
+    if (!s_nativeGhostReplayPaused || s_nativeGhostReplayStepInProgress)
+    {
+        return;
+    }
+
+    if (s_nativeGhostReplayPauseOwned)
+    {
+        sdata->gGT->gameMode1 &= ~PAUSE_1;
+    }
+    s_nativeGhostReplayStepInProgress = true;
+    Platform_SetVBlankPacingScale(1, 1);
+}
+
+static void NativeGhostInput_NeutralizePausedPhysicalInput(struct GamepadSystem *gGamepads)
+{
+    if (gGamepads->numGamepadsConnected <= 0)
+    {
+        return;
+    }
+
+    struct GamepadBuffer *pad = &gGamepads->gamepad[0];
+
+    // While the replay itself is stopped, physical controls must not leak into
+    // HUD/gameplay code. The recorded frame shown by the overlay stays unchanged.
+    pad->buttonsHeldPrevFrame = 0;
+    pad->buttonsHeldCurrFrame = 0;
+    pad->buttonsTapped = 0;
+    pad->buttonsReleased = 0;
+    pad->stickLX = 0x80;
+    pad->stickLY = 0x80;
+    pad->stickLX_dontUse1 = 0x80;
+    pad->stickLY_dontUse1 = 0x80;
+    pad->stickRX = 0x80;
+    pad->stickRY = 0x80;
+    gGamepads->anyoneHeldCurr = 0;
+    gGamepads->anyoneTapped = 0;
+    gGamepads->anyoneReleased = 0;
+    gGamepads->anyoneHeldPrev = 0;
+}
+
+const char *NativeGhostInput_GetReplayControlStatus(void)
+{
+    if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive)
+    {
+        return NULL;
+    }
+
+    int languageRow = 0;
+    if ((cfg_language >= 2) && (cfg_language <= 7))
+    {
+        languageRow = cfg_language - 2;
+    }
+
+    const struct NativeGhostReplaySpeed *speed = &s_nativeGhostReplaySpeeds[s_nativeGhostReplaySpeedIndex];
+    if (s_nativeGhostReplayPaused)
+    {
+        snprintf(s_nativeGhostReplayStatusText, sizeof(s_nativeGhostReplayStatusText), "REPLAY %s %s",
+                 s_nativeGhostReplayPausedText[languageRow], speed->speedText);
+    }
+    else
+    {
+        snprintf(s_nativeGhostReplayStatusText, sizeof(s_nativeGhostReplayStatusText), "REPLAY %s", speed->speedText);
+    }
+    return s_nativeGhostReplayStatusText;
+}
+
+b32 NativeGhostInput_ShouldRunSimulationFrame(void)
+{
+    if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive)
+    {
+        return true;
+    }
+
+    return !s_nativeGhostReplayPaused || s_nativeGhostReplayStepInProgress;
+}
+
+void NativeGhostInput_EndReplaySimulationFrame(void)
+{
+    if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive)
+    {
+        return;
+    }
+
+    if ((s_nativeGhostInputPlaybackIndex >= s_nativeGhostInputFrameCount) ||
+        ((sdata->gGT->gameMode1 & END_OF_RACE) != 0))
+    {
+        s_nativeGhostInputPlaybackActive = false;
+        s_nativeGhostInputDisplayValid = false;
+        NativeGhostInput_ResetReplayControls();
+        return;
+    }
+
+    if (s_nativeGhostReplayStepInProgress)
+    {
+        s_nativeGhostReplayStepInProgress = false;
+        if (s_nativeGhostReplayPaused && s_nativeGhostReplayPauseOwned)
+        {
+            sdata->gGT->gameMode1 |= PAUSE_1;
+        }
+    }
+}
+#endif
 
 static int NativeGhostInput_HeaderMode(const struct NativeGhostInputHeader *header)
 {
@@ -193,6 +434,9 @@ const char *NativeGhostInput_GetLeaderboardReplayName(void)
 
 void NativeGhostInput_ClearSelection(void)
 {
+#if defined(CTR_NATIVE)
+    NativeGhostInput_ResetReplayControls();
+#endif
     s_nativeGhostInputSelectedName[0] = '\0';
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
@@ -333,7 +577,8 @@ b32 NativeGhostInput_GetReplayOverlayState(u32 *buttonsHeld, u8 *stickLX, u8 *st
     if ((gNativeGhostReplayMode == 0) || !s_nativeGhostInputPlaybackActive || !s_nativeGhostInputDisplayValid ||
         (sdata->gGT == NULL) || (sdata->Loading.stage != LOAD_IDLE) ||
         ((sdata->gGT->renderFlags & RENDER_FLAG_CHECKERED_FLAG) != 0) ||
-        ((sdata->gGT->gameMode1 & (PAUSE_ALL | END_OF_RACE | MAIN_MENU | LOADING | GAME_CUTSCENE)) != 0))
+        ((sdata->gGT->gameMode1 & (END_OF_RACE | MAIN_MENU | LOADING | GAME_CUTSCENE)) != 0) ||
+        (((sdata->gGT->gameMode1 & PAUSE_ALL) != 0) && !s_nativeGhostReplayPaused))
     {
         return false;
     }
@@ -500,6 +745,14 @@ static void NativeGhostInput_SetReplayPad(struct GamepadSystem *gGamepads)
 
 void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads)
 {
+#if defined(CTR_NATIVE)
+    if ((gNativeGhostReplayMode == 0) &&
+        (s_nativeGhostReplayPaused || (s_nativeGhostReplaySpeedIndex != NATIVE_GHOST_REPLAY_SPEED_NORMAL)))
+    {
+        NativeGhostInput_ResetReplayControls();
+    }
+#endif
+
     if ((gNativeGhostReplayMode != 0) && s_nativeGhostInputPlaybackActive)
     {
         if ((s_nativeGhostInputPlaybackIndex >= s_nativeGhostInputFrameCount) ||
@@ -507,8 +760,72 @@ void NativeGhostInput_ProcessGamepad(struct GamepadSystem *gGamepads)
         {
             s_nativeGhostInputPlaybackActive = false;
             s_nativeGhostInputDisplayValid = false;
+#if defined(CTR_NATIVE)
+            NativeGhostInput_ResetReplayControls();
+#endif
             return;
         }
+
+#if defined(CTR_NATIVE)
+        u32 physicalTapped = 0;
+        if (gGamepads->numGamepadsConnected > 0)
+        {
+            u32 physicalHeld = gGamepads->gamepad[0].buttonsHeldCurrFrame;
+            if (s_nativeGhostReplayPhysicalHeldPrevValid)
+            {
+                physicalTapped = ~s_nativeGhostReplayPhysicalHeldPrev & physicalHeld;
+            }
+            s_nativeGhostReplayPhysicalHeldPrev = physicalHeld;
+            s_nativeGhostReplayPhysicalHeldPrevValid = true;
+        }
+        else
+        {
+            s_nativeGhostReplayPhysicalHeldPrev = 0;
+            s_nativeGhostReplayPhysicalHeldPrevValid = false;
+        }
+
+        // A normal Start-menu pause keeps its physical input and always runs at
+        // normal wall speed. Replay controls only own PAUSE_1 when X paused it.
+        if (((sdata->gGT->gameMode1 & PAUSE_ALL) != 0) && !s_nativeGhostReplayPaused)
+        {
+            Platform_SetVBlankPacingScale(1, 1);
+            return;
+        }
+
+        if (gGamepads->numGamepadsConnected > 0)
+        {
+            if ((physicalTapped & BTN_CROSS_one) != 0)
+            {
+                NativeGhostInput_SetReplayPaused(!s_nativeGhostReplayPaused);
+            }
+            else
+            {
+                if ((physicalTapped & BTN_L1) != 0)
+                {
+                    NativeGhostInput_ChangeReplaySpeed(-1);
+                }
+                if ((physicalTapped & BTN_R1) != 0)
+                {
+                    NativeGhostInput_ChangeReplaySpeed(1);
+                }
+                if (s_nativeGhostReplayPaused && ((physicalTapped & BTN_SQUARE_one) != 0))
+                {
+                    NativeGhostInput_BeginReplayFrameStep();
+                }
+            }
+        }
+
+        if (s_nativeGhostReplayPaused && !s_nativeGhostReplayStepInProgress)
+        {
+            NativeGhostInput_NeutralizePausedPhysicalInput(gGamepads);
+            return;
+        }
+
+        if (!s_nativeGhostReplayPaused)
+        {
+            NativeGhostInput_ApplyReplaySpeed();
+        }
+#endif
 
         if ((sdata->gGT->gameMode1 & PAUSE_ALL) == 0)
         {
@@ -761,6 +1078,9 @@ b32 NativeGhostInput_BeginPlayback(void)
     int expectedSize;
     int actualSize;
 
+#if defined(CTR_NATIVE)
+    NativeGhostInput_ResetReplayControls();
+#endif
     s_nativeGhostInputPlaybackActive = false;
     s_nativeGhostInputPlaybackIndex = 0;
     s_nativeGhostInputDisplayValid = false;
