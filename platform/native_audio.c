@@ -352,11 +352,13 @@ struct NativeAudioXaLoader
 	u32 generation;
 	int categoryID;
 	int xaID;
+	int customRacerIndex;
 	s16 volumeLeft;
 	s16 volumeRight;
 	b32 cachedReady;
 	int cachedCategoryID;
 	int cachedXaID;
+	int cachedCustomRacerIndex;
 	struct NativeAudioXaPreparedStream cached;
 };
 
@@ -2882,7 +2884,8 @@ internal void NativeAudio_XaStreamStartNoLock(struct NativeAudioXaPreparedStream
 	prepared->sectors = NULL;
 }
 
-internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeAudioXaPreparedStream *prepared)
+internal int NativeAudio_PrepareXATrackForRacer(int categoryID, int xaID, int customRacerIndex,
+                                                 struct NativeAudioXaPreparedStream *prepared)
 {
 	struct NativeAudioXaTrackInfo info;
 	struct NativeAudioXaSource source;
@@ -2896,8 +2899,9 @@ internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeA
 		const char *packagePath = NULL;
 		u64 packageOffset = 0;
 		u32 packageSize = 0;
-		if (NativeCustomRacer_GetVoiceTrack(categoryID, xaID, &info.channelFilter, &info.numSectors,
-		                                    &packagePath, &packageOffset, &packageSize) &&
+		if (NativeCustomRacer_GetVoiceTrackForRacer(customRacerIndex, categoryID, xaID,
+		                                            &info.channelFilter, &info.numSectors,
+		                                            &packagePath, &packageOffset, &packageSize) &&
 		    NativeAudio_XaSourceOpenHostSlice(packagePath, packageOffset, packageSize, &source))
 		{
 			if (NativeAudio_PrepareXAStream(&source, info.channelFilter, info.numSectors, prepared))
@@ -2943,6 +2947,11 @@ internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeA
 	return 1;
 }
 
+internal int NativeAudio_PrepareXATrack(int categoryID, int xaID, struct NativeAudioXaPreparedStream *prepared)
+{
+	const int customRacerIndex = (categoryID == 2) ? NativeCustomRacer_GetActiveVoiceRacerIndex() : -1;
+	return NativeAudio_PrepareXATrackForRacer(categoryID, xaID, customRacerIndex, prepared);
+}
 internal void NativeAudio_StartPreparedXATrackNoLock(struct NativeAudioXaPreparedStream *prepared, int categoryID, int xaID, int volumeLeft,
 	                                                   int volumeRight)
 {
@@ -2986,6 +2995,7 @@ internal int SDLCALL NativeAudio_XaLoaderThread(void *unused)
 		u32 generation;
 		int categoryID;
 		int xaID;
+		int customRacerIndex;
 		int preparedOk;
 		int shouldQuit;
 
@@ -3004,11 +3014,12 @@ internal int SDLCALL NativeAudio_XaLoaderThread(void *unused)
 		generation = s_xaLoader.generation;
 		categoryID = s_xaLoader.categoryID;
 		xaID = s_xaLoader.xaID;
+		customRacerIndex = s_xaLoader.customRacerIndex;
 		s_xaLoader.requestPending = 0;
 		s_xaLoader.workerBusy = 1;
 		SDL_UnlockMutex(s_xaLoader.mutex);
 
-		preparedOk = NativeAudio_PrepareXATrack(categoryID, xaID, &prepared);
+		preparedOk = NativeAudio_PrepareXATrackForRacer(categoryID, xaID, customRacerIndex, &prepared);
 
 		SDL_LockMutex(s_xaLoader.mutex);
 		s_xaLoader.workerBusy = 0;
@@ -3029,6 +3040,7 @@ internal int SDLCALL NativeAudio_XaLoaderThread(void *unused)
 				NativeAudio_MovePreparedXAStream(&s_xaLoader.cached, &prepared);
 				s_xaLoader.cachedCategoryID = categoryID;
 				s_xaLoader.cachedXaID = xaID;
+				s_xaLoader.cachedCustomRacerIndex = customRacerIndex;
 				s_xaLoader.cachedReady = 1;
 			}
 			else if (s_xaLoader.playWhenReady)
@@ -3094,7 +3106,8 @@ internal void NativeAudio_CancelXARequest(void)
 	SDL_UnlockMutex(s_xaLoader.mutex);
 }
 
-internal int NativeAudio_QueueXATrack(int categoryID, int xaID, int playWhenReady, int volumeLeft, int volumeRight)
+internal int NativeAudio_QueueXATrack(int categoryID, int xaID, int customRacerIndex,
+                                      int playWhenReady, int volumeLeft, int volumeRight)
 {
 	if (s_xaLoader.mutex == NULL)
 	{
@@ -3115,7 +3128,8 @@ internal int NativeAudio_QueueXATrack(int categoryID, int xaID, int playWhenRead
 		return 1;
 	}
 
-	if (s_xaLoader.cachedReady && (s_xaLoader.cachedCategoryID == categoryID) && (s_xaLoader.cachedXaID == xaID))
+	if (s_xaLoader.cachedReady && (s_xaLoader.cachedCategoryID == categoryID) &&
+	    (s_xaLoader.cachedXaID == xaID) && (s_xaLoader.cachedCustomRacerIndex == customRacerIndex))
 	{
 		if (playWhenReady)
 		{
@@ -3138,7 +3152,8 @@ internal int NativeAudio_QueueXATrack(int categoryID, int xaID, int playWhenRead
 		return 1;
 	}
 
-	if ((s_xaLoader.requestPending || s_xaLoader.workerBusy) && (s_xaLoader.categoryID == categoryID) && (s_xaLoader.xaID == xaID))
+	if ((s_xaLoader.requestPending || s_xaLoader.workerBusy) && (s_xaLoader.categoryID == categoryID) &&
+	    (s_xaLoader.xaID == xaID) && (s_xaLoader.customRacerIndex == customRacerIndex))
 	{
 		if (playWhenReady)
 		{
@@ -3156,6 +3171,7 @@ internal int NativeAudio_QueueXATrack(int categoryID, int xaID, int playWhenRead
 	s_xaLoader.generation++;
 	s_xaLoader.categoryID = categoryID;
 	s_xaLoader.xaID = xaID;
+	s_xaLoader.customRacerIndex = customRacerIndex;
 	s_xaLoader.volumeLeft = (s16)volumeLeft;
 	s_xaLoader.volumeRight = (s16)volumeRight;
 	s_xaLoader.playWhenReady = playWhenReady != 0;
@@ -4847,20 +4863,21 @@ int NativeAudio_IsXAPlaying(void)
 int NativeAudio_PlayXATrack(int categoryID, int xaID, int volumeLeft, int volumeRight)
 {
 	struct NativeAudioXaPreparedStream prepared;
-
+	const int customRacerIndex = (categoryID == 2) ? NativeCustomRacer_GetActiveVoiceRacerIndex() : -1;
 	if (!NativeAudio_SpuInit())
 	{
 		return 0;
 	}
 
-	if (!NativeAudio_IsDeterministicRenderMode() && NativeAudio_QueueXATrack(categoryID, xaID, 1, volumeLeft, volumeRight))
+	if (!NativeAudio_IsDeterministicRenderMode() &&
+	    NativeAudio_QueueXATrack(categoryID, xaID, customRacerIndex, 1, volumeLeft, volumeRight))
 	{
 		return 1;
 	}
 
 	// Thread creation failure keeps the previous synchronous behavior instead
 	// of disabling XA playback entirely.
-	if (!NativeAudio_PrepareXATrack(categoryID, xaID, &prepared))
+	if (!NativeAudio_PrepareXATrackForRacer(categoryID, xaID, customRacerIndex, &prepared))
 	{
 		return 0;
 	}
@@ -4875,6 +4892,7 @@ int NativeAudio_PlayXATrack(int categoryID, int xaID, int volumeLeft, int volume
 
 int NativeAudio_PreloadXATrack(int categoryID, int xaID)
 {
+	const int customRacerIndex = (categoryID == 2) ? NativeCustomRacer_GetActiveVoiceRacerIndex() : -1;
 	if (!NativeAudio_SpuInit())
 	{
 		return 0;
@@ -4889,7 +4907,7 @@ int NativeAudio_PreloadXATrack(int categoryID, int xaID)
 		return 1;
 	}
 
-	return NativeAudio_QueueXATrack(categoryID, xaID, 0, 0, 0);
+	return NativeAudio_QueueXATrack(categoryID, xaID, customRacerIndex, 0, 0, 0);
 }
 
 int NativeAudio_PlayXAFile(const char *relativePath, int channelFilter, int volumeLeft, int volumeRight)

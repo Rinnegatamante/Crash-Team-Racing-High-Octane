@@ -161,6 +161,7 @@ global_variable u8 *s_nativeCustomRacerRetailSharedVram;
 global_variable u32 s_nativeCustomRacerRetailSharedVramSize;
 global_variable int s_nativeCustomRacerVoiceCharacterID = -1;
 global_variable int s_nativeCustomRacerVoiceDriverID = -1;
+global_variable b32 s_nativeCustomRacerVoiceOverrideBlocked;
 
 internal int NativeCustomRacer_ReadAsset(struct NativeCustomRacerEntry *racer, int assetIndex, void *destination);
 internal int NativeCustomRacer_ReadDiskAsset(struct NativeCustomRacerEntry *racer,
@@ -1253,19 +1254,15 @@ int NativeCustomRacer_PlayActiveSampledVoice(int voiceType, int characterID)
 	return NativeCustomRacer_PlayDriverSampledVoice(s_nativeCustomRacerVoiceDriverID, voiceType, characterID, NULL);
 }
 
-int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter, int *numSectors,
-                                    const char **packagePath, u64 *assetOffset, u32 *assetSize)
+int NativeCustomRacer_GetActiveVoiceRacerIndex(void)
 {
-	// Character speech uses custom XA data; music and extra XA stay retail.
-	if ((categoryID != 2) || (xaID < 0) || !NativeCustomRacer_IsRosterEnabled())
-		return 0;
+	if (s_nativeCustomRacerVoiceOverrideBlocked)
+		return -1;
 
 	int racerIndex = -1;
 	if ((s_nativeCustomRacerVoiceDriverID >= 0) && (s_nativeCustomRacerVoiceDriverID < LOAD_CHARACTER_ID_COUNT))
 	{
 		racerIndex = NativeCustomRacer_GetDriverSelection(s_nativeCustomRacerVoiceDriverID);
-		if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
-			return 0;
 	}
 	else if (s_nativeCustomRacerVoiceCharacterID >= 0)
 	{
@@ -1279,17 +1276,24 @@ int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter
 				break;
 			}
 		}
-		if (racerIndex < 0)
-		{
-			return 0;
-		}
 	}
 	else
 	{
 		racerIndex = NativeCustomRacer_GetPlayerSelection(0);
 	}
-	if ((racerIndex < 0) || (racerIndex >= s_nativeCustomRacerCount))
+
+	return ((racerIndex >= 0) && (racerIndex < s_nativeCustomRacerCount)) ? racerIndex : -1;
+}
+
+int NativeCustomRacer_GetVoiceTrackForRacer(int racerIndex, int categoryID, int xaID, int *channelFilter, int *numSectors,
+                                            const char **packagePath, u64 *assetOffset, u32 *assetSize)
+{
+	if ((categoryID != 2) || (xaID < 0) || (racerIndex < 0) ||
+	    (racerIndex >= s_nativeCustomRacerCount) || !NativeCustomRacer_IsRosterEnabled())
+	{
 		return 0;
+	}
+
 	struct NativeCustomRacerEntry *racer = &s_nativeCustomRacers[racerIndex];
 
 	if (racer->voiceXnf == NULL)
@@ -1347,6 +1351,12 @@ int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter
 	return 0;
 }
 
+int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter, int *numSectors,
+                                    const char **packagePath, u64 *assetOffset, u32 *assetSize)
+{
+	return NativeCustomRacer_GetVoiceTrackForRacer(NativeCustomRacer_GetActiveVoiceRacerIndex(), categoryID, xaID,
+	                                               channelFilter, numSectors, packagePath, assetOffset, assetSize);
+}
 void NativeCustomRacer_SetActiveVoiceCharacter(int characterID)
 {
 	s_nativeCustomRacerVoiceCharacterID = ((characterID >= 0) && (characterID < 16)) ? characterID : -1;
@@ -1357,6 +1367,10 @@ void NativeCustomRacer_SetActiveVoiceDriver(int driverID)
 	s_nativeCustomRacerVoiceDriverID = ((driverID >= 0) && (driverID < LOAD_CHARACTER_ID_COUNT)) ? driverID : -1;
 }
 
+void NativeCustomRacer_SetVoiceOverrideBlocked(int blocked)
+{
+	s_nativeCustomRacerVoiceOverrideBlocked = blocked != 0;
+}
 int NativeCustomRacer_IsRosterEnabled(void)
 {
 #if defined(__vita__)

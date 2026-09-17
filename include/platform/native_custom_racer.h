@@ -30,10 +30,14 @@ int NativeCustomRacer_DisablesRecords(void);
 struct Model *NativeCustomRacer_GetPreviewModel(int index);
 u32 NativeCustomRacer_GetPortraitTexture(int index, const struct Icon *templateIcon, int *width, int *height);
 u32 NativeCustomRacer_GetRetailPortraitTexture(int templateCharacterID, const struct Icon *templateIcon, int *width, int *height);
+int NativeCustomRacer_GetActiveVoiceRacerIndex(void);
+int NativeCustomRacer_GetVoiceTrackForRacer(int racerIndex, int categoryID, int xaID, int *channelFilter, int *numSectors,
+                                            const char **packagePath, u64 *assetOffset, u32 *assetSize);
 int NativeCustomRacer_GetVoiceTrack(int categoryID, int xaID, int *channelFilter, int *numSectors,
                                     const char **packagePath, u64 *assetOffset, u32 *assetSize);
 void NativeCustomRacer_SetActiveVoiceCharacter(int characterID);
 void NativeCustomRacer_SetActiveVoiceDriver(int driverID);
+void NativeCustomRacer_SetVoiceOverrideBlocked(int blocked);
 int NativeCustomRacer_PlayActiveSampledVoice(int voiceType, int characterID);
 int NativeCustomRacer_PlayDriverSampledVoice(int driverID, int voiceType, int characterID, int *soundIDCount);
 int NativeCustomRacer_InitSampledVoiceChannelAttr(int racerIndex, int soundID, struct ChannelAttr *attr,

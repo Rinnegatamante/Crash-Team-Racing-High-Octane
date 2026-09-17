@@ -355,12 +355,14 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	u32 xaID = (u16)voiceIDs[voiceIndex];
 
 #if defined(CTR_NATIVE)
+	NativeCustomRacer_SetVoiceOverrideBlocked(isBossVoice);
 	NativeCustomRacer_SetActiveVoiceCharacter(isBossVoice ? -1 : (int)characterID);
 #endif
 	if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, xaID) == 0)
 	{
 #if defined(CTR_NATIVE)
 		NativeCustomRacer_SetActiveVoiceCharacter(-1);
+		NativeCustomRacer_SetVoiceOverrideBlocked(0);
 #endif
 		sdata->voicelineCooldown = 0x1e;
 		return;
@@ -369,6 +371,7 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	sdata->voicelineCooldown = (s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, xaID) / 5) + 0x1e;
 #if defined(CTR_NATIVE)
 	NativeCustomRacer_SetActiveVoiceCharacter(-1);
+	NativeCustomRacer_SetVoiceOverrideBlocked(0);
 #endif
 }
 
