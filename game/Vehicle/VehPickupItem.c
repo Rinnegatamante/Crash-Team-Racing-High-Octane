@@ -253,8 +253,17 @@ b32 VehPickupItem_MaskBoolGoodGuy(struct Driver *d)
 
 	// Crash, Coco, Pura, Polar, Penta
 	u32 maskBits = MASK_GOOD_GUY_CHARACTER_BITS;
+	b32 boolGoodGuy = (maskBits >> charID) & 1;
 
-	return (maskBits >> charID) & 1;
+#if defined(CTR_NATIVE)
+	const int customRacerIndex = NativeCustomRacer_GetDriverSelection(d->driverID);
+	if (customRacerIndex >= 0)
+	{
+		boolGoodGuy = NativeCustomRacer_GetMaskGoodGuy(customRacerIndex, boolGoodGuy);
+	}
+#endif
+
+	return boolGoodGuy;
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80064c38-0x80064f94.

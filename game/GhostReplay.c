@@ -499,7 +499,15 @@ void GhostReplay_Init2(void)
 		s32 characterID = data.characterIDs[characterIndex];
 		struct Model *model = VehBirth_GetModelByName(data.MetaDataCharacters[characterID].name_Debug);
 
-		driver->wheelSize = (characterID != NITROS_OXIDE) ? 0xccc : 0;
+			b32 showWheels = characterID != NITROS_OXIDE;
+#if defined(CTR_NATIVE)
+			const int customRacerIndex = NativeCustomRacer_GetDriverSelection(driver->driverID);
+			if (customRacerIndex >= 0)
+			{
+				showWheels = NativeCustomRacer_GetWheelsEnabled(customRacerIndex, showWheels);
+			}
+#endif
+			driver->wheelSize = showWheels ? 0xccc : 0;
 
 		struct Instance *inst = driver->instSelf;
 		char *name = (ghostID != 0) ? sdata->s_ghost1 : sdata->s_ghost0;

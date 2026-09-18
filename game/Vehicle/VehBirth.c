@@ -685,6 +685,14 @@ void VehBirth_TireSprites(struct Thread *t)
 		d->wheelSize = 0;
 	}
 
+#if defined(CTR_NATIVE)
+	const int customRacerIndex = NativeCustomRacer_GetDriverSelection(driverID);
+	if (customRacerIndex >= 0)
+	{
+		d->wheelSize = NativeCustomRacer_GetWheelsEnabled(customRacerIndex, d->wheelSize != 0) ? VEH_BIRTH_WHEEL_SIZE : 0;
+	}
+#endif
+
 	d->tireColor = DRIVER_TIRE_COLOR_DEFAULT;
 	d->tireColorCycleTimer = DRIVER_TIRE_COLOR_TIMER_INITIAL;
 

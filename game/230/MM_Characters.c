@@ -1231,7 +1231,12 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 	#endif
 
 #if defined(CTR_NATIVE)
-		gGT->drivers[playerIndex]->wheelSize = (*currCharacterID == NITROS_OXIDE) ? 0 : MM_CHARACTER_SELECT_WHEEL_SIZE;
+			int showWheels = (*currCharacterID != NITROS_OXIDE);
+			if (desiredCustomPreview >= 0)
+			{
+				showWheels = NativeCustomRacer_GetWheelsEnabled(desiredCustomPreview, showWheels);
+			}
+			gGT->drivers[playerIndex]->wheelSize = showWheels ? MM_CHARACTER_SELECT_WHEEL_SIZE : 0;
 #endif
 
 		driverInst->animFrame = 0;

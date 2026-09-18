@@ -5,6 +5,14 @@
 #define NATIVE_CUSTOM_RACER_MAX_VOICE_FILES 32
 #define NATIVE_CUSTOM_RACER_SAMPLED_VOICE_COUNT 2
 
+enum NativeCustomRacerFlags
+{
+	NATIVE_CUSTOM_RACER_FLAG_WHEELS_OVERRIDE = 1u << 0,
+	NATIVE_CUSTOM_RACER_FLAG_WHEELS_ENABLED = 1u << 1,
+	NATIVE_CUSTOM_RACER_FLAG_MASK_OVERRIDE = 1u << 2,
+	NATIVE_CUSTOM_RACER_FLAG_MASK_AKU = 1u << 3,
+};
+
 enum NativeCustomRacerAsset
 {
 	NATIVE_CUSTOM_RACER_ASSET_MODEL_HI = 0,
@@ -25,6 +33,8 @@ int NativeCustomRacer_GetCount(void);
 const char *NativeCustomRacer_GetName(int index);
 int NativeCustomRacer_GetTemplateCharacterID(int index);
 int NativeCustomRacer_GetEngineClass(int index);
+int NativeCustomRacer_GetWheelsEnabled(int index, int fallback);
+int NativeCustomRacer_GetMaskGoodGuy(int index, int fallback);
 int NativeCustomRacer_IsRosterEnabled(void);
 int NativeCustomRacer_DisablesRecords(void);
 struct Model *NativeCustomRacer_GetPreviewModel(int index);

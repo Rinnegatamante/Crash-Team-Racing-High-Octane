@@ -799,6 +799,28 @@ int NativeCustomRacer_GetEngineClass(int index)
 	return s_nativeCustomRacers[index].disk.engineClass;
 }
 
+int NativeCustomRacer_GetWheelsEnabled(int index, int fallback)
+{
+	if ((index < 0) || (index >= s_nativeCustomRacerCount))
+		return fallback != 0;
+
+	const u32 flags = s_nativeCustomRacers[index].disk.flags;
+	if ((flags & NATIVE_CUSTOM_RACER_FLAG_WHEELS_OVERRIDE) == 0)
+		return fallback != 0;
+	return (flags & NATIVE_CUSTOM_RACER_FLAG_WHEELS_ENABLED) != 0;
+}
+
+int NativeCustomRacer_GetMaskGoodGuy(int index, int fallback)
+{
+	if ((index < 0) || (index >= s_nativeCustomRacerCount))
+		return fallback != 0;
+
+	const u32 flags = s_nativeCustomRacers[index].disk.flags;
+	if ((flags & NATIVE_CUSTOM_RACER_FLAG_MASK_OVERRIDE) == 0)
+		return fallback != 0;
+	return (flags & NATIVE_CUSTOM_RACER_FLAG_MASK_AKU) != 0;
+}
+
 struct Model *NativeCustomRacer_GetPreviewModel(int index)
 {
 	if ((index < 0) || (index >= s_nativeCustomRacerCount))
