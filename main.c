@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #if defined(_WIN32)
@@ -362,7 +363,12 @@ void save_config(void)
 
 #ifdef __vita__
 #include <pthread.h>
-void *real_main(void *argv);
+static s32 NativeMain_Run(void *argv);
+
+void *real_main(void *argv)
+{
+	return (void *)(intptr_t)NativeMain_Run(argv);
+}
 
 int main(int argc, char *argv[])
 {
@@ -375,7 +381,7 @@ int main(int argc, char *argv[])
 	return sceKernelExitDeleteThread(0);
 }
 
-void *real_main(void *_argv)
+static s32 NativeMain_Run(void *_argv)
 {
 	scePowerSetArmClockFrequency(444);
 	scePowerSetBusClockFrequency(222);
