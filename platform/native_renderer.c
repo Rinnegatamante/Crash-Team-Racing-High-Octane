@@ -503,6 +503,10 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 1);
 
+#ifdef __EMSCRIPTEN__
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
+#endif
+
 	if (!NativeRenderer_InitialiseGLContext(windowName, fullscreen))
 	{
 		NATIVE_RENDERER_ERROR("%s\n", "Failed to Initialise GL Context!");
