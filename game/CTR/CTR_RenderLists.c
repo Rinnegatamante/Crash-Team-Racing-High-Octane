@@ -8,6 +8,10 @@ void CTR_ClearRenderLists_1P2P(struct GameTracker *gGT, int numPlyrCurrGame)
 		return;
 	}
 
+#if defined(CTR_NATIVE)
+	DrawLevelOvr_InstallNativeRenderedStorage();
+#endif
+
 	for (int i = 0; i < numPlyrCurrGame; i++)
 	{
 		void *quadBlocksRendered = data.ptrRenderedQuadblockDestination_forEachPlayer[i];
@@ -30,6 +34,10 @@ void CTR_ClearRenderLists_3P4P(struct GameTracker *gGT, int numPlyrCurrGame)
 	{
 		return;
 	}
+
+#if defined(CTR_NATIVE)
+	DrawLevelOvr_InstallNativeRenderedStorage();
+#endif
 
 	for (int i = 0; i < numPlyrCurrGame; i++)
 	{

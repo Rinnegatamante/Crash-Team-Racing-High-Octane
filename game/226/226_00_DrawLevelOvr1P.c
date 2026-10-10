@@ -96,12 +96,35 @@ enum DrawLevelOvr1PGridSlotMode
 };
 
 #define DRAW_LEVEL_OVR1P_SLOT_WORD_PRESERVE UINT32_C(0xffffffff)
+#if defined(CTR_NATIVE)
+enum
+{
+	DRAW_LEVEL_OVR_NATIVE_RENDERED_PER_PLAYER_CAPACITY = 0x400,
+};
+
+static struct QuadBlock *sDrawLevelOvrNativeRendered[4][DRAW_LEVEL_OVR_NATIVE_RENDERED_PER_PLAYER_CAPACITY];
+#endif
+
 static int sDrawLevelOvr1P_FullDynamicInheritedOtIndex;
 static struct QuadBlock **sDrawLevelOvr1P_RenderedOverflowBase;
+#if defined(CTR_NATIVE)
+static struct QuadBlock **sDrawLevelOvr1P_RenderedOverflowEnd;
+#endif
 static u8 *sDrawLevelOvr1P_ClipRecordStart;
 static u32 sDrawLevelOvr1P_PrimReserveBias;
 static u32 sDrawLevelOvr1P_MosaicReloadSpanOverride;
 static int sDrawLevelOvr1P_ListHandlersSeedRenderedCursor;
+
+#if defined(CTR_NATIVE)
+static void DrawLevelOvr_InstallNativeRenderedStorage(void)
+{
+	for (int playerIndex = 0; playerIndex < 4; playerIndex++)
+	{
+		data.ptrRenderedQuadblockDestination_forEachPlayer[playerIndex] = sDrawLevelOvrNativeRendered[playerIndex];
+		data.ptrRenderedQuadblockDestination_again[playerIndex] = sDrawLevelOvrNativeRendered[playerIndex];
+	}
+}
+#endif
 
 static u32 DrawLevelOvr1P_ReadPackedWord(const void *src)
 {
@@ -7399,6 +7422,18 @@ static void DrawLevelOvr1P_SetRenderedListCursor(struct QuadBlock **renderedList
 static void DrawLevelOvr1P_SetRenderedOverflowBase(struct QuadBlock **renderedList)
 {
 	sDrawLevelOvr1P_RenderedOverflowBase = renderedList;
+#if defined(CTR_NATIVE)
+	sDrawLevelOvr1P_RenderedOverflowEnd = NULL;
+	for (int playerIndex = 0; playerIndex < 4; playerIndex++)
+	{
+		if (renderedList == sDrawLevelOvrNativeRendered[playerIndex])
+		{
+			sDrawLevelOvr1P_RenderedOverflowEnd =
+			    sDrawLevelOvrNativeRendered[playerIndex] + DRAW_LEVEL_OVR_NATIVE_RENDERED_PER_PLAYER_CAPACITY;
+			break;
+		}
+	}
+#endif
 }
 
 static void DrawLevelOvr1P_SetViewportScratchContext(struct PushBuffer *pb, const int *visFaceList, u8 *clipStart, u8 *clipCursor,
@@ -7456,6 +7491,19 @@ static void DrawLevelOvr1P_AppendRenderedQuadBlock(struct QuadBlock *block)
 		return;
 	}
 
+#if defined(CTR_NATIVE)
+	// Retail reserves 64 retry pointers per player. Widescreen and the native
+	// split-screen renderer can expose more geometry than that, especially on
+	// water-heavy tracks. Keep one slot for the NULL terminator instead of
+	// allowing the retry list to overwrite the next player/global state.
+	if ((sDrawLevelOvr1P_RenderedOverflowEnd != NULL) &&
+	    (renderedList >= sDrawLevelOvr1P_RenderedOverflowEnd - 1))
+	{
+		*(sDrawLevelOvr1P_RenderedOverflowEnd - 1) = NULL;
+		return;
+	}
+#endif
+
 	*renderedList = block;
 	DrawLevelOvr1P_SetRenderedListCursor(renderedList + 1);
 }
@@ -7466,6 +7514,13 @@ static void DrawLevelOvr1P_TerminateRenderedListCursor(void)
 
 	if (renderedList != NULL)
 	{
+#if defined(CTR_NATIVE)
+		if ((sDrawLevelOvr1P_RenderedOverflowEnd != NULL) &&
+		    (renderedList >= sDrawLevelOvr1P_RenderedOverflowEnd))
+		{
+			renderedList = sDrawLevelOvr1P_RenderedOverflowEnd - 1;
+		}
+#endif
 		*renderedList = NULL;
 	}
 }
@@ -9888,5 +9943,11 @@ static void DrawLevelOvr1P_WithContext(void *LevRenderList, struct PushBuffer *p
 void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList,
                     const struct TextureLayout *waterEnvMap)
 {
+#if defined(CTR_NATIVE)
+	DrawLevelOvr_InstallNativeRenderedStorage();
+	DrawLevelOvr1P_WithContext(LevRenderList, pb, bspList, primMem, visFaceList, waterEnvMap, data.PtrClipBuffer[0],
+	                          (struct QuadBlock **)data.ptrRenderedQuadblockDestination_forEachPlayer[0]);
+#else
 	DrawLevelOvr1P_WithContext(LevRenderList, pb, bspList, primMem, visFaceList, waterEnvMap, data.PtrClipBuffer[0], sdata_static.quadBlocksRendered);
+#endif
 }
