@@ -569,6 +569,7 @@ void Platform_EndFrame(void)
 		Platform_EndScene();
 	}
 	Platform_CalcFPS();
+	NativePgxp_EndFrame();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_FRAME);
 }
 

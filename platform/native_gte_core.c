@@ -7,6 +7,8 @@
 #include <macros.h>
 #include <psx/gtereg.h>
 #include <psx/libgte.h>
+#include <platform/native_pgxp.h>
+#include <platform/native_pgxp_projection.h>
 
 GTERegisters gteRegs;
 
@@ -304,13 +306,126 @@ internal int Lm_H(s64 value, int sf)
 	return value_12;
 }
 
+static void NativeGte_RecordMvmva(int mx, int v, int cv, int lm)
+{
+	double input[3] = {VX(v), VY(v), VZ(v)};
+	double precise[3];
+	const double rotation[9] = {MX11(mx), MX12(mx), MX13(mx), MX21(mx), MX22(mx), MX23(mx), MX31(mx), MX32(mx), MX33(mx)};
+	const double translation[3] = {CV1(cv), CV2(cv), CV3(cv)};
+
+	NativePgxp_GteGetInput(v, (s16)VX(v), (s16)VY(v), (s16)VZ(v), input);
+	NativePgxp_Transform(rotation, translation, input, precise);
+
+	const double scale = m_sf ? 1.0 / 4096.0 : 1.0;
+	const double minIr = lm ? 0.0 : -32768.0;
+	for (int axis = 0; axis < 3; axis++)
+	{
+		const double ir = precise[axis] * scale;
+		precise[axis] = ir < minIr ? minIr : (ir > 32767.0 ? 32767.0 : ir);
+	}
+	NativePgxp_GteSetMvmvaResult(precise, C2_IR1, C2_IR2, C2_IR3);
+}
+
+static void NativeGte_RecordProjection(s64 viewX, s64 viewY, s64 viewZ, int hOverSz3, int lm, int idx)
+{
+	float x = (float)C2_SX2;
+	float y = (float)C2_SY2;
+	float w = 0.0f;
+	int computed = 0;
+	if (hOverSz3 < 0x1ffff && C2_SZ3 > 0)
+	{
+		double preciseInput[3];
+		const int hasPreciseInput = NativePgxp_GteGetInput(idx, (s16)VX(idx), (s16)VY(idx), (s16)VZ(idx), preciseInput);
+#if defined(__vita__)
+		float vx = (float)viewX;
+		float vy = (float)viewY;
+		float vz = (float)viewZ;
+		if (hasPreciseInput)
+		{
+			const float px = (float)preciseInput[0];
+			const float py = (float)preciseInput[1];
+			const float pz = (float)preciseInput[2];
+			vx = (float)C2_TRX * 4096.0f + C2_R11 * px + C2_R12 * py + C2_R13 * pz;
+			vy = (float)C2_TRY * 4096.0f + C2_R21 * px + C2_R22 * py + C2_R23 * pz;
+			vz = (float)C2_TRZ * 4096.0f + C2_R31 * px + C2_R32 * py + C2_R33 * pz;
+		}
+		NativePgxp_ProjectViewFloat(vx, vy, vz, m_sf, lm, C2_OFX, C2_OFY, C2_H, &x, &y, &w);
+#else
+		// Bypass the GTE's IR truncation and approximate UNR division.
+		const double scale = m_sf ? (1.0 / 4096.0) : 1.0;
+		const double minIr = lm ? 0.0 : -32768.0;
+		double exactX = (double)viewX;
+		double exactY = (double)viewY;
+		double exactZ = (double)viewZ;
+		if (hasPreciseInput)
+		{
+			exactX = (double)C2_TRX * 4096.0 + C2_R11 * preciseInput[0] + C2_R12 * preciseInput[1] + C2_R13 * preciseInput[2];
+			exactY = (double)C2_TRY * 4096.0 + C2_R21 * preciseInput[0] + C2_R22 * preciseInput[1] + C2_R23 * preciseInput[2];
+			exactZ = (double)C2_TRZ * 4096.0 + C2_R31 * preciseInput[0] + C2_R32 * preciseInput[1] + C2_R33 * preciseInput[2];
+		}
+		const double depth = exactZ / 4096.0;
+		if (depth > 0.0)
+		{
+			double irX = exactX * scale;
+			double irY = exactY * scale;
+			irX = irX < minIr ? minIr : (irX > 32767.0 ? 32767.0 : irX);
+			irY = irY < minIr ? minIr : (irY > 32767.0 ? 32767.0 : irY);
+			x = (float)((double)C2_OFX / 65536.0 + irX * (double)C2_H / depth);
+			y = (float)((double)C2_OFY / 65536.0 + irY * (double)C2_H / depth);
+			w = (float)depth;
+		}
+#endif
+		if (!(x >= -16384.0f && x <= 16384.0f && y >= -16384.0f && y <= 16384.0f))
+		{
+			x = (float)C2_SX2;
+			y = (float)C2_SY2;
+			w = 0.0f;
+		}
+		else
+		{
+			computed = 1;
+		}
+	}
+	else
+	{
+		x = ((float)C2_OFX + (float)C2_IR1 * (float)hOverSz3) * (1.0f / 65536.0f);
+		y = ((float)C2_OFY + (float)C2_IR2 * (float)hOverSz3) * (1.0f / 65536.0f);
+		if (isfinite(x) && isfinite(y))
+		{
+			// No valid perspective divisor: follow the GTE's screen clamp.
+			x = fmaxf(-1024.0f, fminf(1023.0f, x));
+			y = fmaxf(-1024.0f, fminf(1023.0f, y));
+			computed = 1;
+		}
+		else
+		{
+			x = (float)C2_SX2;
+			y = (float)C2_SY2;
+		}
+	}
+	if (computed && gNativeMirrorModeRenderActive)
+		x = (float)((C2_OFX >> 16) * 2) - x;
+#if defined(__vita__)
+	if (!NativePgxp_VitaProjectionConsistent(x, y, C2_SX2, C2_SY2))
+	{
+		x = (float)C2_SX2;
+		y = (float)C2_SY2;
+		w = 0.0f;
+	}
+#endif
+	NativePgxp_GteProject(x, y, w, (u32)C2_SXY2);
+}
+
 internal int GTE_RotTransPers(int idx, int lm)
 {
 	int h_over_sz3;
 
-	C2_MAC1 = A1(/*int44*/ (s64)((s64)C2_TRX << 12) + (C2_R11 * VX(idx)) + (C2_R12 * VY(idx)) + (C2_R13 * VZ(idx)));
-	C2_MAC2 = A2(/*int44*/ (s64)((s64)C2_TRY << 12) + (C2_R21 * VX(idx)) + (C2_R22 * VY(idx)) + (C2_R23 * VZ(idx)));
-	C2_MAC3 = A3(/*int44*/ (s64)((s64)C2_TRZ << 12) + (C2_R31 * VX(idx)) + (C2_R32 * VY(idx)) + (C2_R33 * VZ(idx)));
+	const s64 viewX = (s64)((s64)C2_TRX << 12) + (C2_R11 * VX(idx)) + (C2_R12 * VY(idx)) + (C2_R13 * VZ(idx));
+	const s64 viewY = (s64)((s64)C2_TRY << 12) + (C2_R21 * VX(idx)) + (C2_R22 * VY(idx)) + (C2_R23 * VZ(idx));
+	const s64 viewZ = (s64)((s64)C2_TRZ << 12) + (C2_R31 * VX(idx)) + (C2_R32 * VY(idx)) + (C2_R33 * VZ(idx));
+	C2_MAC1 = A1(viewX);
+	C2_MAC2 = A2(viewY);
+	C2_MAC3 = A3(viewZ);
 	C2_IR1 = Lm_B1(C2_MAC1, lm);
 	C2_IR2 = Lm_B2(C2_MAC2, lm);
 	C2_IR3 = Lm_B3_sf(m_mac3, m_sf, lm);
@@ -332,6 +447,15 @@ internal int GTE_RotTransPers(int idx, int lm)
 #endif
 	C2_SX2 = screenX;
 	C2_SY2 = Lm_G2(F((s64)C2_OFY + ((s64)C2_IR2 * h_over_sz3)) >> 16);
+	if (gNativePgxpMode == NATIVE_PGXP_MODE_TEXTURES)
+	{
+		// No extra matrix transform or floating-point division in TEXTURES.
+		NativePgxp_GteProjectTexture((u32)C2_SXY2, NativePgxp_TextureDepthFromGte(C2_SZ3, h_over_sz3));
+	}
+	else if (NATIVE_PGXP_ACTIVE())
+	{
+		NativeGte_RecordProjection(viewX, viewY, viewZ, h_over_sz3, lm, idx);
+	}
 
 	return h_over_sz3;
 }
@@ -364,6 +488,8 @@ int GTE_operator(int op)
 	{
 		s64 nclip = (s64)(C2_SX0 * C2_SY1) + (C2_SX1 * C2_SY2) + (C2_SX2 * C2_SY0) -
 		            (C2_SX0 * C2_SY2) - (C2_SX1 * C2_SY0) - (C2_SX2 * C2_SY1);
+		if (NATIVE_PGXP_GEOMETRY_ACTIVE())
+			NativePgxp_GteNclip(C2_SXY0, C2_SXY1, C2_SXY2, &nclip);
 #if defined(CTR_NATIVE)
 		if ((gNativeMirrorModeRenderActive != 0) != (gNativeMirrorModeDoubleFlipActive != 0))
 		{
@@ -444,6 +570,8 @@ int GTE_operator(int op)
 		C2_IR1 = Lm_B1(C2_MAC1, lm);
 		C2_IR2 = Lm_B2(C2_MAC2, lm);
 		C2_IR3 = Lm_B3(C2_MAC3, lm);
+		if (NATIVE_PGXP_GEOMETRY_ACTIVE() && cv != 2 && mx < 3 && v < 3)
+			NativeGte_RecordMvmva(mx, v, cv, lm);
 		return 1;
 
 	case 0x13:

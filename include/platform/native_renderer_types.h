@@ -10,6 +10,7 @@
 #include <macros.h>
 #include <psx/libgte.h>
 #include <psx/libgpu.h>
+#include <platform/native_pgxp.h>
 
 #define LUT_WIDTH              (256)
 #define LUT_HEIGHT             (256)
@@ -25,15 +26,18 @@
 #pragma pack(push, 1)
 typedef struct
 {
-	s16 x, y, page, clut;
+	float x, y, w;
+	s16 page, clut;
 
 	u8 u, v, bright, dither;
 	u8 r, g, b, a;
 
 	s8 tcx, tcy, _p0, _p1;
 	u16 orderDepth;
+	u16 _align; // 32-byte GPU vertex stride, including on Vita.
 } GrVertex;
 #pragma pack(pop)
+CTR_STATIC_ASSERT(sizeof(GrVertex) == 32);
 
 typedef enum
 {
@@ -42,6 +46,7 @@ typedef enum
 	a_color,
 	a_extra,
 	a_order_depth,
+	a_page_clut,
 } ShaderAttrib;
 
 typedef enum

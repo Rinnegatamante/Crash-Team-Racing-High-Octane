@@ -3,6 +3,17 @@
 This project vendors third-party software and contains modified third-party
 derivatives. Keep this file with source and binary distributions of CTR Native.
 
+## CTR Turbocharged PGXP implementation
+
+Source: https://github.com/CameronRedmore/Crash-Team-Racing-Turbocharged
+(branch turbocharged, upstream revision 07d0c49f).
+
+The experimental native PGXP vertex tracking in platform/native_pgxp.c and
+include/platform/native_pgxp.h is adapted from this GPLv3 project, which
+credits DuckStation (Stenzek) and the original PGXP work by iCatButler.
+High Octane retains GPLv3 licensing for these adapted files. The native
+renderer integration and Vita geometry-lite adaptations are local changes.
+
 ## PsyCross / Psy-X
 
 Source: <https://github.com/OpenDriver2/PsyCross>

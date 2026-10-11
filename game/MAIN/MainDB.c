@@ -1,6 +1,7 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include <platform/native_pgxp.h>
 enum
 {
 	MAINDB_NATIVE_PRIMMEM_CAPACITY = 0x40000,
@@ -33,6 +34,8 @@ static int MainDB_NativePrimMemIndex(const struct PrimMem *primMem)
 static void MainDB_NativePrimMemBind(struct PrimMem *primMem, int index)
 {
 	void *start = s_mainDbNativePrimMem[index];
+	if (NATIVE_PGXP_ACTIVE())
+		NativePgxp_SetPrimRegion(s_mainDbNativePrimMem, sizeof(s_mainDbNativePrimMem));
 	primMem->capacityBytes = MAINDB_NATIVE_PRIMMEM_CAPACITY;
 	primMem->allocationStart = start;
 	primMem->start = start;

@@ -1291,10 +1291,10 @@ internal void NativeRenderer_DestroyPSXShaders(void)
 #endif
 
 #ifdef __vita__
-#define GPU_TEXTURE_SAMPLE_MAIN "		vec4 color = nearestTextureSample(v_texcoord.xy);\n"
+#define GPU_TEXTURE_SAMPLE_MAIN "		vec4 color = nearestTextureSample(psxTextureUV());\n"
 #else
 #define GPU_TEXTURE_SAMPLE_MAIN \
-	"		vec4 color = (bilinearFilter > 0) ? bilinearTextureSample(v_texcoord.xy) : nearestTextureSample(v_texcoord.xy);\n"
+	"		vec4 color = (bilinearFilter > 0) ? bilinearTextureSample(psxTextureUV()) : nearestTextureSample(psxTextureUV());\n"
 #endif
 
 #define GPU_FRAGMENT_SAMPLE_SHADER(bit)                                                                                                               \
@@ -1383,17 +1383,32 @@ global_variable const char *gte_shader_cached_p4 =
     "\t\treturn t;\n"
     "\t}\n"
     "\tvoid main() {\n"
-    "\t\tvec4 color = nearestTextureSample(v_texcoord.xy);\n"
+    "\t\tvec4 color = nearestTextureSample(psxTextureUV());\n"
     GPU_PSX_FRAGMENT_OUTPUT
     GPU_PSX_BLEND_APPLY
     "\t}\n";
 #endif
 
 global_variable const char *gpu_shader_common = "	centroid varying vec4 v_texcoord;\n"
+                                                "#ifdef PGXP_PC_TEXTURES\n"
+                                                "	noperspective varying vec4 v_color;\n"
+                                                "	noperspective varying vec2 v_ditherCoord;\n"
+                                                "#else\n"
                                                 "	varying vec4 v_color;\n"
-                                                "	varying vec4 v_page_clut;\n"
                                                 "	varying vec2 v_ditherCoord;\n"
-                                                "	varying float v_z;\n";
+                                                "#endif\n"
+                                                "	varying vec4 v_page_clut;\n"
+                                                "	varying float v_z;\n"
+                                                "#ifdef PGXP_VITA_TEXTURES\n"
+                                                "	varying vec3 v_pgxpUV;\n"
+                                                "#endif\n"
+                                                "	vec2 psxTextureUV() {\n"
+                                                "#if defined(PGXP_VITA_TEXTURES) && defined(FRAGMENT)\n"
+                                                "		return v_pgxpUV.xy / max(v_pgxpUV.z, 0.000001);\n"
+                                                "#else\n"
+                                                "		return v_texcoord.xy;\n"
+                                                "#endif\n"
+                                                "	}\n";
 
 const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
@@ -1420,7 +1435,7 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
                                  "	uniform float psxDrawMaskSet;\n"
                                  "	uniform vec2 texelSize;\n"
                                  "	void main() {\n"
-                                 "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
+                                 "		vec2 tc = psxTextureUV() * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
 #ifdef __vita__
                                  "#if defined(PSX_PASS_NON_STP) || defined(PSX_PASS_STP)\n"
@@ -1449,30 +1464,39 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
 #define GTE_ORDER_DEPTH_ATTRIBUTE   "\tattribute float a_orderDepth;\n"
 #define GTE_PERSPECTIVE_CORRECTION                                                                 \
 	"\tgl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"                           \
-	"\tgl_Position.z = 1.0 - a_orderDepth * (2.0 / 65535.0);\n"
+	"\tgl_Position.z = 1.0 - a_orderDepth * (2.0 / 65535.0);\n"                            \
+	"#ifdef PGXP_VITA_TEXTURES\n"                                                             \
+	"\tfloat invW = a_position.z > 0.0 ? (1.0 / a_position.z) : 1.0;\n"                   \
+	"\tv_pgxpUV = vec3(v_texcoord.xy * invW, invW);\n"                                      \
+	"#endif\n"
 #else
 #define GTE_ORDER_DEPTH_ATTRIBUTE   ""
-#define GTE_PERSPECTIVE_CORRECTION "\tgl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
+#define GTE_PERSPECTIVE_CORRECTION                                                          \
+	"\tgl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"                         \
+	"#ifdef PGXP_PC_TEXTURES\n"                                                             \
+	"\tgl_Position *= (a_position.z > 0.0) ? a_position.z : 1.0;\n"                        \
+	"#endif\n"
 #endif
 
 #ifdef __vita__
 #define GTE_PAGE_CLUT_SETUP                                                                                     \
-	"\t\tv_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                           \
-	"\t\tv_page_clut.y = floor(a_position.z / 16.0) * 256.0;\n"                                            \
-	"\t\tv_page_clut.z = fract(a_position.w / 64.0) * 1024.0;\n"                                           \
-	"\t\tv_page_clut.w = floor(a_position.w / 64.0);\n"
+	"\t\tv_page_clut.x = fract(a_page_clut.x / 16.0) * 1024.0;\n"                                          \
+	"\t\tv_page_clut.y = floor(a_page_clut.x / 16.0) * 256.0;\n"                                           \
+	"\t\tv_page_clut.z = fract(a_page_clut.y / 64.0) * 1024.0;\n"                                          \
+	"\t\tv_page_clut.w = floor(a_page_clut.y / 64.0);\n"
 #else
 #define GTE_PAGE_CLUT_SETUP                                                                                     \
-	"\t\tv_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                           \
-	"\t\tv_page_clut.y = floor(a_position.z / 16.0) * 256.0;\n"                                            \
-	"\t\tv_page_clut.z = fract(a_position.w / 64.0);\n"                                                    \
-	"\t\tv_page_clut.w = floor(a_position.w / 64.0) / 512.0;\n"                                            \
+	"\t\tv_page_clut.x = fract(a_page_clut.x / 16.0) * 1024.0;\n"                                          \
+	"\t\tv_page_clut.y = floor(a_page_clut.x / 16.0) * 256.0;\n"                                           \
+	"\t\tv_page_clut.z = fract(a_page_clut.y / 64.0);\n"                                                   \
+	"\t\tv_page_clut.w = floor(a_page_clut.y / 64.0) / 512.0;\n"                                           \
 	"\t\tv_page_clut.xy += c_UVFudge;\n"                                                                   \
 	"\t\tv_page_clut.zw += c_UVFudge;\n"
 #endif
 
 #define GTE_VERTEX_SHADER                                                                                          \
-	"	attribute vec4 a_position;\n"                                                                                \
+	"	attribute vec3 a_position;\n"                                                                                \
+	"	attribute vec2 a_page_clut;\n"                                                                               \
 	"	attribute vec4 a_texcoord; // uv, color multiplier, dither\n"                                                \
 		"	attribute vec4 a_color;\n"                                                                                   \
 		"	attribute vec4 a_extra; // texcoord.xy ofs, unused.xy\n"                                                     \
@@ -1574,6 +1598,16 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 
 	strcat(extra_vs_defines, "#define VERTEX\n");
 	strcat(extra_fs_defines, "#define FRAGMENT\n");
+	if (isPsxShader && NATIVE_PGXP_TEXTURES_ACTIVE())
+	{
+#if defined(__vita__)
+		strcat(extra_vs_defines, "#define PGXP_VITA_TEXTURES\n");
+		strcat(extra_fs_defines, "#define PGXP_VITA_TEXTURES\n");
+#else
+		strcat(extra_vs_defines, "#define PGXP_PC_TEXTURES\n");
+		strcat(extra_fs_defines, "#define PGXP_PC_TEXTURES\n");
+#endif
+	}
 	if (fragmentDefines != NULL)
 	{
 		strcat(extra_fs_defines, fragmentDefines);
@@ -1634,6 +1668,8 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 	glBindAttribLocation(program, a_texcoord, "a_texcoord");
 	glBindAttribLocation(program, a_color, "a_color");
 	glBindAttribLocation(program, a_extra, "a_extra");
+	if (isPsxShader)
+		glBindAttribLocation(program, a_page_clut, "a_page_clut");
 #ifdef __vita__
 	glBindAttribLocation(program, a_order_depth, "a_orderDepth");
 #endif
@@ -2114,11 +2150,13 @@ int NativeRenderer_InitialisePSX(void)
 			glEnableVertexAttribArray(a_texcoord);
 			glEnableVertexAttribArray(a_color);
 			glEnableVertexAttribArray(a_extra);
+			glEnableVertexAttribArray(a_page_clut);
 #ifdef __vita__
 			glEnableVertexAttribArray(a_order_depth);
 #endif
 
-			glVertexAttribPointer(a_position, 4, GL_SHORT, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->x);
+			glVertexAttribPointer(a_position, 3, GL_FLOAT, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->x);
+			glVertexAttribPointer(a_page_clut, 2, GL_SHORT, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->page);
 			glVertexAttribPointer(a_texcoord, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->u);
 			glVertexAttribPointer(a_color, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(GrVertex), &((GrVertex *)NULL)->r);
 			glVertexAttribPointer(a_extra, 4, GL_BYTE, GL_FALSE, sizeof(GrVertex), &((GrVertex *)NULL)->tcx);

@@ -89,6 +89,7 @@ int gNativeRelicRaceResultTier = -1;
 #include "platform/native_cd.c"
 #include "platform/native_custom_racer.c"
 #include "platform/native_gpu_links.c"
+#include "platform/native_pgxp.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
 #if !defined(__EMSCRIPTEN__)
@@ -257,12 +258,15 @@ static int NativeConfig_SetCheat(const char *key, int value)
 void load_config(void)
 {
 	char buffer[30];
+	char line[128];
 	int value;
 	FILE *config = fopen(NativeConfig_GetPath(), "r");
 	if (config)
 	{
-		while (EOF != fscanf(config, "%[^=]=%d\n", buffer, &value))
+		while (fgets(line, sizeof(line), config) != NULL)
 		{
+			if (sscanf(line, "%29[^=]=%d", buffer, &value) != 2)
+				continue;
 			if (strcmp("language", buffer) == 0)
 			{
 				cfg_language = value;
@@ -294,6 +298,14 @@ void load_config(void)
 			else if (strcmp("custom_ai_racers", buffer) == 0)
 			{
 				gNativeAIRacersMode = value ? NATIVE_AI_RACERS_EXTENDED_CUSTOM : NATIVE_AI_RACERS_EXTENDED;
+			}
+			else if (strcmp("pgxp_mode", buffer) == 0)
+			{
+				gNativePgxpMode = gNativePgxpRequestedMode = NativePgxp_NormalizeMode(value);
+			}
+			else if (strcmp("pgxp_precise_nclip", buffer) == 0)
+			{
+				gNativePgxpIntegerNclipEnabled = (value == 0);
 			}
 #ifndef __vita__
 			else if (strcmp("anti_aliasing", buffer) == 0)
@@ -333,6 +345,8 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "default_camera_far", gNativeDefaultCameraFar != 0);
 		fprintf(config, "%s=%d\n", "default_hud_speedometer", gNativeDefaultHudSpeedometer != 0);
 		fprintf(config, "%s=%d\n", "ai_racers", gNativeAIRacersMode);
+		fprintf(config, "%s=%d\n", "pgxp_mode", NativePgxp_NormalizeMode(gNativePgxpRequestedMode));
+		fprintf(config, "%s=%d\n", "pgxp_precise_nclip", !gNativePgxpIntegerNclipEnabled);
 #ifndef __vita__
 		fprintf(config, "%s=%d\n", "anti_aliasing", gNativeAntiAliasingEnabled != 0);
 		fprintf(config, "%s=%d\n", "dithering", gNativeDitheringEnabled != 0);
@@ -441,6 +455,9 @@ int main(int argc, char *argv[])
 		return NativeConsole_Return(1);
 	}
 
+#ifdef __vita__
+	Platform_LogSetPath("ux0:data/ctr/ctr.log");
+#endif
 #ifndef __vita__
 	load_config();
 #endif

@@ -1,4 +1,7 @@
 #include <common.h>
+#if defined(CTR_NATIVE)
+#include <platform/native_pgxp.h>
+#endif
 #include <platform/native_input.h>
 
 extern int cfg_language;
@@ -36,6 +39,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"SPECCHIO: NO", "SPECCHIO: SI"},
 		{"ESPEJO: NO", "ESPEJO: SI"},
 		{"SPIEGEL: UIT", "SPIEGEL: AAN"},
+	};
+	static const char *const pgxpModes[6][NATIVE_PGXP_MODE_COUNT] =
+	{
+		{"OFF", "GEOMETRY", "FULL", "TEXTURES"},
+		{"NON", "GEOMETRIE", "COMPLET", "TEXTURES"},
+		{"AUS", "GEOMETRIE", "VOLL", "TEXTUREN"},
+		{"NO", "GEOMETRIA", "COMPLETO", "TEXTURE"},
+		{"NO", "GEOMETRIA", "COMPLETO", "TEXTURAS"},
+		{"UIT", "GEOMETRIE", "VOLLEDIG", "TEXTUREN"},
 	};
 	static const char *frameRate[2] =
 	{
@@ -318,6 +330,14 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)ghostReplay[languageRow];
 	case NATIVE_MENU_STRING_MIRROR_MODE:
 		return (char *)mirrorMode[languageRow][gNativeMirrorModeEnabled != 0];
+	case NATIVE_MENU_STRING_PGXP:
+	{
+		static char pgxpText[40];
+		const int mode = NativePgxp_NormalizeMode(gNativePgxpRequestedMode);
+		snprintf(pgxpText, sizeof(pgxpText), "PGXP: %s%s",
+		         pgxpModes[languageRow][mode], mode != gNativePgxpMode ? " !" : "");
+		return pgxpText;
+	}
 	case NATIVE_MENU_STRING_FRAME_RATE:
 		return (char *)frameRate[gNative60FpsEnabled != 0];
 	case NATIVE_MENU_STRING_AUDIO_FX:

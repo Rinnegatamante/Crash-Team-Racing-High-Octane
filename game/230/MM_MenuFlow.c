@@ -216,7 +216,7 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 11, 1, 0, 0},
+	{LNG_LANGUAGE, 12, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_AUDIO_FX, 2, 4, 3, 3},
@@ -227,9 +227,10 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 7, 9, 8, 8},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 8, 10, 9, 9},
 	{NATIVE_MENU_STRING_AI_RACERS, 9, 11, 10, 10},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 10, 0, 11, 11},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 10, 12, 11, 11},
+	{NATIVE_MENU_STRING_PGXP, 11, 0, 12, 12},
 #else
-	{LNG_LANGUAGE, 14, 1, 0, 0},
+	{LNG_LANGUAGE, 15, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_AUDIO_FX, 2, 4, 3, 3},
@@ -243,7 +244,8 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 10, 12, 11, 11},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 11, 13, 12, 12},
 	{NATIVE_MENU_STRING_AI_RACERS, 12, 14, 13, 13},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 13, 0, 14, 14},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 13, 15, 14, 14},
+	{NATIVE_MENU_STRING_PGXP, 14, 0, 15, 15},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -899,6 +901,12 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
 	{
 		gNativeMirrorModeEnabled ^= 1;
+		save_config();
+		return;
+	}
+	if (choose == NATIVE_MENU_STRING_PGXP)
+	{
+		gNativePgxpRequestedMode = NativePgxp_NextMode(gNativePgxpRequestedMode);
 		save_config();
 		return;
 	}
