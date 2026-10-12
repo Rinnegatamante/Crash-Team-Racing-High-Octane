@@ -28,9 +28,17 @@ ENGLISH_LANGUAGE_INDEX = 1
 PACKAGE_MAGIC = b"CTRR"
 PACKAGE_VERSION = 2
 PACKAGE_MULTI_VERSION = 3
+PACKAGE_SAMPLED_AUDIO_VERSION = 4
 MAX_VOICE_FILES = 32
+PACKAGE_FLAG_WHEELS_OVERRIDE = 1 << 0
+PACKAGE_FLAG_WHEELS_ENABLED = 1 << 1
+PACKAGE_FLAG_MASK_OVERRIDE = 1 << 2
+PACKAGE_FLAG_MASK_AKU = 1 << 3
 PACKAGE_HEADER_STRUCT = struct.Struct("<IHHhhI32s64s64s" + "II" * 3 + "I" + "B3xII" * MAX_VOICE_FILES)
 PACKAGE_MULTI_HEADER_STRUCT = struct.Struct("<IHHhhI32s64s64s" + "II" * 4 + "I" + "B3xII" * MAX_VOICE_FILES)
+PACKAGE_SAMPLED_AUDIO_HEADER_STRUCT = struct.Struct(
+    "<IHHhhI32s64s64s" + "II" * 4 + "I" + "B3xII" * MAX_VOICE_FILES + "BBHHHII" * 2
+)
 ASSET_MODEL_HI = 0
 ASSET_SHARED_VRM = 1
 ASSET_VOICE_XNF = 2
@@ -40,6 +48,13 @@ ASSET_MULTI_VOICE_XNF = 3
 VOICE_TRACKS_PER_CHARACTER = 19
 XNF_GAME_CATEGORY = 2
 XNF_HEADER_SIZE = 0x44
+
+HOWL_MAGIC = 0x4C574F48
+HOWL_VERSION = 0x80
+HOWL_HEADER_SIZE = 0x28
+HOWL_CHARACTER_BANK_BASE = 0x37
+HOWL_SAMPLED_VOICE_SOUND_BASES = (0x1C, 0x2C)
+SAMPLED_VOICE_COUNT = 2
 
 VRAM_WIDTH = 1024
 VRAM_HEIGHT = 512
@@ -124,6 +139,15 @@ class VramBlock:
     w: int
     h: int
     pixels: bytes
+
+
+@dataclass
+class SampledVoice:
+    flags: int
+    volume: int
+    pitch: int
+    duration: int
+    data: bytes
 
 
 class RawIso:
@@ -308,6 +332,78 @@ def xa_payload(raw: bytes) -> bytes:
     if len(raw) % RAW_SECTOR:
         return raw
     return b"".join(raw[i + 16:i + RAW_SECTOR] for i in range(0, len(raw), RAW_SECTOR))
+
+
+def howl_character_sampled_voices(raw: bytes, template_id: int):
+    if len(raw) < HOWL_HEADER_SIZE:
+        raise RuntimeError("KART.HWL is too small")
+
+    magic, version, _, _, num_spu, num_other, num_engine, num_banks, _, header_size = struct.unpack_from("<10I", raw, 0)
+    if magic != HOWL_MAGIC or version != HOWL_VERSION:
+        raise RuntimeError("KART.HWL has an unsupported header")
+    if header_size > len(raw):
+        raise RuntimeError("KART.HWL header extends past the end of the file")
+
+    cursor = HOWL_HEADER_SIZE
+    spu_end = cursor + num_spu * 4
+    other_end = spu_end + num_other * 8
+    engine_end = other_end + num_engine * 8
+    bank_end = engine_end + num_banks * 2
+    if bank_end > len(raw) or bank_end > header_size:
+        raise RuntimeError("KART.HWL metadata tables are truncated")
+
+    spu_entries = [struct.unpack_from("<HH", raw, cursor + i * 4) for i in range(num_spu)]
+    other_entries = [struct.unpack_from("<BBHHH", raw, spu_end + i * 8) for i in range(num_other)]
+    bank_offsets = struct.unpack_from("<" + "H" * num_banks, raw, engine_end)
+
+    bank_id = HOWL_CHARACTER_BANK_BASE + template_id
+    if bank_id >= num_banks:
+        raise RuntimeError(f"KART.HWL has no character bank for {CHARACTER_NAMES[template_id]}")
+    bank_sector = bank_offsets[bank_id]
+    bank_header_offset = bank_sector * FORM1_SIZE
+    if bank_header_offset + 2 > len(raw):
+        raise RuntimeError(f"KART.HWL character bank {bank_id} is outside the file")
+
+    num_samples = struct.unpack_from("<H", raw, bank_header_offset)[0]
+    sample_index_offset = bank_header_offset + 2
+    if sample_index_offset + num_samples * 2 > bank_header_offset + FORM1_SIZE:
+        raise RuntimeError(f"KART.HWL character bank {bank_id} has an invalid sample table")
+    sample_indices = struct.unpack_from("<" + "H" * num_samples, raw, sample_index_offset)
+
+    sample_data_offset = (bank_sector + 1) * FORM1_SIZE
+    samples_by_spu = {}
+    for spu_index in sample_indices:
+        if spu_index >= num_spu:
+            raise RuntimeError(f"KART.HWL character bank {bank_id} references invalid SPU sample {spu_index}")
+        sample_size = spu_entries[spu_index][1] * 8
+        sample_end = sample_data_offset + sample_size
+        if sample_size <= 0 or sample_end > len(raw):
+            raise RuntimeError(f"KART.HWL SPU sample {spu_index} is truncated")
+        samples_by_spu[spu_index] = raw[sample_data_offset:sample_end]
+        sample_data_offset = sample_end
+
+    voices = []
+    for sound_base in HOWL_SAMPLED_VOICE_SOUND_BASES:
+        sound_id = sound_base + template_id
+        if sound_id >= num_other:
+            raise RuntimeError(f"KART.HWL has no sampled voice sound {sound_id}")
+        flags, volume, pitch, spu_index, duration = other_entries[sound_id]
+        sample_data = samples_by_spu.get(spu_index)
+        if sample_data is None:
+            raise RuntimeError(
+                f"KART.HWL sampled voice {sound_id} for {CHARACTER_NAMES[template_id]} is not present in its character bank"
+            )
+        voices.append(SampledVoice(flags, volume, pitch, duration, sample_data))
+    return voices
+
+
+def changed_sampled_voices(clean_hwl: bytes, patched_hwl: bytes, template_id: int):
+    clean = howl_character_sampled_voices(clean_hwl, template_id)
+    patched = howl_character_sampled_voices(patched_hwl, template_id)
+    result = []
+    for clean_voice, patched_voice in zip(clean, patched):
+        result.append(patched_voice if patched_voice != clean_voice else None)
+    return result
 
 
 def xnf_character_voice_entries(xnf: bytes, template_id: int):
@@ -929,8 +1025,13 @@ def multi_output_path(output: Path, template_id: int) -> Path:
 
 def write_package(output: Path, template_id: int, engine_class: int, display_name: str, author: str,
                   source_hash: bytes, model_hi: bytes, shared_vrm: bytes, portrait_vrm: bytes,
-                  voice_xnf: bytes, voice_files, multi_format: bool):
-    if multi_format:
+                  voice_xnf: bytes, voice_files, sampled_voices, multi_format: bool, package_flags: int):
+    has_sampled_audio = any(voice is not None and voice.data for voice in sampled_voices)
+    if has_sampled_audio:
+        header_struct = PACKAGE_SAMPLED_AUDIO_HEADER_STRUCT
+        version = PACKAGE_SAMPLED_AUDIO_VERSION
+        assets = [model_hi, shared_vrm, portrait_vrm, voice_xnf]
+    elif multi_format:
         header_struct = PACKAGE_MULTI_HEADER_STRUCT
         version = PACKAGE_MULTI_VERSION
         assets = [model_hi, shared_vrm, portrait_vrm, voice_xnf]
@@ -953,6 +1054,14 @@ def write_package(output: Path, template_id: int, engine_class: int, display_nam
         voice_offsets.append((file_number, cursor, len(voice_data)))
         cursor = align(cursor + len(voice_data), 16)
 
+    sample_offsets = []
+    for voice in sampled_voices:
+        if voice is not None and voice.data:
+            sample_offsets.append((cursor, len(voice.data)))
+            cursor = align(cursor + len(voice.data), 16)
+        else:
+            sample_offsets.append((0, 0))
+
     voice_header_values = []
     for i in range(MAX_VOICE_FILES):
         if i < len(voice_offsets):
@@ -963,10 +1072,26 @@ def write_package(output: Path, template_id: int, engine_class: int, display_nam
 
     common_header = (
         int.from_bytes(PACKAGE_MAGIC, "little"), version, header_struct.size,
-        template_id, engine_class, 0, source_hash,
+        template_id, engine_class, package_flags, source_hash,
         fixed_string(display_name, 64), fixed_string(author, 64),
     )
-    if multi_format:
+    if has_sampled_audio:
+        sample_header_values = []
+        for voice, (offset, size) in zip(sampled_voices, sample_offsets):
+            if voice is None or not voice.data:
+                sample_header_values.extend((0, 0, 0, 0, 0, 0, 0))
+            else:
+                sample_header_values.extend((voice.flags, voice.volume, voice.pitch, voice.duration, 0, offset, size))
+        header = header_struct.pack(
+            *common_header,
+            offsets[ASSET_MODEL_HI][0], offsets[ASSET_MODEL_HI][1],
+            offsets[ASSET_SHARED_VRM][0], offsets[ASSET_SHARED_VRM][1],
+            offsets[ASSET_PORTRAIT_VRM][0], offsets[ASSET_PORTRAIT_VRM][1],
+            offsets[ASSET_MULTI_VOICE_XNF][0], offsets[ASSET_MULTI_VOICE_XNF][1],
+            len(voice_offsets), *voice_header_values,
+            *sample_header_values,
+        )
+    elif multi_format:
         header = header_struct.pack(
             *common_header,
             offsets[ASSET_MODEL_HI][0], offsets[ASSET_MODEL_HI][1],
@@ -1008,6 +1133,16 @@ def write_package(output: Path, template_id: int, engine_class: int, display_nam
             if aligned != out.tell():
                 out.write(b"\0" * (aligned - out.tell()))
 
+        for voice, (offset, _) in zip(sampled_voices, sample_offsets):
+            if voice is None or not voice.data:
+                continue
+            if out.tell() < offset:
+                out.write(b"\0" * (offset - out.tell()))
+            out.write(voice.data)
+            aligned = align(out.tell(), 16)
+            if aligned != out.tell():
+                out.write(b"\0" * (aligned - out.tell()))
+
 
 def print_animation_report(animation_report):
     if animation_report is None:
@@ -1030,6 +1165,10 @@ def main() -> int:
     parser.add_argument("--name", help="display name override; otherwise uses a patched character name when available")
     parser.add_argument("--author", default="", help="mod author")
     parser.add_argument("--engine-class", type=int, default=-1, choices=(-1, 0, 1, 2, 3), help="override engine class; -1 keeps template")
+    parser.add_argument("--wheels", choices=("on", "off"),
+                        help="override wheel rendering for the custom racer")
+    parser.add_argument("--mask", choices=("aku", "uka"),
+                        help="override the mask type used by the custom racer")
     parser.add_argument("--template-animations", action="store_true",
                         help="retarget the replaced retail racer's animations onto a static custom racer model")
     parser.add_argument("--xdelta3", help="path to xdelta3 executable")
@@ -1076,6 +1215,14 @@ def main() -> int:
             clean_xnf = base_iso._read_entry(base_iso.files["XA/ENG.XNF"])
             patched_xnf = patched_iso._read_entry(patched_iso.files["XA/ENG.XNF"])
             voice_xnf = patched_xnf if clean_xnf != patched_xnf else b""
+
+            clean_hwl = base_iso._read_entry(base_iso.files["SOUNDS/KART.HWL"])
+            patched_hwl = patched_iso._read_entry(patched_iso.files["SOUNDS/KART.HWL"])
+            sampled_voices_by_character = {
+                template_id: changed_sampled_voices(clean_hwl, patched_hwl, template_id)
+                for template_id in changed_models
+            }
+
             voice_files = []
             patched_voice_files = {}
             changed_voice_file_numbers = set()
@@ -1096,6 +1243,15 @@ def main() -> int:
             patched_iso.close()
 
     source_hash = hashlib.sha256(args.patch.read_bytes()).digest()
+    package_flags = 0
+    if args.wheels is not None:
+        package_flags |= PACKAGE_FLAG_WHEELS_OVERRIDE
+        if args.wheels == "on":
+            package_flags |= PACKAGE_FLAG_WHEELS_ENABLED
+    if args.mask is not None:
+        package_flags |= PACKAGE_FLAG_MASK_OVERRIDE
+        if args.mask == "aku":
+            package_flags |= PACKAGE_FLAG_MASK_AKU
     base_display_name = args.name or normalize_name(args.patch.stem)
     multi_format = len(changed_models) > 1
     if multi_format:
@@ -1132,8 +1288,11 @@ def main() -> int:
                 f"too many custom GAME XA files for {CHARACTER_NAMES[template_id]}: {len(racer_voice_files)}"
             )
 
+        racer_sampled_voices = sampled_voices_by_character[template_id]
+
         write_package(output, template_id, args.engine_class, display_name, args.author, source_hash,
-                      models[template_id], shared_vrm, portrait_vrm, racer_voice_xnf, racer_voice_files, multi_format)
+                      models[template_id], shared_vrm, portrait_vrm, racer_voice_xnf, racer_voice_files,
+                      racer_sampled_voices, multi_format, package_flags)
 
         print(f"Custom racer: {display_name}")
         print(f"Template character ID: {template_id} ({CHARACTER_NAMES[template_id]})")
@@ -1146,6 +1305,12 @@ def main() -> int:
                 print(f"Racer VRM changed words: {split_report['per_racer_words'][template_id]}")
         print(f"Voice XNF: {len(racer_voice_xnf)} bytes")
         print(f"Voice XA files: {', '.join(f'S{n:02d}' for n, _ in racer_voice_files) if racer_voice_files else 'none'}")
+        sampled_voice_sizes = [len(voice.data) if voice is not None else 0 for voice in racer_sampled_voices]
+        print("Sampled voices: " +
+              ", ".join(f"type {i}: {size} bytes" if size else f"type {i}: retail"
+                        for i, size in enumerate(sampled_voice_sizes)))
+        print(f"Wheels: {args.wheels or 'template'}")
+        print(f"Mask: {args.mask or 'template'}")
         print(f"Wrote: {output}")
 
     return 0
