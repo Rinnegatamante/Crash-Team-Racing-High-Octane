@@ -2,6 +2,7 @@ build/
 build-*/
 dist/
 assets/*
+!assets/postfx/
 !assets/vita.png
 !assets/dualshock.png
 debug/

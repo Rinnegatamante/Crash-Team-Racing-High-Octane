@@ -11,6 +11,8 @@ You can play it from Web Browser as well from this link: [Web Browser Build](htt
 - Internal resolution of the renderer bumped to 960x544.
 - MSAA 4x (PSVita) / FXAA (PC) for anti-aliasing.
 - 60 FPS support.
+- Post-processing effects (CRT, Sepia, Greyscale, Negative, Sharp Bilinear, ...).
+- Perspective correction via PGXP implementation derived from [Crash Team Racing: Turbocharged](https://github.com/CameronRedmore/Crash-Team-Racing-Turbocharged).
 - Penta Penguin has its stats set to its PAL/NTSC-J counterpart (6/6/6).
 - Playable Nitrous Oxide (Unlockable via the original Spyro 2 Demo cheatcode). (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/OxideFix))
 - Reserves Meter (Credits: [Original mod](https://github.com/CTR-tools/CTR-ModSDK/tree/main/mods/Modules/ReservesMeter))
@@ -79,8 +81,26 @@ Download a custom character in the form of an `.xdelta` patch and place it in th
 - Place your NTSC-U Crash Team Racing `.bin` dump in the same folder as the script.
 - Open a command prompt in that folder by typing `cmd` in the File Explorer address bar and pressing Enter.
 - Run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr`.
-- If the patch replaces multiple characters, the importer automatically generates one `.ctrr` per changed racer, adding the original character name to the requested output filename (for example `YOUR_CHARACTER_crash.ctrr`, `YOUR_CHARACTER_cortex.ctrr`, etc.).
-- *NOTE*: For static custom models, the script can automatically retarget and bake the animations of the original character being replaced onto the custom model. To enable this, run `python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr --template-animations`. Models that already contain animations will not be overwritten.
+- To customize the generated racer, append any of these optional arguments:
+
+  | Option | Description |
+  | --- | --- |
+  | `--name "Racer Name"` | Set the in-game name. By default, the importer uses the patched character name when available. |
+  | `--author "Author Name"` | Set the mod author's name. |
+  | `--engine-class {-1,0,1,2,3}` | Override the racer's engine class with `0`–`3`. Omit this option (or use `-1`) to keep the replaced character's class. |
+  | `--wheels {on,off}` | Force wheels to be shown or hidden. Omit this option to keep the replaced character's default. |
+  | `--mask {aku,uka}` | Select the Aku Aku or Uka Uka mask. Omit this option to keep the replaced character's default. |
+  | `--template-animations` | Retarget and bake the replaced character's animations onto a static custom model. Models that already contain animations are left unchanged. |
+  | `--xdelta3 PATH` | Use a specific xdelta3 executable instead of the copy next to the script or one on PATH. |
+
+  For example, to import a static model with its original character's animations, custom name and author, Uka Uka mask, and wheels disabled:
+
+  ```sh
+  python import_custom_racer.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_CHARACTER.ctrr --template-animations --name "My Racer" --author "Mod Author" --mask uka --wheels off
+  ```
+
+- If the patch replaces multiple characters, the importer automatically generates one `.ctrr` per changed racer, adding the original character name to the requested output filename (for example `YOUR_CHARACTER_crash.ctrr`, `YOUR_CHARACTER_cortex.ctrr`, etc.). You can also pass an output directory instead of a `.ctrr` filename for multi-character patches. Optional overrides apply to every generated racer.
+- Changed XA voices and sampled voices from `KART.HWL` are extracted automatically when present in the patch; no extra command-line option is needed. Regenerate older `.ctrr` packs to include newly supported sampled voices.
 - When conversion is complete, place the generated `.ctrr` file or files:
   - on PSVita: in `ux0:data/ctr/mods/customracers`.
   - on PC: in the `mods/customracers` folder next to the CTR: High Octane executable, so that the final path is `mods/customracers/YOUR_CHARACTER.ctrr`.
@@ -97,6 +117,35 @@ In order to be able to auto submit your new records in Time Trial and Relic Race
 - Follow the instructions on screen to properly link your PC account and your PSVita one.
 
 ## Changelog
+
+### v.1.5
+
+- Added PGXP support for perspective correction of texture warping and geometry wobbling. Geometry wobbling fix is not available on PSVita.
+- Added post-processing effects support (CRT, Sharp Bilinear, Sepia, Grayscale, Negative and many more).
+- Fixed a bug making the Discord Rich Presence not show custom racers names and instead using the original overloaded ones.
+- Fixed a bug causing custom racers portrait to have incorrect background trasparency and incorrect aspect ratio/scaling.
+- Fixed a bug casuing custom racers overloading Penta Penguin to show an incorrect stats chart at character selection screen.
+- Added shadow casting for the stats chart in the character selection screen.
+- Fixed a bug causing custom racers models to persist across modes, resulting sometimes in custom racers to be used in place of original ones erroneously.
+- Fixed the track previews to have incorrect aspect ratio.
+- Fixed the track previews to have incorrect blending and showing as darker than normal.
+- Added sampled sounds support for custom racers (Needs racers packs regeneration).
+- Fixed a bug causing Wumpa fruits to be visible in the end race screen after a VS/Battle race.
+- Added replay stopping, replay frame-by-frame progression and replay playback speed adjustments controls in the Ghost Replay mode.
+- Fixed Boss Battle boss voices to be overridden by custom racer ones under certain circumstances.
+- Add support for mask and wheels settings for custom racers during pack generation.
+- Allow player 2/3/4 to be able to change the racers page during character selection.
+- Made so that it's now possible for all players to pick same characters in the character selection during multiplayer modes.
+- Added Exit Game option in the main menu.
+- Switched Exit and Options voices in the Pause menu so that now Exit is the last voice in the pause menu.
+- [PC/Web] Made so that a dualshock is shown for the inputs overlay during Ghost Replay.
+- Added Audio options in the Options submenu in the main menu.
+- Reworked the Language submenu to use smaller font for a cleaner presentation.
+- Changed AI Racers option to allow for AI Racers to pick only original extra characters or original + custom ones.
+- Fixed a bug causing SFX mixups during multiplayer modes when using custom racers.
+- [Web] Enforce an opaque framebuffer for the OpenGL context: Fixes the game being a black screen on Mac.
+- Fixed an out of bound causing a crash when playing in 3P or 4P modes on Mystery Caves.
+- [PSVita] Updated Livearea assets.
 
 ### v.1.4.1
 
