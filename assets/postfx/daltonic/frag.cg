@@ -1,0 +1,9 @@
+float4 main(
+		float2 vTexcoord : TEXCOORD0,
+		uniform sampler2D colorMap : TEXUNIT0,
+		uniform float3 uGreenRow,
+		uniform float3 uBlueRow) : COLOR
+{
+		float3 color = tex2D(colorMap, vTexcoord).rgb;
+		return float4(color.r, dot(color, uGreenRow), dot(color, uBlueRow), 1.0);
+}

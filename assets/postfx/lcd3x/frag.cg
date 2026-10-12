@@ -1,0 +1,29 @@
+/*
+	Author: Gigaherz
+	License: Public domain
+*/
+
+/* configuration (higher values mean brighter image but reduced effect depth) */
+static const int brighten_scanlines = 16;
+static const int brighten_lcd = 4;
+static const float3 subpixelOffset = float3(0.25, -1.0/12.0, -5.0/12.0);
+
+float4 main (
+	float2 tex : TEXCOORD,
+	uniform sampler2D s0 : TEXUNIT0,
+	uniform float4 uCrop) : COLOR
+{
+	float3 res = tex2D(s0, tex).xyz;
+
+	float2 localTex = (tex - uCrop.xy) / uCrop.zw;
+	float3 subpixelPhase = frac(localTex.x * 640.0 + subpixelOffset - 0.25);
+	float3 subpixelWave = 4.0 * abs(subpixelPhase - 0.5) - 1.0;
+	float linePhase = frac(localTex.y * 480.0 - 0.25);
+	float lineWave = 4.0 * abs(linePhase - 0.5) - 1.0;
+	float yfactor = (brighten_scanlines + lineWave) / (brighten_scanlines + 1);
+	float3 xfactors = (brighten_lcd + subpixelWave) / (brighten_lcd + 1);
+
+	float3 color = yfactor * xfactors * res;
+
+	return float4(color.x, color.y, color.z, 1.0);
+}

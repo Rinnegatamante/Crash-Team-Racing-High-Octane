@@ -18,6 +18,7 @@
 #endif
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
+#include "platform/native_postfx.h"
 #include "platform/native_renderer.h"
 
 #include <assert.h>
@@ -364,6 +365,9 @@ extern int gNativeDitheringEnabled;
 global_variable int s_presentAspectW = 4;
 global_variable int s_presentAspectH = 3;
 global_variable SDL_Rect s_presentViewport = {0, 0, 0, 0};
+#if !defined(__EMSCRIPTEN__)
+global_variable SDL_Rect s_postfxViewport = {0, 0, 0, 0};
+#endif
 
 int g_dbg_wireframeMode = 0;
 int g_dbg_texturelessMode = 0;
@@ -527,6 +531,9 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 
 void NativeRenderer_Shutdown(void)
 {
+#if !defined(__EMSCRIPTEN__)
+	NativePostFX_Shutdown();
+#endif
 	glDeleteVertexArrays(MAX_NUM_VERTEX_BUFFERS, s_glVertexArray);
 	glDeleteBuffers(MAX_NUM_VERTEX_BUFFERS, s_glVertexBuffer);
 
@@ -3505,11 +3512,19 @@ void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, in
 	NativeRenderer_UpdateVRAM();
 
 	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+#if !defined(__EMSCRIPTEN__)
+	s_postfxViewport = s_presentViewport;
+	const GLuint postfxFramebuffer = NativePostFX_TargetFramebuffer(g_windowWidth, g_windowHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, postfxFramebuffer);
+	if (postfxFramebuffer != 0)
+		NativeRenderer_ClearPresentationBars();
+#else
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
 
 	NativeRenderer_SetScissorState(0);
-	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_NONE);
+	NativeRenderer_EnableDepth(0);
 	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
 	glDisable(GL_STENCIL_TEST);
 
@@ -3532,11 +3547,19 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	}
 
 	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+#if !defined(__EMSCRIPTEN__)
+	s_postfxViewport = s_presentViewport;
+	const GLuint postfxFramebuffer = NativePostFX_TargetFramebuffer(g_windowWidth, g_windowHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, postfxFramebuffer);
+	if (postfxFramebuffer != 0)
+		NativeRenderer_ClearPresentationBars();
+#else
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
 
 	NativeRenderer_SetScissorState(0);
-	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_NONE);
+	NativeRenderer_EnableDepth(0);
 	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
 	glDisable(GL_STENCIL_TEST);
 
@@ -3549,7 +3572,7 @@ void NativeRenderer_PresentMainRenderTarget(void)
 	}
 	if (s_presentRgbaFxaaLoc >= 0)
 	{
-		glUniform1i(s_presentRgbaFxaaLoc, gNativeAntiAliasingEnabled != 0);
+		glUniform1i(s_presentRgbaFxaaLoc, gNativeAntiAliasingEnabled != 0 && gNativePostFXMode != NATIVE_POSTFX_FXAA);
 	}
 #endif
 	glActiveTexture(GL_TEXTURE0);
@@ -3880,10 +3903,14 @@ void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight
 		return;
 	}
 
+#if !defined(__EMSCRIPTEN__)
+	glBindFramebuffer(GL_FRAMEBUFFER, NativePostFX_TargetFramebuffer(g_windowWidth, g_windowHeight));
+#else
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
 	NativeRenderer_SetScissorState(0);
-	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_NONE);
+	NativeRenderer_EnableDepth(0);
 	const GLboolean previousStencilEnabled = glIsEnabled(GL_STENCIL_TEST);
 	glDisable(GL_STENCIL_TEST);
 
@@ -3891,6 +3918,9 @@ void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight
 	glClear(GL_COLOR_BUFFER_BIT);
 	const int viewportH = (s_presentViewport.h * contentHeight + displayHeight / 2) / displayHeight;
 	const int viewportY = s_presentViewport.y + (s_presentViewport.h - viewportH) / 2;
+#if !defined(__EMSCRIPTEN__)
+	s_postfxViewport = (SDL_Rect){s_presentViewport.x, viewportY, s_presentViewport.w, viewportH};
+#endif
 	NativeRenderer_SetViewPort(s_presentViewport.x, viewportY, s_presentViewport.w, viewportH);
 
 	glUseProgram(s_presentRgbaShader);
@@ -3921,6 +3951,20 @@ void NativeRenderer_PresentVRAMDisplay(void)
 void NativeRenderer_SwapWindow(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
+#if !defined(__EMSCRIPTEN__)
+	if (NativePostFX_Finish(s_postfxViewport.x, s_postfxViewport.y, s_postfxViewport.w, s_postfxViewport.h,
+	                       g_windowWidth, g_windowHeight))
+	{
+		NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+		s_previousShader = (ShaderID)-1;
+		s_lastBoundTexture = (TextureID)-1;
+		s_previousBlendMode = BM_NONE;
+		s_previousMixedSTPBlend = 0;
+		s_previousDepthMode = 0;
+		s_previousScissorState = 0;
+		NativeRenderer_InvalidateScissorRectCache();
+	}
+#endif
 #ifdef __vita__
 	if (NativeAdhoc_IsDialogRunning())
 	{

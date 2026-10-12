@@ -101,6 +101,29 @@ set_target_properties(ctr_native PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(NOT EMSCRIPTEN)
+    set(CTR_POSTFX_GLSL_HEADER "${CMAKE_CURRENT_BINARY_DIR}/native_postfx_pc_shaders.h")
+    set(shader_header_text "#ifndef CTR_NATIVE_POSTFX_PC_SHADERS_H\n#define CTR_NATIVE_POSTFX_PC_SHADERS_H\n")
+    foreach(stage IN ITEMS vert frag)
+        set(shader_path "${CMAKE_SOURCE_DIR}/platform/shaders/native_postfx_pc.${stage}")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${shader_path}")
+        file(READ "${shader_path}" shader_source)
+        string(REPLACE "\\" "\\\\" shader_source "${shader_source}")
+        string(REPLACE "\"" "\\\"" shader_source "${shader_source}")
+        string(REPLACE "\r" "" shader_source "${shader_source}")
+        string(REPLACE "\n" "\\n\"\n\"" shader_source "${shader_source}")
+        string(APPEND shader_header_text "static const char native_postfx_pc_${stage}[] =\n\"${shader_source}\";\n")
+    endforeach()
+    string(APPEND shader_header_text "#endif\n")
+    set(previous_shader_header "")
+    if(EXISTS "${CTR_POSTFX_GLSL_HEADER}")
+        file(READ "${CTR_POSTFX_GLSL_HEADER}" previous_shader_header)
+    endif()
+    if(NOT previous_shader_header STREQUAL shader_header_text)
+        file(WRITE "${CTR_POSTFX_GLSL_HEADER}" "${shader_header_text}")
+    endif()
+    target_include_directories(ctr_native PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
     BUILD=926
@@ -173,9 +196,16 @@ if(EMSCRIPTEN)
 else()
     add_custom_command(TARGET ctr_native POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ctr_native>/assets"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ctr_native>/licenses"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/assets/dualshock.png"
             "$<TARGET_FILE_DIR:ctr_native>/assets/dualshock.png"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/assets/postfx/NOTICE.txt"
+            "$<TARGET_FILE_DIR:ctr_native>/licenses/PostFX-NOTICE.txt"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+            "$<TARGET_FILE_DIR:ctr_native>/licenses/THIRD_PARTY_NOTICES.md"
         VERBATIM
     )
 endif()
@@ -194,4 +224,19 @@ include(CTest)
 if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_test(NAME ctr_native_version COMMAND $<TARGET_FILE:ctr_native> --version)
     set_tests_properties(ctr_native_version PROPERTIES PASS_REGULAR_EXPRESSION "^CTR Native ")
+    add_executable(native_postfx_test tests/native_postfx_test.c platform/native_postfx.c platform/native_postfx_params.c)
+    target_include_directories(native_postfx_test PRIVATE include)
+    set_target_properties(native_postfx_test PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
+    add_test(NAME native_postfx_state_and_crop COMMAND $<TARGET_FILE:native_postfx_test>)
+    add_executable(native_postfx_pc_gl_test
+        tests/native_postfx_pc_gl_test.c
+        platform/native_postfx.c
+        platform/native_postfx_params.c
+        platform/native_postfx_pc.c
+        platform/native_glad.c)
+    target_include_directories(native_postfx_pc_gl_test PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}")
+    target_link_libraries(native_postfx_pc_gl_test PRIVATE SDL3::SDL3)
+    set_target_properties(native_postfx_pc_gl_test PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
+    add_test(NAME native_postfx_opengl_shaders COMMAND $<TARGET_FILE:native_postfx_pc_gl_test>)
+    set_tests_properties(native_postfx_opengl_shaders PROPERTIES SKIP_RETURN_CODE 77)
 endif()

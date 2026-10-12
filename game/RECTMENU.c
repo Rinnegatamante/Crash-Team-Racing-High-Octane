@@ -1,6 +1,8 @@
 #include <common.h>
 #if defined(CTR_NATIVE)
 #include <platform/native_pgxp.h>
+#include <platform/native_postfx.h>
+#include <platform/native_postfx_params.h>
 #endif
 #include <platform/native_input.h>
 
@@ -48,6 +50,19 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"NO", "GEOMETRIA", "COMPLETO", "TEXTURE"},
 		{"NO", "GEOMETRIA", "COMPLETO", "TEXTURAS"},
 		{"UIT", "GEOMETRIE", "VOLLEDIG", "TEXTUREN"},
+	};
+	static const char *const postFxEffectLabel[6] =
+	{
+		"SHADER", "EFFET", "SHADER", "EFFETTO", "EFECTO", "EFFECT",
+	};
+	static const char *const postFxParameterLabels[6][NATIVE_POSTFX_PARAMETER_COUNT] =
+	{
+		{"PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA", "GAMMA", "HUE", "SATURATION", "RADIUS", "SOFTNESS", "OPACITY"},
+		{"PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE", "GAMMA", "TEINTE", "SATURATION", "RAYON", "DOUCEUR", "OPACITE"},
+		{"PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE", "GAMMA", "FARBTON", "SAETTIGUNG", "RADIUS", "WEICHHEIT", "DECKKRAFT"},
+		{"PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA", "GAMMA", "TONALITA", "SATURAZIONE", "RAGGIO", "MORBIDEZZA", "OPACITA"},
+		{"PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA", "GAMMA", "TONO", "SATURACION", "RADIO", "SUAVIDAD", "OPACIDAD"},
+		{"PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE", "GAMMA", "KLEURTOON", "VERZADIGING", "STRAAL", "ZACHTHEID", "DEKKING"},
 	};
 	static const char *frameRate[2] =
 	{
@@ -324,6 +339,17 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return lapRow;
 	}
 
+	if ((nativeStringIndex >= NATIVE_MENU_STRING_POSTFX_PARAMETER_0) &&
+	    (nativeStringIndex <= NATIVE_MENU_STRING_POSTFX_PARAMETER_8))
+	{
+		static char postFxParamText[48];
+		const int index = nativeStringIndex - NATIVE_MENU_STRING_POSTFX_PARAMETER_0;
+		const int cent = gNativePostFXParameterValues[index];
+		snprintf(postFxParamText, sizeof(postFxParamText), "%s: %d.%02d",
+		         postFxParameterLabels[languageRow][index], cent / 100, cent % 100);
+		return postFxParamText;
+	}
+
 	switch (nativeStringIndex)
 	{
 	case NATIVE_MENU_STRING_GHOST_REPLAY:
@@ -337,6 +363,15 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		snprintf(pgxpText, sizeof(pgxpText), "PGXP: %s%s",
 		         pgxpModes[languageRow][mode], mode != gNativePgxpMode ? " !" : "");
 		return pgxpText;
+	}
+	case NATIVE_MENU_STRING_POSTFX:
+		return "POST FX";
+	case NATIVE_MENU_STRING_POSTFX_MODE:
+	{
+		static char postFxModeText[48];
+		snprintf(postFxModeText, sizeof(postFxModeText), "%s: %s",
+		         postFxEffectLabel[languageRow], NativePostFX_GetLabel(gNativePostFXMode));
+		return postFxModeText;
 	}
 	case NATIVE_MENU_STRING_FRAME_RATE:
 		return (char *)frameRate[gNative60FpsEnabled != 0];
@@ -781,12 +816,16 @@ static b32 RECTMENU_NativeOptionsSeparatorBeforeRow(struct RectMenu *menu, struc
 
 static b32 RECTMENU_NativeOptionsHorizontalInput(struct RectMenu *menu)
 {
+	s16 stringIndex = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+	if ((stringIndex == NATIVE_MENU_STRING_POSTFX_MODE) ||
+	    ((stringIndex >= NATIVE_MENU_STRING_POSTFX_PARAMETER_0) &&
+	     (stringIndex <= NATIVE_MENU_STRING_POSTFX_PARAMETER_8)))
+		return true;
 	if ((menu->drawStyle & RECTMENU_DRAW_STYLE_NATIVE_OPTIONS) == 0)
 	{
 		return false;
 	}
 
-	s16 stringIndex = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
 	return ((stringIndex >= NATIVE_MENU_STRING_AUDIO_FX) &&
 	        (stringIndex <= NATIVE_MENU_STRING_AUDIO_MODE)) ||
 	       (stringIndex == NATIVE_MENU_STRING_AI_RACERS);

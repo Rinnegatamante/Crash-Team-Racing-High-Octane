@@ -90,10 +90,15 @@ int gNativeRelicRaceResultTier = -1;
 #include "platform/native_custom_racer.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_pgxp.c"
+#include "platform/native_postfx_params.c"
+#include "platform/native_postfx.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
 #if !defined(__EMSCRIPTEN__)
 #include "platform/native_glad.c"
+#endif
+#if !defined(__vita__) && !defined(__EMSCRIPTEN__)
+#include "platform/native_postfx_pc.c"
 #endif
 #include "platform/native_input.c"
 #include "platform/native_network.c"
@@ -307,6 +312,18 @@ void load_config(void)
 			{
 				gNativePgxpIntegerNclipEnabled = (value == 0);
 			}
+#if !defined(__EMSCRIPTEN__)
+			else if (strcmp("postfx_mode", buffer) == 0)
+			{
+				NativePostFX_SetMode(value);
+			}
+			else if (strncmp(buffer, "postfx_param_", 13) == 0)
+			{
+				int paramIndex = -1;
+				if (sscanf(buffer + 13, "%d", &paramIndex) == 1)
+					NativePostFX_SetParameter(paramIndex, value);
+			}
+#endif
 #ifndef __vita__
 			else if (strcmp("anti_aliasing", buffer) == 0)
 			{
@@ -347,6 +364,11 @@ void save_config(void)
 		fprintf(config, "%s=%d\n", "ai_racers", gNativeAIRacersMode);
 		fprintf(config, "%s=%d\n", "pgxp_mode", NativePgxp_NormalizeMode(gNativePgxpRequestedMode));
 		fprintf(config, "%s=%d\n", "pgxp_precise_nclip", !gNativePgxpIntegerNclipEnabled);
+#if !defined(__EMSCRIPTEN__)
+		fprintf(config, "postfx_mode=%d\n", gNativePostFXMode);
+		for (int i = 0; i < NATIVE_POSTFX_PARAMETER_COUNT; i++)
+			fprintf(config, "postfx_param_%d=%d\n", i, gNativePostFXParameterValues[i]);
+#endif
 #ifndef __vita__
 		fprintf(config, "%s=%d\n", "anti_aliasing", gNativeAntiAliasingEnabled != 0);
 		fprintf(config, "%s=%d\n", "dithering", gNativeDitheringEnabled != 0);

@@ -3,7 +3,10 @@
 
 #if defined(CTR_NATIVE)
 #include "platform/native_leaderboard.h"
+#include "platform/native_postfx.h"
+#include "platform/native_postfx_params.h"
 #if defined(__vita__)
+#include "platform/native_gpu.h"
 #include "platform/native_adhoc.h"
 #endif
 #endif
@@ -216,7 +219,7 @@ static struct MenuRow s_nativeTimeTrialRows[] =
 static struct MenuRow s_nativeOptionsRows[] =
 {
 #ifdef __vita__
-	{LNG_LANGUAGE, 12, 1, 0, 0},
+	{LNG_LANGUAGE, 13, 1, 0, 0},
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_AUDIO_FX, 2, 4, 3, 3},
@@ -228,9 +231,14 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 8, 10, 9, 9},
 	{NATIVE_MENU_STRING_AI_RACERS, 9, 11, 10, 10},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 10, 12, 11, 11},
-	{NATIVE_MENU_STRING_PGXP, 11, 0, 12, 12},
+	{NATIVE_MENU_STRING_POSTFX, 11, 13, 12, 12},
+	{NATIVE_MENU_STRING_PGXP, 12, 0, 13, 13},
 #else
+#ifdef __EMSCRIPTEN__
 	{LNG_LANGUAGE, 15, 1, 0, 0},
+#else
+	{LNG_LANGUAGE, 16, 1, 0, 0},
+#endif
 	{NATIVE_MENU_STRING_CONTROLS, 0, 2, 1, 1},
 	{NATIVE_MENU_STRING_CHEATS, 1, 3, 2, 2},
 	{NATIVE_MENU_STRING_AUDIO_FX, 2, 4, 3, 3},
@@ -239,6 +247,16 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_AUDIO_MODE, 5, 7, 6, 6},
 	{NATIVE_MENU_STRING_FRAME_RATE, 6, 8, 7, 7},
 	{NATIVE_MENU_STRING_ANTI_ALIASING, 7, 9, 8, 8},
+#ifndef __EMSCRIPTEN__
+	{NATIVE_MENU_STRING_POSTFX, 8, 10, 9, 9},
+	{NATIVE_MENU_STRING_PGXP, 9, 11, 10, 10},
+	{NATIVE_MENU_STRING_DITHERING, 10, 12, 11, 11},
+	{NATIVE_MENU_STRING_BORDERLESS, 11, 13, 12, 12},
+	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 12, 14, 13, 13},
+	{NATIVE_MENU_STRING_DEFAULT_HUD, 13, 15, 14, 14},
+	{NATIVE_MENU_STRING_AI_RACERS, 14, 16, 15, 15},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 15, 0, 16, 16},
+#else
 	{NATIVE_MENU_STRING_DITHERING, 8, 10, 9, 9},
 	{NATIVE_MENU_STRING_BORDERLESS, 9, 11, 10, 10},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 10, 12, 11, 11},
@@ -246,6 +264,7 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_AI_RACERS, 12, 14, 13, 13},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 13, 15, 14, 14},
 	{NATIVE_MENU_STRING_PGXP, 14, 0, 15, 15},
+#endif
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -359,6 +378,18 @@ static struct RectMenu s_nativeCheatsMenu =
 	.rows = s_nativeCheatsRows,
 	.funcPtr = MM_NativeCheatsMenuProc,
 };
+
+#if !defined(__EMSCRIPTEN__)
+static void MM_NativePostFXMenuProc(struct RectMenu *menu);
+static struct MenuRow s_nativePostFXRows[NATIVE_POSTFX_PARAMETER_COUNT + 2];
+static struct RectMenu s_nativePostFXMenu =
+{
+	.stringIndexTitle = RECTMENU_STRING_NONE,
+	.state = CENTER_ON_X | USE_SMALL_FONT,
+	.rows = s_nativePostFXRows,
+	.funcPtr = MM_NativePostFXMenuProc,
+};
+#endif
 
 static struct RectMenu s_nativeControlsMenu =
 {
@@ -802,6 +833,62 @@ static void MM_NativeTimeTrialMenuProc(struct RectMenu *menu)
 #endif
 }
 
+#if !defined(__EMSCRIPTEN__)
+static void MM_NativePostFXRebuildRows(void)
+{
+	int count = 1;
+	s_nativePostFXRows[0].stringIndex = NATIVE_MENU_STRING_POSTFX_MODE;
+	const char *effect = NativePostFX_GetName(gNativePostFXMode);
+	for (int i = 0; i < NATIVE_POSTFX_PARAMETER_COUNT; i++)
+	{
+		if (strcmp(effect, native_postfx_parameters[i].effect) != 0)
+			continue;
+		s_nativePostFXRows[count].stringIndex = NATIVE_MENU_STRING_POSTFX_PARAMETER_0 + i;
+		count++;
+	}
+	for (int i = 0; i < count; i++)
+	{
+		s_nativePostFXRows[i].rowOnPressUp = (char)(i == 0 ? count - 1 : i - 1);
+		s_nativePostFXRows[i].rowOnPressDown = (char)(i + 1 == count ? 0 : i + 1);
+		s_nativePostFXRows[i].rowOnPressLeft = (char)i;
+		s_nativePostFXRows[i].rowOnPressRight = (char)i;
+	}
+	s_nativePostFXRows[count].stringIndex = RECTMENU_STRING_NONE;
+}
+
+static void MM_NativePostFXMenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+		return;
+	if (menu->rowSelected < 0)
+	{
+		if (menu->ptrPrevBox_InHierarchy != NULL)
+			menu->ptrPrevBox_InHierarchy->state &= ~(ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY);
+		return;
+	}
+	const s16 choose = menu->rows[menu->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+	const u32 button = sdata->buttonTapPerPlayer[0];
+	const int direction = (button & BTN_LEFT) ? -1 : 1;
+	if (choose == NATIVE_MENU_STRING_POSTFX_MODE)
+	{
+		const int mode = (gNativePostFXMode + direction + NATIVE_POSTFX_MODE_COUNT) % NATIVE_POSTFX_MODE_COUNT;
+		NativePostFX_SetMode(mode);
+		MM_NativePostFXRebuildRows();
+		menu->rowSelected = 0;
+		save_config();
+		return;
+	}
+	if (choose >= NATIVE_MENU_STRING_POSTFX_PARAMETER_0 &&
+	    choose <= NATIVE_MENU_STRING_POSTFX_PARAMETER_8)
+	{
+		const int index = choose - NATIVE_MENU_STRING_POSTFX_PARAMETER_0;
+		NativePostFX_SetParameter(index, gNativePostFXParameterValues[index] +
+		                          direction * native_postfx_parameters[index].stepCent);
+		save_config();
+	}
+}
+#endif
+
 static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 {
 	if (menu->funcState == RECTMENU_FUNC_STATE_UPDATE)
@@ -898,6 +985,19 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		return;
 	}
 
+#if !defined(__EMSCRIPTEN__)
+	if (choose == NATIVE_MENU_STRING_POSTFX)
+	{
+		MM_NativePostFXRebuildRows();
+		s_nativePostFXMenu.rowSelected = 0;
+		s_nativePostFXMenu.state = CENTER_ON_X | USE_SMALL_FONT;
+		s_nativePostFXMenu.ptrNextBox_InHierarchy = NULL;
+		s_nativePostFXMenu.ptrPrevBox_InHierarchy = menu;
+		menu->ptrNextBox_InHierarchy = &s_nativePostFXMenu;
+		menu->state |= ONLY_DRAW_TITLE | DRAW_NEXT_MENU_IN_HIERARCHY;
+		return;
+	}
+#endif
 	if (choose == NATIVE_MENU_STRING_MIRROR_MODE)
 	{
 		gNativeMirrorModeEnabled ^= 1;
@@ -1220,6 +1320,14 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+#ifdef __vita__
+	if (mainMenu->funcState == RECTMENU_FUNC_STATE_INPUT &&
+	    (mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0 &&
+	    mainMenu->rowSelected >= 0 &&
+	    mainMenu->rows[mainMenu->rowSelected].stringIndex == NATIVE_MENU_STRING_EXIT_GAME)
+		NativeGpu_ExitProcess();
+#endif
+
 #if defined(CTR_NATIVE)
 	if ((mainMenu->state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
 	{
@@ -1523,11 +1631,13 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		return;
 	}
 
+#ifndef __vita__
 	if (choose == NATIVE_MENU_STRING_EXIT_GAME)
 	{
 		sdata->mainGameState = 5;
 		return;
 	}
+#endif
 #endif
 
 	// Scrapbook

@@ -14,6 +14,15 @@ credits DuckStation (Stenzek) and the original PGXP work by iCatButler.
 High Octane retains GPLv3 licensing for these adapted files. The native
 renderer integration and Vita geometry-lite adaptations are local changes.
 
+## Post-processing shaders (PC and Vita)
+
+The shaders under `assets/postfx/` were adapted from the DaedalusX64-vitaGL
+shader collection through PCSX AwO commit `1b7173a4`. The viewport handling,
+parameter configuration, GLSL desktop adaptation in `platform/shaders/` and
+High Octane integration are local changes.
+Source-specific authorship, license details and required binary-distribution
+notices are retained in `assets/postfx/NOTICE.txt` and the shader sources.
+
 ## PsyCross / Psy-X
 
 Source: <https://github.com/OpenDriver2/PsyCross>

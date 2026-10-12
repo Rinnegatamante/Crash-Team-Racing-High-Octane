@@ -1,0 +1,47 @@
+/*
+	Author: Themaister
+	License: Public domain
+*/
+
+#define SCANLINE_BASE_BRIGHTNESS 1.0
+#define SCANLINE_SINE_COMP_A 0.1
+#define SCANLINE_SINE_COMP_B 0.15
+#define SHARP_BILINEAR_PRE_SCALE 1.25
+
+float4 main
+(
+	float4 vPosition : POSITION,
+	float2 vTexcoord : TEXCOORD0,
+	uniform sampler2D s0 : TEXUNIT0,
+	uniform float4 uCrop,
+	uniform float2 uOutputSize
+) : COLOR
+{
+
+	float2 texture_size = float2(640.0f, 480.0f);
+	float2 output_size = uOutputSize;
+	float2 localUV = (vTexcoord - uCrop.xy) / uCrop.zw - float2(0.25 / texture_size.x, 0.0);
+	float2 localTexel = localUV * texture_size;
+
+	float2 texel_floored = floor(localTexel);
+	float2 s = frac(localTexel);
+	float region_range = 0.5 - 0.5 / SHARP_BILINEAR_PRE_SCALE;
+
+	// Figure out where in the texel to sample to get correct pre-scaled bilinear.
+	// Uses the hardware bilinear interpolator to avoid having to sample 4 times manually.
+
+	float2 center_dist = s - 0.5;
+	float2 f = (center_dist - clamp(center_dist, -region_range, region_range)) * SHARP_BILINEAR_PRE_SCALE + 0.5;
+	float2 mod_texel = texel_floored + f;
+
+	float2 halfPixel = 0.5 / uOutputSize;
+	float2 sampleUV = uCrop.xy + clamp(mod_texel / texture_size, halfPixel, 1.0 - halfPixel) * uCrop.zw;
+	float3 res = tex2D(s0, sampleUV).rgb;
+
+	float2 phase = frac(float2(localUV.x * texture_size.x,
+	                            localUV.y * (output_size.y * 0.5)) - 0.25);
+	float2 wave = 4.0 * abs(phase - 0.5) - 1.0;
+	float3 scanline = res * (SCANLINE_BASE_BRIGHTNESS + dot(float2(SCANLINE_SINE_COMP_A, SCANLINE_SINE_COMP_B), wave));
+
+	return float4(scanline, 1.0);
+}
