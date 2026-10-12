@@ -31,6 +31,9 @@ void NativeGpu_FinishSynchronousFrame(void);
 void NativeGpu_SyncVRAMToCPU(int x, int y, int w, int h);
 int NativeGpu_InitBackend(int width, int height);
 void NativeGpu_ShutdownBackend(void);
+#ifdef __vita__
+void NativeGpu_ExitProcess(void) __attribute__((noreturn));
+#endif
 void NativeGpu_ForceSynchronousFrame(void);
 int NativeGpu_IsSynchronousFrame(void);
 int NativeGpu_IsFrontendFrameActive(void);

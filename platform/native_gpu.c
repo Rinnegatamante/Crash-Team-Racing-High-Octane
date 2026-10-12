@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef __vita__
+#include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/kernel/threadmgr/lw_cond.h>
 #include <psp2/kernel/threadmgr/lw_mutex.h>
@@ -174,6 +175,7 @@ global_variable int s_gpuBackendBusy;
 global_variable int s_gpuBackendWorkReady;
 global_variable int s_gpuBackendInitComplete;
 global_variable volatile int s_gpuBackendExit;
+global_variable int s_gpuProcessExitRequested;
 global_variable int s_gpuBackendEnabled;
 global_variable int s_gpuBackendInitWidth;
 global_variable int s_gpuBackendInitHeight;
@@ -299,9 +301,20 @@ internal int NativeGpu_BackendThreadMain(SceSize args, void *argp)
 	sceKernelSignalLwCondAll(&s_gpuBackendCond);
 	for (;;)
 	{
-		while (!s_gpuBackendWorkReady && !s_gpuBackendExit)
+		while (!s_gpuBackendWorkReady && !s_gpuBackendExit && !s_gpuProcessExitRequested)
 		{
 			sceKernelWaitLwCond(&s_gpuBackendCond, NULL);
+		}
+		if (s_gpuProcessExitRequested)
+		{
+			// Only exit at a scene boundary, never while another thread is inside SceGxm.
+			s_gpuBackendBusy = 1;
+			NativeGpu_BackendUnlock();
+			if (s_gpuSynchronousFrame)
+				Platform_EndScene();
+			sceKernelExitProcess(0);
+			for (;;)
+				sceKernelDelayThread(1000000);
 		}
 		if (s_gpuBackendExit)
 		{
@@ -361,6 +374,7 @@ int NativeGpu_InitBackend(int width, int height)
 	s_gpuBackendWorkReady = 0;
 	s_gpuBackendInitComplete = 0;
 	s_gpuBackendExit = 0;
+	s_gpuProcessExitRequested = 0;
 	s_gpuBackendInitWidth = width;
 	s_gpuBackendInitHeight = height;
 	s_gpuBackendInitSucceeded = 0;
@@ -426,6 +440,26 @@ void NativeGpu_SyncBackend(void)
 	NativeGpu_BackendUnlock();
 #endif
 }
+
+#ifdef __vita__
+void NativeGpu_ExitProcess(void)
+{
+	if (!s_gpuBackendEnabled)
+	{
+		sceKernelExitProcess(0);
+	}
+	else
+	{
+		NativeGpu_BackendLock();
+		s_gpuProcessExitRequested = 1;
+		sceKernelSignalLwCondAll(&s_gpuBackendCond);
+		NativeGpu_BackendUnlock();
+	}
+	// Stop the producer immediately; the renderer owns the process exit.
+	for (;;)
+		sceKernelDelayThread(1000000);
+}
+#endif
 
 void NativeGpu_RunBackendTaskSync(NativeGpuBackendTaskFn task, void *arg)
 {
