@@ -398,14 +398,13 @@ struct NativeAdhocShutdownContext
 
 static struct NativeAdhocShutdownContext s_nativeAdhocShutdown;
 
-static void *NativeAdhoc_NetCtlCallback(int eventType, void *arg)
+static void NativeAdhoc_NetCtlCallback(int eventType, void *arg)
 {
 	(void)arg;
 	if ((eventType == NATIVE_ADHOC_NETCTL_EVENT_DISCONNECT_REQ_FINISHED) && s_nativeAdhocShutdown.active)
 	{
 		s_nativeAdhocShutdown.disconnectReqFinished = 1;
 	}
-	return NULL;
 }
 
 static void NativeAdhoc_InitHeader(struct NativeAdhocPacketHeader *header, int type);
