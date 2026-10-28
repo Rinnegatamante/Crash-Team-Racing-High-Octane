@@ -4,7 +4,7 @@ GIT_VERSION := $(shell git describe --abbrev=6 --dirty --always --tags)
 SHADERS     := shaders
 
 LIBS = -lSDL3 -lvitaGL -lvitashark -lSceShaccCgExt -ltaihen_stub -lvorbisfile -lvorbis -logg \
-	-lspeexdsp -lmpg123 -lScePspnetAdhoc_stub -lSceShaccCg_stub -lSceKernelDmacMgr_stub -lpthread \
+	-lspeexdsp -lmpg123 -lScePspnetAdhoc_stub -lSceShaccCg_stub -lSceKernelDmacMgr_stub \
 	-lc -lSceCommonDialog_stub -lSceAudio_stub -lSceLibKernel_stub -lmathneon -lkubridge_stub \
 	-lSceNet_stub -lSceNetCtl_stub -lpng -lSceDisplay_stub -lSceGxm_stub -lSceAudioIn_stub \
 	-Wl,--whole-archive -lSceSysmodule_stub -Wl,--no-whole-archive -lSceIme_stub -lSceCamera_stub \
@@ -17,6 +17,9 @@ CFILES	:= $(COMMON_OBJS)
 OBJS     := $(CFILES:.c=.o) $(CPPFILES:.cpp=.o)
 
 PREFIX  = arm-vita-eabi
+PKG_CONFIG ?= $(PREFIX)-pkg-config
+SDK_LIBS = $(shell $(PKG_CONFIG) --static --libs sdl3 libcurl)
+LDFLAGS += -pthread
 CC      = $(PREFIX)-gcc
 CXX      = $(PREFIX)-g++
 CFLAGS  = -fsigned-char -fshort-enums -Wl,-q -O3 -g -fno-optimize-sibling-calls \
@@ -40,7 +43,7 @@ $(TARGET).vpk: $(TARGET).velf
 	vita-elf-create $< $@
 
 $(TARGET).elf: $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ $(LIBS) -o $@
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^  $(LIBS) $(SDK_LIBS)  -o $@
 
 clean:
 	@rm -rf $(TARGET).velf $(TARGET).elf $(OBJS) $(TARGET).elf.unstripped.elf $(TARGET).vpk eboot.bin param.sfo
