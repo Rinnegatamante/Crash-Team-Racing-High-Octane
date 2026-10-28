@@ -188,6 +188,30 @@
       return path.split('/').every(part => part && part !== '.' && part !== '..');
     }
 
+    function goFullscreen() {
+      if (canvas.requestFullscreen) {
+        canvas.requestFullscreen();
+      } else if (canvas.webkitRequestFullscreen) {
+        canvas.webkitRequestFullscreen();
+      } else if (canvas.mozRequestFullScreen) {
+        canvas.mozRequestFullScreen();
+      } else if (canvas.msRequestFullscreen) {
+        canvas.msRequestFullscreen();
+      }
+    }
+
+    function leaveFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+    }
+
     exportSaveButton.addEventListener('click', async () => {
       if (!persistenceReady) return;
       try {
@@ -246,7 +270,7 @@
     });
 
     var Module = {
-      canvas,
+      canvas: canvas,
       print: console.log,
       printErr: console.error,
       ctrSyncPersistentStorage: requestPersistentStorageSync,
@@ -268,7 +292,12 @@
     };
 
     playButton.addEventListener('click', async () => {
-      if (!runtimeReady || gameStarted || !discInput.files.length) return;
+      if (!runtimeReady || !discInput.files.length) return;
+
+      if (gameStarted) {
+        goFullscreen();
+        return;
+      }
 
       gameStarted = true;
       updatePlayState();
@@ -287,12 +316,28 @@
 
         statusText.textContent = 'Starting game...';
         canvas.focus();
+        goFullscreen();
         Module.callMain([]);
+        Module.requestFullscreen(false, false);
       } catch (error) {
         gameStarted = false;
         updatePlayState();
         statusText.textContent = `Failed to start: ${error}`;
         console.error(error);
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "F11") {
+        if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+          event.stopImmediatePropagation();
+          event.preventDefault(); 
+          leaveFullscreen();
+        } else if (gameStarted && (canvas.requestFullscreen || canvas.webkitRequestFullscreen || canvas.mozRequestFullScreen || canvas.msRequestFullscreen)) {
+          event.stopImmediatePropagation();
+          event.preventDefault(); 
+          goFullscreen();
+        }
       }
     });
   </script>
