@@ -171,9 +171,11 @@ static struct MenuRow s_nativeMainMenuBasic[] =
 	{NATIVE_MENU_STRING_ADHOC, 5, 7, 6, 6},
 	{LNG_OPTIONS, 6, 8, 7, 7},
 	{NATIVE_MENU_STRING_EXIT_GAME, 7, 8, 8, 8},
-#else
+#elif !defined(__EMSCRIPTEN__)
 	{LNG_OPTIONS, 5, 7, 6, 6},
 	{NATIVE_MENU_STRING_EXIT_GAME, 6, 7, 7, 7},
+#else
+	{LNG_OPTIONS, 5, 6, 6, 6},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -191,10 +193,13 @@ static struct MenuRow s_nativeMainMenuWithScrapbook[] =
 	{LNG_OPTIONS, 6, 8, 7, 7},
 	{LNG_SCRAPBOOK, 7, 9, 8, 8},
 	{NATIVE_MENU_STRING_EXIT_GAME, 8, 9, 9, 9},
-#else
+#elif !defined(__EMSCRIPTEN__)
 	{LNG_OPTIONS, 5, 7, 6, 6},
 	{LNG_SCRAPBOOK, 6, 8, 7, 7},
 	{NATIVE_MENU_STRING_EXIT_GAME, 7, 8, 8, 8},
+#else
+	{LNG_OPTIONS, 5, 7, 6, 6},
+	{LNG_SCRAPBOOK, 6, 7, 7, 7},
 #endif
 	{RECTMENU_STRING_NONE},
 };
@@ -257,13 +262,12 @@ static struct MenuRow s_nativeOptionsRows[] =
 	{NATIVE_MENU_STRING_AI_RACERS, 14, 16, 15, 15},
 	{NATIVE_MENU_STRING_MIRROR_MODE, 15, 0, 16, 16},
 #else
-	{NATIVE_MENU_STRING_DITHERING, 8, 10, 9, 9},
-	{NATIVE_MENU_STRING_BORDERLESS, 9, 11, 10, 10},
+	{NATIVE_MENU_STRING_PGXP, 8, 10, 9, 9},
+	{NATIVE_MENU_STRING_DITHERING, 9, 11, 10, 10},
 	{NATIVE_MENU_STRING_DEFAULT_CAMERA, 10, 12, 11, 11},
 	{NATIVE_MENU_STRING_DEFAULT_HUD, 11, 13, 12, 12},
 	{NATIVE_MENU_STRING_AI_RACERS, 12, 14, 13, 13},
-	{NATIVE_MENU_STRING_MIRROR_MODE, 13, 15, 14, 14},
-	{NATIVE_MENU_STRING_PGXP, 14, 0, 15, 15},
+	{NATIVE_MENU_STRING_MIRROR_MODE, 13, 0, 14, 14},
 #endif
 #endif
 	{RECTMENU_STRING_NONE},
@@ -1073,11 +1077,13 @@ static void MM_NativeOptionsMenuProc(struct RectMenu *menu)
 		return;
 	}
 
+#if !defined(__EMSCRIPTEN__)
 	if (choose == NATIVE_MENU_STRING_BORDERLESS)
 	{
 		Platform_SetBorderless(!gNativeBorderlessEnabled);
 		save_config();
 	}
+#endif
 #endif
 }
 
@@ -1631,7 +1637,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		return;
 	}
 
-#ifndef __vita__
+#if !defined(__vita__) && !defined(__EMSCRIPTEN__)
 	if (choose == NATIVE_MENU_STRING_EXIT_GAME)
 	{
 		sdata->mainGameState = 5;

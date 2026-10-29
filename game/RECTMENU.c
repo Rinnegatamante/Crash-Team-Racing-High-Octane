@@ -111,11 +111,13 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		{"DITHER: NO", "DITHER: SI"},
 		{"DITHER: UIT", "DITHER: AAN"},
 	};
+#if !defined(__EMSCRIPTEN__)
 	static const char *displayMode[2] =
 	{
 		"DISPLAY: WINDOWED",
 		"DISPLAY: BORDERLESS",
 	};
+#endif
 #endif
 	static const char *superHard[6] =
 	{
@@ -162,6 +164,7 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"CAMBIAR JEFE",
 		"BAAS WIJZIGEN",
 	};
+#if CTR_NATIVE_HAS_ADHOC
 	static const char *adhoc[6] =
 	{
 		"ADHOC",
@@ -171,6 +174,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"ADHOC",
 		"ADHOC",
 	};
+#endif
+#if !defined(__EMSCRIPTEN__)
 	static const char *exitGame[6] =
 	{
 		"EXIT GAME",
@@ -180,6 +185,8 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"SALIR DEL JUEGO",
 		"SPEL AFSLUITEN",
 	};
+#endif
+#if CTR_NATIVE_HAS_LEADERBOARD
 	static const char *onlineLeaderboard[6] =
 	{
 		"ONLINE LEADERBOARD",
@@ -189,6 +196,7 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		"RANKING ONLINE",
 		"ONLINE RANGLIJST",
 	};
+#endif
 	static const char *watchGhost[6] =
 	{
 		"WATCH GHOST",
@@ -413,8 +421,10 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)antiAliasing[gNativeAntiAliasingEnabled != 0];
 	case NATIVE_MENU_STRING_DITHERING:
 		return (char *)dithering[languageRow][gNativeDitheringEnabled != 0];
+#if !defined(__EMSCRIPTEN__)
 	case NATIVE_MENU_STRING_BORDERLESS:
 		return (char *)displayMode[gNativeBorderlessEnabled != 0];
+#endif
 #endif
 	case NATIVE_MENU_STRING_SUPER_HARD:
 		return (char *)superHard[languageRow];
@@ -426,12 +436,18 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		return (char *)oxideFinal[languageRow];
 	case NATIVE_MENU_STRING_CHANGE_BOSS:
 		return (char *)changeBoss[languageRow];
+#if CTR_NATIVE_HAS_ADHOC
 	case NATIVE_MENU_STRING_ADHOC:
 		return (char *)adhoc[languageRow];
+#endif
+#if !defined(__EMSCRIPTEN__)
 	case NATIVE_MENU_STRING_EXIT_GAME:
 		return (char *)exitGame[languageRow];
+#endif
+#if CTR_NATIVE_HAS_LEADERBOARD
 	case NATIVE_MENU_STRING_ONLINE_LEADERBOARD:
 		return (char *)onlineLeaderboard[languageRow];
+#endif
 	case NATIVE_MENU_STRING_WATCH_GHOST:
 		return (char *)watchGhost[languageRow];
 	case NATIVE_MENU_STRING_CHALLENGE_GHOST:
