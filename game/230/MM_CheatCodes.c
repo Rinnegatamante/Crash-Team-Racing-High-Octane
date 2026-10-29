@@ -2,6 +2,7 @@
 
 #if defined(CTR_NATIVE)
 #include <platform/native_custom_racer.h>
+#include <platform/native_custom_track.h>
 
 extern u32 gNativeCheatConfigMask;
 
@@ -44,6 +45,10 @@ b32 NativeCheat_DisablesRecords(void)
 		return 0;
 
 	if ((sdata->gGT->gameMode2 & CHEAT_ALL) != 0)
+		return 1;
+
+	// Custom tracks would overwrite their host track's records and ghosts.
+	if (NativeCustomTrack_IsActive())
 		return 1;
 
 	return ((sdata->gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0) && NativeCustomRacer_DisablesRecords();

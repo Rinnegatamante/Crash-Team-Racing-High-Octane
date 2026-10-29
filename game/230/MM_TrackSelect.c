@@ -1,6 +1,8 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_track.h>
+
 extern int gNativeGhostReplayMode;
 #endif
 
@@ -128,28 +130,27 @@ s32 MM_NativeLapSelect_GetLapCount(s16 row)
 	return MM_NativeLapSelect_ClampRow(row) + MM_NATIVE_LAP_MIN;
 }
 
-static struct MenuRow s_reverseVariantRows[] =
+enum
 {
-	{NATIVE_MENU_STRING_TRACK_NORMAL, 1, 1, 0, 0},
-	{NATIVE_MENU_STRING_TRACK_REVERSE, 0, 0, 1, 1},
-	{RECTMENU_STRING_NONE},
+	MM_TRACK_VARIANT_NORMAL = 0,
+	MM_TRACK_VARIANT_REVERSE = 1,
+	MM_TRACK_VARIANT_ALTERNATIVE = 2,
+	MM_TRACK_VARIANT_CUSTOM = 3, // + custom track index
+	MM_TRACK_VARIANT_MAX_ROWS = 15,
+	MM_TRACK_VARIANT_MENU_POS_Y = 0x7c,
 };
 
-static struct MenuRow s_tigerTempleVariantRows[] =
-{
-	{NATIVE_MENU_STRING_TRACK_NORMAL, 2, 1, 0, 0},
-	{NATIVE_MENU_STRING_TRACK_REVERSE, 0, 2, 1, 1},
-	{NATIVE_MENU_STRING_TRACK_ALTERNATIVE, 1, 0, 2, 2},
-	{RECTMENU_STRING_NONE},
-};
+// Built by MM_TrackSelect_BuildVariantRows for the chosen track.
+static struct MenuRow s_trackVariantRows[MM_TRACK_VARIANT_MAX_ROWS + 1] = {{RECTMENU_STRING_NONE}};
+static int s_trackVariantKinds[MM_TRACK_VARIANT_MAX_ROWS];
 
 static struct RectMenu s_reverseVariantMenu =
 {
 	.stringIndexTitle = RECTMENU_STRING_NONE,
 	.posX_curr = 0x18c,
-	.posY_curr = 0x7c,
+	.posY_curr = MM_TRACK_VARIANT_MENU_POS_Y,
 	.state = USE_SMALL_FONT | CENTER_ON_X,
-	.rows = s_reverseVariantRows,
+	.rows = s_trackVariantRows,
 };
 
 static b32 s_reverseVariantOpen;
@@ -166,9 +167,87 @@ static b32 MM_TrackSelect_CanChooseReverse(struct GameTracker *gGT, s16 physical
 	       ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0));
 }
 
-static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLevelId, int variant)
+static b32 MM_TrackSelect_CanChooseCustom(struct GameTracker *gGT, int customTrackIndex, s16 physicalLevelId)
 {
-	if (variant == 2)
+	if (NativeCustomTrack_GetLevelID(customTrackIndex) != physicalLevelId)
+	{
+		return false;
+	}
+
+	// Ghost Replay, Boss Fight and Relic Race need the stock track's data.
+	if ((gNativeGhostReplayMode != 0) || (gNativeBossFightMode != 0) || ((gGT->gameMode1 & RELIC_RACE) != 0))
+	{
+		return false;
+	}
+
+	// Arcade bots need the track's AI paths.
+	return ((gGT->gameMode1 & ARCADE_MODE) == 0) || NativeCustomTrack_HasAIPaths(customTrackIndex);
+}
+
+// Normal, then Reverse / Alternative where the mode offers them, then the
+// custom tracks installed over this track. Returns the row count, 0 when
+// Normal is the only choice.
+static int MM_TrackSelect_BuildVariantRows(struct GameTracker *gGT, s16 physicalLevelId)
+{
+	static const s16 variantStrings[MM_TRACK_VARIANT_CUSTOM] =
+	{
+		NATIVE_MENU_STRING_TRACK_NORMAL,
+		NATIVE_MENU_STRING_TRACK_REVERSE,
+		NATIVE_MENU_STRING_TRACK_ALTERNATIVE,
+	};
+	int count = 0;
+
+	s_trackVariantKinds[count++] = MM_TRACK_VARIANT_NORMAL;
+	if (MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
+	{
+		s_trackVariantKinds[count++] = MM_TRACK_VARIANT_REVERSE;
+		if (physicalLevelId == TIGER_TEMPLE)
+		{
+			s_trackVariantKinds[count++] = MM_TRACK_VARIANT_ALTERNATIVE;
+		}
+	}
+	if (NativeCustomTrack_IsEnabled())
+	{
+		for (int i = 0; (i < NativeCustomTrack_GetCount()) && (count < MM_TRACK_VARIANT_MAX_ROWS); i++)
+		{
+			if (MM_TrackSelect_CanChooseCustom(gGT, i, physicalLevelId))
+			{
+				s_trackVariantKinds[count++] = MM_TRACK_VARIANT_CUSTOM + i;
+			}
+		}
+	}
+
+	if (count == 1)
+	{
+		return 0;
+	}
+
+	for (int i = 0; i < count; i++)
+	{
+		int kind = s_trackVariantKinds[i];
+		s_trackVariantRows[i].stringIndex = (kind >= MM_TRACK_VARIANT_CUSTOM)
+			? (s16)(NATIVE_MENU_STRING_CUSTOM_TRACK_0 + kind - MM_TRACK_VARIANT_CUSTOM)
+			: variantStrings[kind];
+		s_trackVariantRows[i].rowOnPressUp = (char)((i == 0) ? count - 1 : i - 1);
+		s_trackVariantRows[i].rowOnPressDown = (char)((i == count - 1) ? 0 : i + 1);
+		s_trackVariantRows[i].rowOnPressLeft = (char)i;
+		s_trackVariantRows[i].rowOnPressRight = (char)i;
+	}
+	s_trackVariantRows[count].stringIndex = RECTMENU_STRING_NONE;
+	return count;
+}
+
+static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLevelId, int row)
+{
+	int variant = s_trackVariantKinds[row];
+
+	NativeCustomTrack_Select(-1);
+	if (variant >= MM_TRACK_VARIANT_CUSTOM)
+	{
+		NativeReverseTrack_SelectPhysical(physicalLevelId, false);
+		NativeCustomTrack_Select(variant - MM_TRACK_VARIANT_CUSTOM);
+	}
+	else if (variant == MM_TRACK_VARIANT_ALTERNATIVE)
 	{
 		if (physicalLevelId != TIGER_TEMPLE)
 		{
@@ -178,7 +257,7 @@ static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLev
 	}
 	else
 	{
-		NativeReverseTrack_SelectPhysical(physicalLevelId, variant == 1);
+		NativeReverseTrack_SelectPhysical(physicalLevelId, variant == MM_TRACK_VARIANT_REVERSE);
 	}
 	s16 logicalTrackId = NativeReverseTrack_GetTrackIdForPhysical(physicalLevelId);
 	gGT->currLEV = logicalTrackId;
@@ -524,6 +603,7 @@ void MM_TrackSelect_Init(void)
 	s_reverseVariantOpen = false;
 	s_reverseVariantMenu.rowSelected = 0;
 	NativeReverseTrack_ClearSelection();
+	NativeCustomTrack_Select(-1);
 #endif
 
 	// set track index to the index selected in track selection menu, starts at 0 for both Arcade and Battle
@@ -712,8 +792,17 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				{
 					OtherFX_Play(1, 1);
 					s_reverseVariantOpen = false;
-					D230.trackSelect.transition.startAfterExit = D230.trackSelect.transition.state;
-					D230.trackSelect.transition.state = EXITING_MENU;
+
+					// custom tracks are offered in Arcade and VS too: those pick laps first
+					if (((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL | RELIC_RACE)) == 0) && (gNativeBossFightMode == 0))
+					{
+						D230.trackSelect.lapBoxOpen = D230.trackSelect.transition.state;
+					}
+					else
+					{
+						D230.trackSelect.transition.startAfterExit = D230.trackSelect.transition.state;
+						D230.trackSelect.transition.state = EXITING_MENU;
+					}
 				}
 			}
 			else if (variantResult == -1)
@@ -721,6 +810,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				OtherFX_Play(2, 1);
 				s_reverseVariantOpen = false;
 				NativeReverseTrack_ClearSelection();
+				NativeCustomTrack_Select(-1);
 			}
 			RECTMENU_ClearInput();
 		}
@@ -794,15 +884,19 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 #if defined(CTR_NATIVE)
 			{
 				s16 physicalLevelId = selectMenu[D230.trackSelect.currentTrack].levID;
-				if (MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
+				int variantRows = MM_TrackSelect_BuildVariantRows(gGT, physicalLevelId);
+				if (variantRows != 0)
 				{
 					OtherFX_Play(1, 1);
-					s_reverseVariantMenu.rows = (physicalLevelId == TIGER_TEMPLE) ? s_tigerTempleVariantRows : s_reverseVariantRows;
 					s_reverseVariantMenu.rowSelected = 0;
+					// (grows upward to stay on screen with many custom tracks)
+					s_reverseVariantMenu.posY_curr = (s16)(MM_TRACK_VARIANT_MENU_POS_Y -
+						((variantRows > 3) ? (variantRows - 3) * data.font_charPixHeight[FONT_SMALL] / 2 : 0));
 					s_reverseVariantOpen = true;
 					break;
 				}
 				NativeReverseTrack_SelectPhysical(physicalLevelId, false);
+				NativeCustomTrack_Select(-1);
 			}
 #endif
 
@@ -843,6 +937,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				D230.trackSelect.transition.state = EXITING_MENU;
 #if defined(CTR_NATIVE)
 				NativeReverseTrack_ClearSelection();
+				NativeCustomTrack_Select(-1);
 #endif
 				break;
 			default:

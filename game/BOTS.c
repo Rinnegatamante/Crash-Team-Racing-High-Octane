@@ -1758,8 +1758,20 @@ UpdateTireColorTimer:
 	int iVar15 = CTR_MipsSra(deltaPosThisFrame, 8);
 	int iVar3;
 
+#if defined(CTR_NATIVE)
+	// Custom tracks' nav paths can have frames 0 apart all the way round: the
+	// loop below would never use up the distance. One lap of the path in one
+	// tick at most.
+	int navSteps = 0;
+#endif
 	for (iVar3 = navDist; iVar3 <= iVar15; /* decrement inside loop */)
 	{
+#if defined(CTR_NATIVE)
+		if (++navSteps > sdata->NavPath_ptrHeader[botDriver->botData.botPath]->numPoints + 1)
+		{
+			break;
+		}
+#endif
 		navFrameCurr = navFrameNext;
 
 		deltaPosThisFrame = CTR_MipsSubLo(deltaPosThisFrame, CTR_MipsSll(iVar3, 8));

@@ -141,7 +141,12 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 
 		if (levelID < GEM_STONE_VALLEY)
 		{
+#if defined(CTR_NATIVE)
+			// 8x polygon budget: custom tracks overflow the stock one
+			return data.primMem_SizePerLEV_1P[levelID] << 13;
+#else
 			return data.primMem_SizePerLEV_1P[levelID] << 10;
+#endif
 		}
 
 		return 0x17c00;
@@ -149,7 +154,12 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 	case 2:
 		if (levelID < GEM_STONE_VALLEY)
 		{
+#if defined(CTR_NATIVE)
+			// 4x polygon budget: custom tracks overflow the stock one
+			return data.primMem_SizePerLEV_2P[levelID] << 12;
+#else
 			return data.primMem_SizePerLEV_2P[levelID] << 10;
+#endif
 		}
 
 		return 0x1e000;
@@ -158,7 +168,12 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 	case 4:
 		if (levelID < GEM_STONE_VALLEY)
 		{
+#if defined(CTR_NATIVE)
+			// 4x polygon budget: custom tracks overflow the stock one
+			return data.primMem_SizePerLEV_4P[levelID] << 12;
+#else
 			return data.primMem_SizePerLEV_4P[levelID] << 10;
+#endif
 		}
 
 		return 0x25800;

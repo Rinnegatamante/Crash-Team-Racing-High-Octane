@@ -3,6 +3,9 @@
 #if defined(__vita__)
 #include "platform/native_adhoc.h"
 #endif
+#if defined(CTR_NATIVE)
+#include "platform/native_custom_track.h"
+#endif
 
 #if defined(CTR_NATIVE)
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook, MM_NativeBossFight_JumpToBossSelect};
@@ -494,6 +497,18 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		// NOTE(aalhendi): Retail sets the load gate before queueing level files.
 		sdata->load_inProgress = 1;
+
+#if defined(CTR_NATIVE)
+		// A custom track picked in the track list replaces its host level's files
+		// (one VRM/LEV pair serves every LOD).
+		struct BigHeader *customTrackBigfile = NativeCustomTrack_GetLevelBigHeader(gGT->levelID);
+		if (customTrackBigfile != NULL)
+		{
+			LOAD_AppendQueue(customTrackBigfile, LT_VRAM, NATIVE_CUSTOM_TRACK_ASSET_VRM, NULL, NULL);
+			LOAD_AppendQueue(customTrackBigfile, LT_GETADDR, NATIVE_CUSTOM_TRACK_ASSET_LEV, NULL, LOAD_Callback_LEV);
+			break;
+		}
+#endif
 
 		// add VRAM to loading queue
 		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);

@@ -1,5 +1,6 @@
 #include <common.h>
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_track.h>
 #include <platform/native_pgxp.h>
 #include <platform/native_postfx.h>
 #include <platform/native_postfx_params.h>
@@ -348,6 +349,12 @@ static char *RECTMENU_GetString(s16 stringIndex)
 		snprintf(postFxParamText, sizeof(postFxParamText), "%s: %d.%02d",
 		         postFxParameterLabels[languageRow][index], cent / 100, cent % 100);
 		return postFxParamText;
+	}
+
+	if ((nativeStringIndex >= NATIVE_MENU_STRING_CUSTOM_TRACK_0) &&
+	    (nativeStringIndex <= NATIVE_MENU_STRING_CUSTOM_TRACK_LAST))
+	{
+		return (char *)NativeCustomTrack_GetName(nativeStringIndex - NATIVE_MENU_STRING_CUSTOM_TRACK_0);
 	}
 
 	switch (nativeStringIndex)

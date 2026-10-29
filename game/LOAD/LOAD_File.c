@@ -16,6 +16,7 @@ void LOAD_StringToUpper(char *path)
 
 #ifdef CTR_NATIVE
 #include <platform/native_cd.h>
+#include <platform/native_custom_track.h>
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x8007c118-0x8007c208.
@@ -396,6 +397,28 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 	// queued. Its completion callback is dispatched later on the main thread.
 	lqs->ptrDestination = ptrDst;
 	lqs->size_UNUSED = eSize;
+
+	// Custom track packages are read from their own file, then complete like
+	// a CD read would.
+	if (NativeCustomTrack_IsBigHeader(bigfile))
+	{
+		if (!NativeCustomTrack_ReadAsset(bigfile, subfileIndex, ptrDst))
+		{
+			fprintf(stderr, "[CTR Native] Failed to read custom track asset %d\n", subfileIndex);
+		}
+
+		if (callback != NULL)
+		{
+			sdata->callbackCdReadSuccess = callback;
+			LOAD_ReadFileASyncCallback(CdlComplete, NULL);
+		}
+		else if (originalDst == NULL)
+		{
+			MEMPACK_ReallocMem(*sizePtr);
+		}
+
+		return ptrDst;
+	}
 #endif
 
 	while (1)
