@@ -4008,6 +4008,16 @@ void NativeRenderer_SwapWindow(void)
 		SDL_GL_SwapWindow(g_window);
 	}
 #else
+	if (NativeCustomTrack_Capture_WantsFrame())
+	{
+		u8 *pixels = (u8 *)malloc((size_t)s_presentViewport.w * s_presentViewport.h * 4);
+		if (pixels != NULL)
+		{
+			glReadPixels(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+			NativeCustomTrack_Capture_OnFrame(pixels, s_presentViewport.w, s_presentViewport.h);
+			free(pixels);
+		}
+	}
 	SDL_GL_SwapWindow(g_window);
 #endif
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);

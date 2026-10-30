@@ -747,7 +747,11 @@ void StateZero()
 	GAMEPROG_NewGame_OnBoot();
 	gGT->overlayIndex_null_notUsed = 0;
 
+#if defined(CTR_NATIVE)
+	gGT->levelID = NativeCustomTrack_Capture_BootLevel(NAUGHTY_DOG_CRATE); // --capture-track-previews
+#else
 	gGT->levelID = NAUGHTY_DOG_CRATE;
+#endif
 	// gGT->levelID = OXIDE_TRUE_ENDING;
 
 	InitGeom();

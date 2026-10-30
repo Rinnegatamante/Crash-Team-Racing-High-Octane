@@ -5506,6 +5506,13 @@ void RenderBucket_Execute(void *param_1, struct PrimMem *param_2)
 		{
 			continue;
 		}
+#if defined(CTR_NATIVE)
+		// custom track pictures: no HUD models (traffic lights, position number, ...)
+		if (NativeCustomTrack_Capture_Active() && (ctx.pb != &sdata->gGT->pushBuffer[0]))
+		{
+			continue;
+		}
+#endif
 
 #if defined(CTR_NATIVE)
 		int nativeMirrorState = gNativeMirrorModeRenderActive;
