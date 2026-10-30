@@ -352,6 +352,8 @@ void GhostReplay_Init1(void)
 	b32 humanGhostOnly = relicRaceGameplay;
 #if defined(CTR_NATIVE)
 	humanGhostOnly |= NativeReverseTrack_IsCustomVariantActive();
+	// (custom tracks have no N. Tropy / Oxide tapes)
+	humanGhostOnly |= NativeCustomTrack_IsActive();
 #endif
 	s32 ghostCount = humanGhostOnly ? 1 : 2;
 	if (humanGhostOnly)
