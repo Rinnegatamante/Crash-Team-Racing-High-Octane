@@ -507,7 +507,10 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 1);
 
-#ifdef __EMSCRIPTEN__
+	// Opaque window: with an alpha channel, compositors (Wayland, browsers) blend
+	// the game over what is behind it by the PS1 mask bit (blown-out menus,
+	// smeared backgrounds).
+#if !defined(__vita__)
 	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 #endif
 
