@@ -201,6 +201,14 @@ void UI_RenderFrame_Racing()
 		void **pointers = ST1_GETPOINTERS(gGT->level1->ptrSpawnType1);
 		levPtrMap = pointers[ST1_MAP];
 	}
+#if defined(CTR_NATIVE)
+	// A custom track's own minimap (drawn where the stock one goes, below)
+	struct UIMap *customTrackMap = NativeCustomTrack_GetRaceMap((numPlyr == 3) ? 500 - 60 : 500, (numPlyr == 3) ? 195 + 10 : 195);
+	if (customTrackMap != NULL)
+	{
+		levPtrMap = customTrackMap;
+	}
+#endif
 
 	// If you are not in Relic Race, and not in battle mode,
 	// and not in time trial
@@ -927,6 +935,14 @@ void UI_RenderFrame_Racing()
 			}
 
 			// Draw the map
+#if defined(CTR_NATIVE)
+			if (customTrackMap != NULL)
+			{
+				NativeCustomTrack_DrawMap(NativeCustomTrack_GetSelection(), mapPosX, mapPosY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, 1,
+				                          customTrackMap);
+			}
+			else
+#endif
 			UI_Map_DrawMap(
 			    // top half and bottom half
 			    gGT->ptrIcons[3], gGT->ptrIcons[4],
