@@ -662,14 +662,20 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 		// The wider corner rays need a longer conservative endpoint so the
 		// frustum AABB does not reject geometry visible at the side edges.
 #if CTR_NATIVE_WIDESCREEN
-		posX = tx * 0x200 + cameraPosX;
-		posY = ty * 0x200 + cameraPosY;
-		posZ = tz * 0x200 + cameraPosZ;
+		int farScale = 0x200;
 #else
-		posX = tx * 0x100 + cameraPosX;
-		posY = ty * 0x100 + cameraPosY;
-		posZ = tz * 0x100 + cameraPosZ;
+		int farScale = 0x100;
 #endif
+#if defined(CTR_NATIVE)
+		// custom tracks: the whole track (the frustum reaches the world's edge)
+		if (NativeCustomTrack_IsActive())
+		{
+			farScale *= 16;
+		}
+#endif
+		posX = tx * farScale + cameraPosX;
+		posY = ty * farScale + cameraPosY;
+		posZ = tz * farScale + cameraPosZ;
 
 		iVar19 = 0x1000;
 

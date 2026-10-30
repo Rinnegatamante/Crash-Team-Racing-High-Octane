@@ -134,6 +134,13 @@ static int RenderLists_Select1P2PSlot(const struct BSP *bsp, struct PushBuffer *
 		return RENDER_LIST_SLOT_DYNAMIC_SUBDIV;
 	}
 
+#if defined(CTR_NATIVE)
+	// Custom tracks: near detail three times as far (their far lists often draw nothing)
+	if (NativeCustomTrack_IsActive())
+	{
+		lodDistanceThreshold *= 3;
+	}
+#endif
 	if (RenderLists_ProjectDistance(pb, &bsp->box) > lodDistanceThreshold)
 	{
 		return RENDER_LIST_SLOT_FULL_DYNAMIC;

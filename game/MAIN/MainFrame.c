@@ -719,6 +719,173 @@ static void MainFrame_VisMemAddDriverPVS(struct GameTracker *gGT, int playerInde
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800357b8-0x80035d30.
+#if defined(CTR_NATIVE)
+// Custom tracks: the PS1 draws only what each quadblock's precomputed lists say
+// can be seen from where the camera is, and custom tracks' lists are often
+// rough, so the track ahead isn't drawn until the kart is near. On them the
+// lists become, every frame, the union of every quadblock's lists: everything
+// that is visible from somewhere (invisible walls and triggers stay hidden).
+static struct
+{
+	const struct Level *level;
+	const struct mesh_info *mesh;
+	int numQuads;
+	int numNodes;
+	int numInst;
+	int *leaf;                  // unions, packed bit lists
+	int *face;
+	u32 *instMask;              // level instances (index in ptrInstDefPtrArray) in any list
+	struct Instance **instList; // this frame's: NULL terminated
+} s_nativeCustomTrackVis;
+
+static void MainFrame_CustomTrackVisBuild(struct Level *level)
+{
+	struct mesh_info *mesh = level->ptr_mesh_info;
+	int leafBytes = ((mesh->numBspNodes + 0x1f) >> 5) << 2;
+	int faceBytes = ((mesh->numQuadBlock + 0x1f) >> 5) << 2;
+	free(s_nativeCustomTrackVis.leaf);
+	free(s_nativeCustomTrackVis.face);
+	free(s_nativeCustomTrackVis.instMask);
+	free(s_nativeCustomTrackVis.instList);
+	s_nativeCustomTrackVis.leaf = calloc(1, leafBytes + 4);
+	s_nativeCustomTrackVis.face = calloc(1, faceBytes + 4);
+	s_nativeCustomTrackVis.level = level;
+	s_nativeCustomTrackVis.mesh = mesh;
+	s_nativeCustomTrackVis.numQuads = mesh->numQuadBlock;
+	s_nativeCustomTrackVis.numNodes = mesh->numBspNodes;
+
+	// the level's instances, and a map from either record of each (instance or
+	// its InstDef: the lists hold either) to its index
+	int numInst = 0;
+	void **all = (void **)level->ptrInstDefPtrArray;
+	while ((all != NULL) && (all[numInst] != NULL))
+	{
+		numInst++;
+	}
+	s_nativeCustomTrackVis.numInst = numInst;
+	s_nativeCustomTrackVis.instMask = calloc((numInst >> 5) + 1, sizeof(u32));
+	s_nativeCustomTrackVis.instList = calloc(numInst + 1, sizeof(struct Instance *));
+	int mapSize = 64;
+	while (mapSize < numInst * 4)
+	{
+		mapSize <<= 1;
+	}
+	const void **mapKey = calloc(mapSize, sizeof(void *));
+	int *mapVal = calloc(mapSize, sizeof(int));
+	for (int k = 0; k < numInst; k++)
+	{
+		const struct Instance *inst = (const struct Instance *)all[k];
+		const void *keys[2] = {inst, inst->instDef};
+		for (int j = 0; j < 2; j++)
+		{
+			u32 h = ((u32)(uintptr_t)keys[j] * 0x9E3779B1u) & (mapSize - 1);
+			while ((mapKey[h] != NULL) && (mapKey[h] != keys[j]))
+			{
+				h = (h + 1) & (mapSize - 1);
+			}
+			mapKey[h] = keys[j];
+			mapVal[h] = k;
+		}
+	}
+
+	b32 anyInstList = false;
+	for (int q = 0; q < mesh->numQuadBlock; q++)
+	{
+		struct PVS *pvs = mesh->ptrQuadBlockArray[q].pvs;
+		if (pvs == NULL)
+		{
+			continue;
+		}
+		if (pvs->visLeafSrc != NULL)
+		{
+			MainFrame_OrPackedVisList(s_nativeCustomTrackVis.leaf, pvs->visLeafSrc, leafBytes);
+		}
+		if (pvs->visFaceSrc != NULL)
+		{
+			MainFrame_OrPackedVisList(s_nativeCustomTrackVis.face, pvs->visFaceSrc, faceBytes);
+		}
+		for (void **e = (void **)pvs->visInstSrc; (e != NULL) && (*e != NULL); e++)
+		{
+			anyInstList = true;
+			u32 h = ((u32)(uintptr_t)*e * 0x9E3779B1u) & (mapSize - 1);
+			while ((mapKey[h] != NULL) && (mapKey[h] != *e))
+			{
+				h = (h + 1) & (mapSize - 1);
+			}
+			if (mapKey[h] == *e)
+			{
+				s_nativeCustomTrackVis.instMask[mapVal[h] >> 5] |= 1u << (mapVal[h] & 31);
+			}
+		}
+	}
+	if (!anyInstList)
+	{
+		// (no lists: the PS1 shows the level's instances only through the camera's, none)
+		memset(s_nativeCustomTrackVis.instMask, 0, ((numInst >> 5) + 1) * sizeof(u32));
+	}
+	free(mapKey);
+	free(mapVal);
+}
+
+void MainFrame_CustomTrackVisibility(struct GameTracker *gGT)
+{
+	struct Level *level = gGT->level1;
+	struct VisMem *visMem = gGT->visMem1;
+	if (!NativeCustomTrack_IsActive() || (level == NULL) || (visMem == NULL) || (level->ptr_mesh_info == NULL) || (gGT->numPlyrCurrGame == 0))
+	{
+		return;
+	}
+	struct mesh_info *mesh = level->ptr_mesh_info;
+	if ((s_nativeCustomTrackVis.level != level) || (s_nativeCustomTrackVis.mesh != mesh) || (s_nativeCustomTrackVis.numQuads != mesh->numQuadBlock) ||
+	    (s_nativeCustomTrackVis.numNodes != mesh->numBspNodes))
+	{
+		MainFrame_CustomTrackVisBuild(level);
+	}
+	int leafBytes = ((mesh->numBspNodes + 0x1f) >> 5) << 2;
+	int faceBytes = ((mesh->numQuadBlock + 0x1f) >> 5) << 2;
+
+	// this frame's level instances in any list (their pointers as they are now)
+	void **all = (void **)level->ptrInstDefPtrArray;
+	int n = 0;
+	for (int k = 0; (all != NULL) && (k < s_nativeCustomTrackVis.numInst) && (all[k] != NULL); k++)
+	{
+		if ((s_nativeCustomTrackVis.instMask[k >> 5] & (1u << (k & 31))) != 0)
+		{
+			s_nativeCustomTrackVis.instList[n++] = (struct Instance *)all[k];
+		}
+	}
+	s_nativeCustomTrackVis.instList[n] = NULL;
+
+	for (int p = 0; p < gGT->numPlyrCurrGame; p++)
+	{
+		if (visMem->visLeafList[p] != NULL)
+		{
+			memcpy(visMem->visLeafList[p], s_nativeCustomTrackVis.leaf, leafBytes);
+		}
+		if (visMem->visFaceList[p] != NULL)
+		{
+			memcpy(visMem->visFaceList[p], s_nativeCustomTrackVis.face, faceBytes);
+		}
+		if (n > 0)
+		{
+			gGT->cameraDC[p].visInstSrc = s_nativeCustomTrackVis.instList;
+		}
+		// water / animated vertices: all move
+		if ((level->configFlags & 4) == 0)
+		{
+			if ((visMem->visOVertList[p] != NULL) && (level->numWaterVertices > 0))
+			{
+				memset(visMem->visOVertList[p], 0xff, ((level->numWaterVertices + 0x1f) >> 5) << 2);
+			}
+		}
+		else if ((visMem->visSCVertList[p] != NULL) && (level->numSCVert > 0))
+		{
+			memset(visMem->visSCVertList[p], 0xff, ((level->numSCVert + 0x1f) >> 5) << 2);
+		}
+	}
+}
+#endif
+
 void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 {
 	struct VisMem *visMem;

@@ -60,6 +60,9 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	{
 		MainFrame_VisMemFullFrame(gGT, gGT->level1);
 	}
+#if defined(CTR_NATIVE)
+	MainFrame_CustomTrackVisibility(gGT); // custom tracks: everything visible from anywhere
+#endif
 
 
 	if ((gGT->renderFlags & RENDER_FLAG_DRAW_LEVEL) != 0)
