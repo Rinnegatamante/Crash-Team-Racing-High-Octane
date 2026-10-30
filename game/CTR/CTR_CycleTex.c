@@ -6,6 +6,15 @@ void CTR_CycleTex_LEV(struct AnimTex *animtex, int timer)
 	int frameCurr;
 	struct AnimTex *curAnimTex = animtex;
 
+#if defined(CTR_NATIVE)
+	// Levels without animated textures (custom tracks) have none here; the PS1
+	// reads its RAM at 0 (zero: the loop ends), natively that faults.
+	if (animtex == NULL)
+	{
+		return;
+	}
+#endif
+
 	// Termination is determined by pointer to First AnimTex
 	while (*(int *)curAnimTex != (int)animtex)
 	{
@@ -37,6 +46,15 @@ void CTR_CycleTex_Model(struct AnimTex *animtex, int timer)
 {
 	int frameCurr;
 	struct AnimTex *curAnimTex = animtex;
+
+#if defined(CTR_NATIVE)
+	// Levels without animated textures (custom tracks) have none here; the PS1
+	// reads its RAM at 0 (zero: the loop ends), natively that faults.
+	if (animtex == NULL)
+	{
+		return;
+	}
+#endif
 
 	// Termination is determined by pointer to First AnimTex
 	while (*(int *)curAnimTex != (int)animtex)

@@ -21,9 +21,11 @@
 #if CTR_NATIVE_MEMPACK_RETAIL_PRESSURE
 // NOTE(aalhendi): Retail pressure mode exposes the NTSC-U 926 mempack window
 // inside a 2 MiB backing store.
-#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x200000u
+// Custom tracks' levels outgrow it: the window grows by 6 MiB in an 8 MiB
+// backing store (the same start, so pointers keep their PSX shape).
+#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x800000u // (retail 0x200000)
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0xba9f0u
-#define CTR_NATIVE_MEMPACK_SIZE         0x144e10u
+#define CTR_NATIVE_MEMPACK_SIZE         0x744e10u // (retail 0x144e10)
 #else
 #define CTR_NATIVE_MEMPACK_BUFFER_SIZE  (8u * 1024u * 1024u)
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0u

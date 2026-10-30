@@ -4,7 +4,7 @@
 #include <platform/native_pgxp.h>
 enum
 {
-	MAINDB_NATIVE_PRIMMEM_CAPACITY = 0x40000,
+	MAINDB_NATIVE_PRIMMEM_CAPACITY = 0x100000, // (0x40000 overflows on large custom tracks)
 };
 
 #if defined(_MSC_VER)
