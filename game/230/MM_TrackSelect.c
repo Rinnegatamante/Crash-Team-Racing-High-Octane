@@ -1,6 +1,8 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_track.h>
+
 extern int gNativeGhostReplayMode;
 #endif
 
@@ -191,6 +193,125 @@ static b32 MM_TrackSelect_ChooseVariant(struct GameTracker *gGT, s16 physicalLev
 
 	return true;
 }
+
+// Custom tracks (mods/customtracks) follow the stock tracks in the list. A
+// custom track's row is a copy of its host track's (unlock state, thumbnail);
+// s_trackRowCustom has the custom track's index, -1 on stock rows.
+enum
+{
+	MM_TRACK_SELECT_MAX_ROWS = MM_TRACK_SELECT_ARCADE_TRACK_COUNT + NATIVE_CUSTOM_TRACK_MAX,
+	MM_TRACK_SELECT_PAGE_ROWS = 9,
+};
+
+static struct MainMenu_LevelRow s_trackRows[MM_TRACK_SELECT_MAX_ROWS];
+static s16 s_trackRowCustom[MM_TRACK_SELECT_MAX_ROWS];
+
+static b32 MM_TrackSelect_CanListCustom(struct GameTracker *gGT, int customTrackIndex)
+{
+	// battle arenas in Battle, race tracks in the other modes
+	if (NativeCustomTrack_IsBattle(customTrackIndex) != ((gGT->gameMode1 & BATTLE_MODE) != 0))
+	{
+		return false;
+	}
+
+	// Ghost Replay, Boss Fight and Relic Race need the stock track's data.
+	if ((gNativeGhostReplayMode != 0) || (gNativeBossFightMode != 0) || ((gGT->gameMode1 & RELIC_RACE) != 0))
+	{
+		return false;
+	}
+
+	// Arcade bots need the track's AI paths.
+	return ((gGT->gameMode1 & ARCADE_MODE) == 0) || NativeCustomTrack_HasAIPaths(customTrackIndex);
+}
+
+// This mode's rows: its stock tracks, then the custom tracks over them.
+static struct MainMenu_LevelRow *MM_TrackSelect_GetRows(struct GameTracker *gGT, s16 *numRows)
+{
+	struct MainMenu_LevelRow *stock = D230.arcadeTracks;
+	int numStock = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
+	int count = 0;
+
+	if ((gGT->gameMode1 & BATTLE_MODE) != 0)
+	{
+		stock = D230.battleTracks;
+		numStock = MM_TRACK_SELECT_BATTLE_TRACK_COUNT;
+	}
+
+	for (int i = 0; i < numStock; i++)
+	{
+		s_trackRows[count] = stock[i];
+		s_trackRowCustom[count++] = -1;
+	}
+
+	for (int i = 0; NativeCustomTrack_IsEnabled() && (i < NativeCustomTrack_GetCount()); i++)
+	{
+		if (!MM_TrackSelect_CanListCustom(gGT, i))
+		{
+			continue;
+		}
+		for (int j = 0; j < numStock; j++)
+		{
+			if (stock[j].levID == NativeCustomTrack_GetLevelID(i))
+			{
+				s_trackRows[count] = stock[j];
+				s_trackRowCustom[count++] = (s16)i;
+				break;
+			}
+		}
+	}
+
+	*numRows = (s16)count;
+	return s_trackRows;
+}
+
+// A row's name in the big font, shrunk to fit the row when it is too long.
+static void MM_TrackSelect_DrawRowName(char *str, int posX, int posY, int flags)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	struct IconGroup *group = gGT->iconGroup[data.font_IconGroupID[FONT_BIG]];
+	int width = DecalFont_GetLineWidth(str, FONT_BIG);
+	int room = MM_TRACK_SELECT_ROW_W - MM_TRACK_SELECT_ROW_NAME_X_OFFSET * 2;
+	if ((width <= room) || (group == NULL))
+	{
+		DecalFont_DrawLine(str, posX, posY, FONT_BIG, flags);
+		return;
+	}
+
+	int scale = (room << 12) / width;
+	u32 *colors = data.ptrColor[flags & 0xfff];
+	struct Icon **icons = ICONGROUP_GETICONS(group);
+	int fontHeight = data.font_charPixHeight[FONT_BIG];
+	posY += (fontHeight - ((fontHeight * scale) >> 12)) / 2; // (vertically centred)
+	int advance = 0; // (12 bit fixed point: no rounding drift along the line)
+	for (u8 *c = (u8 *)str; *c != 0; c++)
+	{
+		int charWidth = ((*c == ':') || (*c == '.')) ? data.font_puncPixWidth[FONT_BIG] : data.font_charPixWidth[FONT_BIG];
+		if ((u32)(*c - 0x21) < 0xdf)
+		{
+			u16 iconID = data.font_characterIconID[*c - 0x21];
+			if (iconID < group->numIcons)
+			{
+#if CTR_NATIVE_WIDESCREEN
+				int x = posX + CTR_WIDESCREEN_SCALE_X(advance >> 12);
+#else
+				int x = posX + (advance >> 12);
+#endif
+				DecalFont_DrawGlyph(icons[iconID], (s16)x, (s16)posY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, colors[0], colors[1],
+				                    colors[2], colors[3], 0, (s16)scale);
+			}
+		}
+		advance += charWidth * scale;
+	}
+}
+
+static char *MM_TrackSelect_GetRowName(struct MainMenu_LevelRow *rows, int row)
+{
+	if (s_trackRowCustom[row] >= 0)
+	{
+		return (char *)NativeCustomTrack_GetName(s_trackRowCustom[row]);
+	}
+	return sdata->lngStrings[data.metaDataLEV[rows[row].levID].name_LNG];
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800afa44-0x800afa94.
@@ -313,8 +434,15 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 
 	selectMenu = &selectMenu[trackIndex];
 	s32 previewVideoFileIndex = selectMenu->previewVideoFileIndex;
+#ifdef CTR_NATIVE
+	int customTrack = s_trackRowCustom[trackIndex];
+#endif
 
 	if ((entry[previewVideoFileIndex].size == 0) ||
+#ifdef CTR_NATIVE
+	    // custom tracks: their picture
+	    (customTrack >= 0) ||
+#endif
 
 	    // Video off-screen
 	    (r->x < 0) || (r->y < 0) || ((r->x + r->w) > MM_TRACK_VIDEO_SCREEN_W) || ((r->y + r->h) > MM_TRACK_VIDEO_SCREEN_H))
@@ -412,6 +540,20 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 	// if not playing video, draw icon
 	if (D230.trackSelect.videoStateCurr != MM_TRACK_VIDEO_PLAYING)
 	{
+#ifdef CTR_NATIVE
+		if (customTrack >= 0)
+		{
+			int pictureWidth;
+			int pictureHeight;
+			u32 picture = NativeCustomTrack_GetPreviewTexture(customTrack, &pictureWidth, &pictureHeight);
+			// (the picture fills the frame: texture coordinates over the frame's size)
+			if (picture != 0)
+			{
+				MM_TrackSelect_Video_DrawNativePreview(r, picture, MM_TRACK_VIDEO_WIDTH, MM_TRACK_VIDEO_HEIGHT);
+			}
+		}
+		else
+#endif
 		// Draw Video icon
 		RECTMENU_DrawPolyGT4(gGT->ptrIcons[selectMenu->videoThumbnail], (r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X), (r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y),
 		                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, D230.videoCol.self, D230.videoCol.self, D230.videoCol.self,
@@ -513,8 +655,13 @@ b32 MM_TrackSelect_boolTrackOpen(struct MainMenu_LevelRow *menuSelect)
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800affd0-0x800b00d4.
 void MM_TrackSelect_Init(void)
 {
+#if defined(CTR_NATIVE)
+	s16 numTracks;
+	struct MainMenu_LevelRow *selectMenu = MM_TrackSelect_GetRows(sdata->gGT, &numTracks);
+#else
 	struct MainMenu_LevelRow *selectMenu = D230.arcadeTracks;
 	s16 numTracks = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
+#endif
 
 	// lap selection menu is closed by default
 	D230.trackSelect.lapBoxOpen = false;
@@ -524,6 +671,7 @@ void MM_TrackSelect_Init(void)
 	s_reverseVariantOpen = false;
 	s_reverseVariantMenu.rowSelected = 0;
 	NativeReverseTrack_ClearSelection();
+	NativeCustomTrack_Select(-1);
 #endif
 
 	// set track index to the index selected in track selection menu, starts at 0 for both Arcade and Battle
@@ -532,12 +680,14 @@ void MM_TrackSelect_Init(void)
 	// 12 frames when moving between selection
 	D230.trackSelect.transition.frame = MM_TRACK_SELECT_TRANSITION_FRAMES;
 
+#if !defined(CTR_NATIVE)
 	// Set menu and num of tracks based on game mode
 	if ((sdata->gGT->gameMode1 & BATTLE_MODE) != 0)
 	{
 		selectMenu = D230.battleTracks;
 		numTracks = MM_TRACK_SELECT_BATTLE_TRACK_COUNT;
 	}
+#endif
 
 	// If you scroll past the max number of tracks, go back to the first track
 	if (numTracks <= sdata->trackSelBackup)
@@ -675,6 +825,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 	}
 	D230.trackSelect.transition.frame = elapsedFrames;
 
+#if defined(CTR_NATIVE)
+	// stock tracks, then custom tracks
+	s16 numTracks;
+	struct MainMenu_LevelRow *selectMenu = MM_TrackSelect_GetRows(gGT, &numTracks);
+#else
 	// default arcade tracks
 	struct MainMenu_LevelRow *selectMenu = &D230.arcadeTracks[0];
 	s16 numTracks = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
@@ -685,6 +840,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		selectMenu = &D230.battleTracks[0];
 		numTracks = MM_TRACK_SELECT_BATTLE_TRACK_COUNT;
 	}
+#endif
 
 	s16 currTrack = menu->rowSelected;
 	sdata->trackSelBackup = currTrack;
@@ -727,6 +883,32 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		else
 #endif
 		{
+#if defined(CTR_NATIVE)
+		// L1 / R1: a page of rows at a time
+		int pageButton = sdata->buttonTapPerPlayer[0] & (BTN_L1 | BTN_R1);
+		if ((pageButton != 0) && (D230.trackSelect.trackChangeFrames == 0) && (D230.trackSelect.transition.state == IN_MENU))
+		{
+			for (int step = 0; step < MM_TRACK_SELECT_PAGE_ROWS; step++)
+			{
+				do
+				{
+					currTrack += ((pageButton & BTN_R1) != 0) ? 1 : -1;
+					if (currTrack < 0)
+					{
+						currTrack = numTracks - 1;
+					}
+					if (currTrack >= numTracks)
+					{
+						currTrack = 0;
+					}
+				} while (!MM_TrackSelect_boolTrackOpen(&selectMenu[currTrack]));
+			}
+			D230.trackSelect.currentTrack = currTrack;
+			menu->rowSelected = currTrack;
+			OtherFX_Play(0, 1);
+			RECTMENU_ClearInput();
+		}
+#endif
 		int importantButton = sdata->buttonTapPerPlayer[0] & MM_TRACK_SELECT_INPUT;
 
 		if (
@@ -794,7 +976,9 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 #if defined(CTR_NATIVE)
 			{
 				s16 physicalLevelId = selectMenu[D230.trackSelect.currentTrack].levID;
-				if (MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
+				int customTrack = s_trackRowCustom[D230.trackSelect.currentTrack];
+				NativeCustomTrack_Select(customTrack);
+				if ((customTrack < 0) && MM_TrackSelect_CanChooseReverse(gGT, physicalLevelId))
 				{
 					OtherFX_Play(1, 1);
 					s_reverseVariantMenu.rows = (physicalLevelId == TIGER_TEMPLE) ? s_tigerTempleVariantRows : s_reverseVariantRows;
@@ -843,6 +1027,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				D230.trackSelect.transition.state = EXITING_MENU;
 #if defined(CTR_NATIVE)
 				NativeReverseTrack_ClearSelection();
+				NativeCustomTrack_Select(-1);
 #endif
 				break;
 			default:
@@ -981,7 +1166,12 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		rowRect.y = rowY;
 
 		// if you are in time trial mode
+#if defined(CTR_NATIVE)
+		// (custom tracks keep no records)
+		if (((gGT->gameMode1 & TIME_TRIAL) != 0) && (s_trackRowCustom[currTrack] < 0))
+#else
 		if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+#endif
 		{
 			// backup level ID
 			s16 previousLevelID = gGT->levelID;
@@ -1029,8 +1219,13 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		}
 
 		// Draw string
+#if defined(CTR_NATIVE)
+		MM_TrackSelect_DrawRowName(MM_TrackSelect_GetRowName(selectMenu, currTrack), (rowX + MM_TRACK_SELECT_ROW_NAME_X_OFFSET),
+		                           (rowBaseY + MM_TRACK_SELECT_ROW_NAME_Y_OFFSET), ORANGE);
+#else
 		DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[selectMenu[currTrack].levID].name_LNG], (rowX + MM_TRACK_SELECT_ROW_NAME_X_OFFSET),
 		                   (rowBaseY + MM_TRACK_SELECT_ROW_NAME_Y_OFFSET), FONT_BIG, ORANGE);
+#endif
 
 		if ((D230.trackSelect.trackChangeFrames == 0) && ((s16)rowIndex == MM_TRACK_SELECT_CENTER_ROW))
 		{
@@ -1039,7 +1234,11 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			    ((gNativeRelicRaceMode != 0) && ((gGT->gameMode1 & RELIC_RACE) != 0)))
 			{
 				// Only advertise ghost data that can actually be followed in this mode.
+#if defined(CTR_NATIVE)
+				s16 ghostProfileCount = (s_trackRowCustom[currTrack] < 0) ? RefreshCard_CountCompatibleGhostProfilesForLEV(selectMenu[currTrack].levID) : 0;
+#else
 				s16 ghostProfileCount = RefreshCard_CountCompatibleGhostProfilesForLEV(selectMenu[currTrack].levID);
+#endif
 
 				// If this track has Ghost Data
 				if (ghostProfileCount != 0)
@@ -1107,7 +1306,20 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			// near-top if map exists, near-mid if no map
 			previewRect.y = D230.trackSelect_previewTransition.currY + MM_TRACK_SELECT_PREVIEW_Y_NO_MAP;
 
-			if (-1 < selectMenu[menu->rowSelected].mapTextureID)
+			b32 rowHasStockMap = -1 < selectMenu[menu->rowSelected].mapTextureID;
+			b32 rowHasMap = rowHasStockMap;
+#if defined(CTR_NATIVE)
+			int customTrack = s_trackRowCustom[menu->rowSelected];
+			int customMapWidth = 0;
+			int customMapHeight = 0;
+			if (customTrack >= 0)
+			{
+				rowHasStockMap = false;
+				rowHasMap = NativeCustomTrack_HasMap(customTrack, &customMapWidth, &customMapHeight);
+			}
+#endif
+
+			if (rowHasMap)
 			{
 				previewRect.y = D230.trackSelect_previewTransition.currY + MM_TRACK_SELECT_PREVIEW_Y_WITH_MAP;
 			}
@@ -1129,7 +1341,25 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			// exactly 0x22 (34) pixels below the text
 			previewRect.y += MM_TRACK_SELECT_TITLE_TO_MAP_Y;
 
-			if ((-1 < selectMenu[menu->rowSelected].mapTextureID) &&
+#if defined(CTR_NATIVE)
+			// a custom track's map, in the stock maps' layers
+			if (rowHasMap && !rowHasStockMap && !rightSideMenuOpen)
+			{
+				for (s32 mapLayer = 0; mapLayer < MM_TRACK_SELECT_MAP_LAYER_COUNT; mapLayer++)
+				{
+					NativeCustomTrack_DrawMap(customTrack,
+					                          D230.drawMapOffset[mapLayer].offsetX + previewRect.x +
+					                              (D230.trackSelect_lapMenuTransition.currX - D230.trackSelect_previewTransition.currX) +
+					                              (MM_TRACK_VIDEO_WIDTH >> 1) + (customMapWidth >> 1),
+					                          D230.drawMapOffset[mapLayer].offsetY + previewRect.y +
+					                              (D230.trackSelect_lapMenuTransition.currY - D230.trackSelect_previewTransition.currY) +
+					                              MM_TRACK_SELECT_MAP_CENTER_Y_OFFSET + (MM_TRACK_SELECT_MAP_BOX_H >> 1) + (customMapHeight >> 1),
+					                          &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, D230.drawMapOffset[mapLayer].type, NULL);
+				}
+			}
+#endif
+
+			if (rowHasStockMap &&
 
 			    // If neither lap nor Reverse selection is covering the preview area
 			    !rightSideMenuOpen)
@@ -1188,6 +1418,17 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 			MM_TrackSelect_Video_Draw(&previewRect, selectMenu, (int)(s16)D230.trackSelect.currentTrack,
 			                          (u32)(D230.trackSelect.transition.state == EXITING_MENU), 0);
+
+#if defined(CTR_NATIVE)
+			// a custom track's author, under its picture
+			if ((customTrack >= 0) && !rightSideMenuOpen && (NativeCustomTrack_GetAuthor(customTrack)[0] != '\0'))
+			{
+				char byLine[80];
+				snprintf(byLine, sizeof(byLine), "BY %s", NativeCustomTrack_GetAuthor(customTrack));
+				DecalFont_DrawLine(byLine, previewRect.x + (MM_TRACK_VIDEO_WIDTH >> 1), previewRect.y + MM_TRACK_VIDEO_HEIGHT + 4, FONT_SMALL,
+				                   (JUSTIFY_CENTER | WHITE));
+			}
+#endif
 
 			return;
 		}
