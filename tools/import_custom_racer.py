@@ -1171,6 +1171,8 @@ def main() -> int:
                         help="override the mask type used by the custom racer")
     parser.add_argument("--template-animations", action="store_true",
                         help="retarget the replaced retail racer's animations onto a static custom racer model")
+    parser.add_argument("--no-voice", action="store_true",
+                        help="do not package any custom voice audio (XNF and XA files); the racer keeps retail voices")
     parser.add_argument("--xdelta3", help="path to xdelta3 executable")
     args = parser.parse_args()
 
@@ -1236,7 +1238,7 @@ def main() -> int:
                 if xa_payload(clean) != xa_payload(patched):
                     voice_files.append((file_number, patched))
                     changed_voice_file_numbers.add(file_number)
-            if len(changed_models) == 1 and len(voice_files) > MAX_VOICE_FILES:
+            if not args.no_voice and len(changed_models) == 1 and len(voice_files) > MAX_VOICE_FILES:
                 raise RuntimeError(f"too many changed GAME XA files: {len(voice_files)}")
         finally:
             base_iso.close()
@@ -1282,6 +1284,10 @@ def main() -> int:
             portrait_vrm = b""
             racer_voice_xnf = voice_xnf
             racer_voice_files = voice_files
+
+        if args.no_voice:
+            racer_voice_xnf = b""
+            racer_voice_files = []
 
         if len(racer_voice_files) > MAX_VOICE_FILES:
             raise RuntimeError(
