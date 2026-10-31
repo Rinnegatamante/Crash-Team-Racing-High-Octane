@@ -476,6 +476,7 @@ void RenderSubmit(struct GameTracker *gGT);
 void MainFrame_ResetDB(struct GameTracker *gGT);
 void MainFrame_InitVideoSTR(u32 boolPlayVideoStr, RECT *r, s16 posX, s16 posY);
 void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level);
+void MainFrame_CustomTrackVisibility(struct GameTracker *gGT);
 void MainFrame_RequestMaskHint(s16 hintId, s16 interruptWarpPad);
 void MainFrame_TogglePauseAudio(b32 bool_pause);
 

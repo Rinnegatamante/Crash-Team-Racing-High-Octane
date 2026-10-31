@@ -41,6 +41,9 @@ TextureID NativeRenderer_GetCachedP4Texture(int page, int clut, int superTurboTi
 TextureID NativeRenderer_CreateStreamingTexture(int width, int height);
 void NativeRenderer_UpdateStreamingTexture(TextureID texture, int width, int height, const u8 *rgbaPixels);
 void NativeRenderer_DestroyStreamingTexture(TextureID texture);
+// RGBA pixels of a PNG in memory (free with NativeRenderer_FreeImage), NULL on failure
+u8 *NativeRenderer_DecodePNG(const void *data, int size, int *width, int *height);
+void NativeRenderer_FreeImage(u8 *pixels);
 void NativeRenderer_SetBlendMode(BlendMode blendMode);
 void NativeRenderer_SetMixedSTPBlendMode(BlendMode blendMode);
 void NativeRenderer_SetDepthState(int enable, int write);

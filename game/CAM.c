@@ -1679,7 +1679,13 @@ LAB_8001ab04:
 			s32 flyInDone = 0;
 
 			// No camera + No ghosts (battle maps)
+#if defined(CTR_NATIVE)
+			// or no fly-in path (custom tracks: the PS1 reads its RAM at 0,
+			// natively that faults)
+			if ((st1->count < 4) || (cameraPath == NULL))
+#else
 			if (st1->count < 4)
+#endif
 			{
 				// startline fly-in is done
 				flyInDone = 1;

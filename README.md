@@ -35,6 +35,7 @@ You can play it from Web Browser as well from this link: [Web Browser Build](htt
 - Relic Race mode available outside of Adventure mode and accessible with any character.
 - Relic Race mode now has ghosts support.
 - Custom characters support with pre-baked animations option.
+- Custom tracks and battle arenas support.
 - Personal bests tracking during Time Trials.
 - Alternative Temple Tiger variant for Time Trial and Relic Race.
 - Fully rebindable controls.
@@ -104,6 +105,30 @@ Download a custom character in the form of an `.xdelta` patch and place it in th
 - When conversion is complete, place the generated `.ctrr` file or files:
   - on PSVita: in `ux0:data/ctr/mods/customracers`.
   - on PC: in the `mods/customracers` folder next to the CTR: High Octane executable, so that the final path is `mods/customracers/YOUR_CHARACTER.ctrr`.
+
+## How to add new custom tracks to the game
+
+- Install Python 3.11 or higher ([https://www.python.org/downloads/](https://www.python.org/downloads/)).
+- Download [this script](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane/raw/refs/heads/vita/tools/import_custom_track.py) by right-clicking the link and selecting "Save link as..." or, if the script opens in the browser, "Save page as...".
+- Download [xdelta3](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane/raw/refs/heads/vita/tools/xdelta3.exe) and place it in the same folder as the script.
+- Download a custom track in the form of an `.xdelta` patch and place it in the same folder as the script.
+- Place your NTSC-U Crash Team Racing `.bin` dump in the same folder as the script.
+- Open a command prompt in that folder by typing `cmd` in the File Explorer address bar and pressing Enter.
+- Run `python import_custom_track.py YOUR_DUMP_NAME.bin YOUR_PATCH.xdelta YOUR_TRACK.ctrt`.
+- To customize the generated track, append any of these optional arguments:
+
+  | Option | Description |
+  | --- | --- |
+  | `--name "Track Name"` | Set the in-game name. By default, the importer uses the patch file name. |
+  | `--author "Author Name"` | Set the track author's name. |
+  | `--xdelta3 PATH` | Use a specific xdelta3 executable instead of the copy next to the script or one on PATH. |
+
+- If the patch holds multiple tracks, the importer generates one `.ctrt` per track, numbering the extra ones (`YOUR_TRACK_2.ctrt`, named "... 2"). You can also pass an output directory instead of a `.ctrt` filename.
+- When conversion is complete, place the generated `.ctrt` file or files:
+  - on PSVita: in `ux0:data/ctr/mods/customtracks`.
+  - on PC: in the `mods/customtracks` folder next to the CTR: High Octane executable, so that the final path is `mods/customtracks/YOUR_TRACK.ctrt`.
+- Custom tracks are listed after the stock tracks in Arcade, VS, Time Trial and Battle (L1/R1 scroll a page at a time), with their own minimap. Tracks without AI paths are not listed in Arcade. Records and ghosts are not saved on custom tracks.
+- To give the custom tracks a picture on the track list (PC only), run the game once with `--capture-track-previews`: it loads every custom track without one, saves a screenshot of its start next to its package (`YOUR_TRACK.png`) and quits.
 
 ## How to set up Online functionalities on PC
 

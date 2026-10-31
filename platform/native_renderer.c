@@ -507,7 +507,10 @@ int NativeRenderer_InitialiseRender(char *windowName, int width, int height, int
 
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 1);
 
-#ifdef __EMSCRIPTEN__
+	// Opaque window: with an alpha channel, compositors (Wayland, browsers) blend
+	// the game over what is behind it by the PS1 mask bit (blown-out menus,
+	// smeared backgrounds).
+#if !defined(__vita__)
 	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 #endif
 
@@ -3939,6 +3942,36 @@ void NativeRenderer_PresentStreamingTexture(TextureID texture, int contentHeight
 	s_lastBoundTexture = (TextureID)-1;
 }
 
+u8 *NativeRenderer_DecodePNG(const void *data, int size, int *width, int *height)
+{
+#ifdef __vita__
+	png_image image;
+	memset(&image, 0, sizeof(image));
+	image.version = PNG_IMAGE_VERSION;
+	if (!png_image_begin_read_from_memory(&image, data, (size_t)size))
+		return NULL;
+	image.format = PNG_FORMAT_RGBA;
+	u8 *pixels = (u8 *)malloc(PNG_IMAGE_SIZE(image));
+	if ((pixels == NULL) || !png_image_finish_read(&image, NULL, pixels, 0, NULL))
+	{
+		free(pixels);
+		png_image_free(&image);
+		return NULL;
+	}
+	*width = (int)image.width;
+	*height = (int)image.height;
+	return pixels;
+#else
+	int channels = 0;
+	return (u8 *)stbi_load_from_memory((const stbi_uc *)data, size, width, height, &channels, 4);
+#endif
+}
+
+void NativeRenderer_FreeImage(u8 *pixels)
+{
+	free(pixels);
+}
+
 void NativeRenderer_PresentVRAMDisplay(void)
 {
 	// NOTE(aalhendi): ctr-native local divergence. Retail presents this boot
@@ -3975,6 +4008,16 @@ void NativeRenderer_SwapWindow(void)
 		SDL_GL_SwapWindow(g_window);
 	}
 #else
+	if (NativeCustomTrack_Capture_WantsFrame())
+	{
+		u8 *pixels = (u8 *)malloc((size_t)s_presentViewport.w * s_presentViewport.h * 4);
+		if (pixels != NULL)
+		{
+			glReadPixels(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+			NativeCustomTrack_Capture_OnFrame(pixels, s_presentViewport.w, s_presentViewport.h);
+			free(pixels);
+		}
+	}
 	SDL_GL_SwapWindow(g_window);
 #endif
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);

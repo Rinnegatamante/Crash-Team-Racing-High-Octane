@@ -115,7 +115,7 @@ typedef struct
 	const char *debugText;
 } GPUDrawSplit;
 
-#define MAX_DRAW_SPLITS 4096
+#define MAX_DRAW_SPLITS 16384 // (large custom tracks overflow 4096)
 
 typedef struct
 {

@@ -60,6 +60,9 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	{
 		MainFrame_VisMemFullFrame(gGT, gGT->level1);
 	}
+#if defined(CTR_NATIVE)
+	MainFrame_CustomTrackVisibility(gGT); // custom tracks: everything visible from anywhere
+#endif
 
 
 	if ((gGT->renderFlags & RENDER_FLAG_DRAW_LEVEL) != 0)
@@ -120,6 +123,11 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 #endif
 
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_HUD);
+#if defined(CTR_NATIVE)
+	// (custom track pictures: no HUD)
+	NativeCustomTrack_Capture_Tick();
+	if (!NativeCustomTrack_Capture_Active())
+#endif
 	RenderAllHUD(gGT);
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_HUD);
 
@@ -138,6 +146,9 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_QUEUE_INSTANCES);
 
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
+#if defined(CTR_NATIVE)
+	if (!NativeCustomTrack_Capture_Active())
+#endif
 	RenderAllNormalParticles(gGT);
 
 	RenderDispEnv_World(gGT); // == RenderDispEnv_World ==
@@ -151,10 +162,19 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 	MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_EXECUTE_INSTANCES);
 
 	MAINFRAME_PERF_BEGIN(NATIVE_PERF_BUCKET_MAINFRAME_EFFECTS);
+#if defined(CTR_NATIVE)
+	if (!NativeCustomTrack_Capture_Active())
+#endif
 	RenderAllTires(gGT);
 
+#if defined(CTR_NATIVE)
+	if (!NativeCustomTrack_Capture_Active())
+#endif
 	RenderAllShadows(gGT);
 
+#if defined(CTR_NATIVE)
+	if (!NativeCustomTrack_Capture_Active())
+#endif
 	RenderAllHeatParticles(gGT);
 
 	PushBuffer_FadeAllWindows();
@@ -198,6 +218,9 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 		    // if not in main menu
 		    ((gGT->gameMode1 & (GAME_CUTSCENE | ADVENTURE_ARENA | MAIN_MENU)) == 0) && dotLightsLoadReady)
 		{
+#if defined(CTR_NATIVE)
+			if (!NativeCustomTrack_Capture_Active()) // (custom track pictures: no traffic lights)
+#endif
 			DotLights_AudioAndVideo(gGT);
 		}
 

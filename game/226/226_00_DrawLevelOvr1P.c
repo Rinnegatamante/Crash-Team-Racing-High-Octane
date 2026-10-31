@@ -1,6 +1,7 @@
 #include <common.h>
 
 #if defined(CTR_NATIVE)
+#include <platform/native_custom_track.h>
 #include <platform/native_pgxp.h>
 extern int gNativeReverseTrackEnabled;
 #endif
@@ -557,7 +558,7 @@ static u32 DrawLevelOvr1P_GetProjectedOtSlotWord(const struct DrawLevelOvr1PScra
 static int DrawLevelOvr1P_TryConvertNativeMempackPointerToPsxWord(u32 hostWord, u32 *psxWord)
 {
 	const u32 psxRamBase = 0x80000000u;
-	const uintptr_t psxRamSize = 0x200000u;
+	const uintptr_t psxRamSize = 0x800000u; // 8 MiB mempack backing (retail 0x200000): custom track levels are larger
 	uintptr_t hostPtr = (uintptr_t)hostWord;
 	const struct Mempack *pack = DrawLevelOvr1P_FindMempackContaining(hostPtr);
 	if (pack == NULL || pack->endOfMemory == NULL)
@@ -8368,7 +8369,7 @@ static int Ovr226_800a0f78_EmitFullDynamicQuadBlock(struct PushBuffer *pb, struc
 static void Ovr226_800a0f0c_SeedFullDynamicVisibilityScratch(const int *visFaceList, const struct QuadBlock *block)
 {
 	u32 blockID = (u16)block->blockID;
-	const u32 *word = (const u32 *)((const u8 *)visFaceList + ((blockID >> 3) & 0x1fc));
+	const u32 *word = (const u32 *)((const u8 *)visFaceList + ((blockID >> 3) & 0xfffc)); // retail masks 0x1fc (4096 quadblocks); custom tracks have more
 
 	DrawLevelOvr1P_Scratch()->visibilityWordPtr32 = (u32)(uintptr_t)word;
 	DrawLevelOvr1P_Scratch()->visibilityBitIndex = blockID & 0x1f;
@@ -10109,6 +10110,15 @@ static int Ovr226_800a0e10_DispatchBucketTable(struct DrawLevelOvr1PRenderList *
 		void *bucketValue = DrawLevelOvr1P_GetRenderListBucketValue(renderList, bucket);
 		u32 setupAddress = R226.bucketSetupAddresses[bucketIndex];
 		u32 handlerAddress = R226.bucketHandlerAddresses[bucketIndex];
+
+#if defined(CTR_NATIVE)
+		// Custom tracks draw their far bucket with the high-LOD handler; their
+		// low-LOD data is often unusable.
+		if ((bucketIndex == OVR226_BUCKET_COUNT - 1) && NativeCustomTrack_IsActive())
+		{
+			handlerAddress = DRAW_LEVEL_OVR_RETAIL_LABEL_DYNAMIC_LIST_BUCKET_ENTRY;
+		}
+#endif
 
 		DrawLevelOvr1P_Scratch()->currentBucketOffset = (u32)renderListOffset;
 
