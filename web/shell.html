@@ -217,7 +217,7 @@
       try {
         await syncPersistentStorage(false);
         const files = [];
-        collectPersistentFiles('/persistent', '/persistent', files);
+        collectPersistentFiles('/ctr-high-octane-v1', '/ctr-high-octane-v1', files);
         const blob = new Blob([JSON.stringify({ format: saveArchiveFormat, files })], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -253,11 +253,11 @@
           return { path: file.path, data: base64ToBytes(file.data) };
         });
 
-        clearPersistentDirectory('/persistent');
+        clearPersistentDirectory('/ctr-high-octane-v1');
         for (const file of files) {
           const slash = file.path.lastIndexOf('/');
-          if (slash >= 0) Module.FS.mkdirTree(`/persistent/${file.path.slice(0, slash)}`);
-          Module.FS.writeFile(`/persistent/${file.path}`, file.data);
+          if (slash >= 0) Module.FS.mkdirTree(`/ctr-high-octane-v1/${file.path.slice(0, slash)}`);
+          Module.FS.writeFile(`/ctr-high-octane-v1/${file.path}`, file.data);
         }
         await syncPersistentStorage(false);
         statusText.textContent = `Imported ${files.length} persistent file${files.length === 1 ? '' : 's'}.`;
@@ -278,8 +278,8 @@
         runtimeReady = true;
         statusText.textContent = 'Loading save data from browser storage...';
         try {
-          Module.FS.mkdirTree('/persistent');
-          Module.FS.mount(IDBFS, { autoPersist: true }, '/persistent');
+          Module.FS.mkdirTree('/ctr-high-octane-v1');
+          Module.FS.mount(IDBFS, { autoPersist: true }, '/ctr-high-octane-v1');
           await syncPersistentStorage(true);
           persistenceReady = true;
           statusText.textContent = 'Select your NTSC-U ctr-u.bin. highoctane.key is optional for online leaderboards.';
